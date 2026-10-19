@@ -5,8 +5,10 @@ The one home for every app Bilal has built: the source code, the tool that build
 | App | What it is | Lives in |
 |---|---|---|
 | **Assist** | Private, on-device AI chat and reply assistant | `apps/assist` |
+| **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
 | **Fresh Desk** | Private folder organization with preview and undo | `apps/fresh-desk` (still developed in its Codex folder until `./utility adopt fresh-desk`) |
+| **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
 | **RO3** | Photo editing, video editing and file conversion | `apps/ro3` |
 | **Relay** | Inboxes, calendars, browser, library and AI | `apps/relay` |
@@ -38,6 +40,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Relay | `~/Downloads/Relay/Relay Files` (library and downloads) |
 | Onward | `~/Downloads/Onward/Onward Files` (resume, credentials, applications) |
 | Slate | `~/Documents/Slate/Statements` |
+| Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | All apps | their app-data folder (`~/Library/Application Support/<App>`, `%APPDATA%\<App>`) |
 
 ## Commands

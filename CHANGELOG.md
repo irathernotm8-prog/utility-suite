@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-19 15:41 — **Crate 0.1.0** — First release: download songs, albums and playlists from YouTube and more as tagged MP3s, clean titles and fill in album info and covers automatically, edit tags and audio (trim, fade, volume), organize albums and playlists, and send them to your iPhone or Android
+- 2026-10-19 15:41 — **Crate 0.1.0** (40 new) — Added to the Utility Package
 - 2026-10-19 13:42 — **Utility Hub 1.1.0** — Updates from the internet: new versions show up on their own and only the changed app downloads; new computers can set up straight from the GitHub release
 - 2026-10-19 18:17 — **Onward 0.2.1** — Fixes Windows freezing on launch; example text in empty fields is now generic (no personal details)
 - 2026-10-19 16:58 — **Sideby 2.0.0** — Rebuilt from scratch: invites now work from anywhere (no server, friends connect directly), sync works on almost any site including YouTube, Twitch and embedded players, and you can broadcast a page, window, screen or file with sound for live games. New look, reactions, theater mode and a personal room code.

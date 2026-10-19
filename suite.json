@@ -101,11 +101,19 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
       "movedFrom": "~/Downloads/kiln-source"
+    },
+    {
+      "id": "crate",
+      "name": "Crate",
+      "description": "Download music as MP3s, then tag, edit and organize it into albums for your phone.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {
