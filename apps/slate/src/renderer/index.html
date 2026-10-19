@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: http: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self' https:;" />
+  <title>Slate</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="rail">
+      <div class="brand"><b>slate</b></div>
+      <nav class="nav" id="nav"></nav>
+      <div class="rail-foot">
+        <button id="settingsBtn"><span>Settings</span></button>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="topbar" id="topbar"></div>
+      <div class="view" id="view"></div>
+    </main>
+  </div>
+  <div class="modal-root" id="modalRoot"></div>
+  <div class="menu-root" id="menuRoot"></div>
+  <div class="toast-root" id="toastRoot"></div>
+
+  <script src="icons.js"></script>
+  <script src="core.js"></script>
+  <script src="views/overview.js"></script>
+  <script src="views/accounts.js"></script>
+  <script src="views/cards.js"></script>
+  <script src="views/calendar.js"></script>
+  <script src="views/planner.js"></script>
+  <script src="views/credit.js"></script>
+  <script src="views/statements.js"></script>
+  <script src="views/browser.js"></script>
+  <script src="views/report.js"></script>
+  <script src="views/importer.js"></script>
+  <script src="views/connections.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

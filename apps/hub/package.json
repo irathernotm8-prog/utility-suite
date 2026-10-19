@@ -1,0 +1,57 @@
+{
+  "name": "utility-hub",
+  "productName": "Utility Hub",
+  "version": "1.1.0",
+  "description": "Install, update and remove the Utility Suite apps",
+  "main": "main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.bilal.utilityhub",
+    "productName": "Utility Hub",
+    "copyright": "Personal use",
+    "files": [
+      "feed.json",
+      "main.js",
+      "preload.js",
+      "lib/**",
+      "renderer/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.png",
+      "target": [
+        "dir"
+      ],
+      "identity": null,
+      "darkModeSupport": true
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "dir"
+      ]
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}

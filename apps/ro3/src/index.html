@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; img-src 'self' file: data: blob:; media-src 'self' file: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:">
+  <title>RO3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" aria-label="RO3">
+      <svg class="brand-mark" viewBox="0 0 30 30" aria-hidden="true">
+        <rect x="1" y="1" width="28" height="28" rx="7.5" class="bm-frame"/>
+        <path d="M7.8 12.9V10Q7.8 7.8 10 7.8H12.9M22.2 12.9V10Q22.2 7.8 20 7.8H17.1M7.8 17.1V20Q7.8 22.2 10 22.2H12.9M22.2 17.1V20Q22.2 22.2 20 22.2H17.1" class="bm-corner"/>
+        <circle cx="17.41" cy="12.59" r="2.4" class="bm-dot"/>
+      </svg>
+      <span class="brand-name">RO3</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="photo" class="tab" aria-selected="true"><span class="tab-ico" data-icon="photo"></span>Photo</button>
+      <button role="tab" data-tab="video" class="tab"><span class="tab-ico" data-icon="film"></span>Video</button>
+      <button role="tab" data-tab="convert" class="tab"><span class="tab-ico" data-icon="convert"></span>Quick Convert</button>
+    </nav>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </header>
+
+  <main>
+    <section class="view" id="view-photo" data-view="photo"></section>
+    <section class="view" id="view-video" data-view="video" hidden></section>
+    <section class="view" id="view-convert" data-view="convert" hidden></section>
+  </main>
+
+  <div id="modal-root"></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <script src="js/icons.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/convert.js"></script>
+  <script src="vendor/ag-psd.js"></script>
+  <script src="js/photo-ops.js"></script>
+  <script src="js/photo-adjust.js"></script>
+  <script src="js/photo-compose.js"></script>
+  <script src="js/photo-psd.js"></script>
+  <script src="js/photo.js"></script>
+  <script src="js/video.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

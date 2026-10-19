@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Assist</title>
+  <meta name="description" content="Assist: a private, on-device AI chat and reply assistant.">
+  <meta name="theme-color" content="#0E0F11">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="chat.css">
+</head>
+<body class="tab-chat">
+  <header class="topbar drag" id="topbar">
+    <div class="brand">
+      <img class="mark-img" src="icons/mark.svg" alt="" aria-hidden="true">
+      <span class="wordmark">Assist</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Mode">
+      <button type="button" role="tab" data-tab="chat" class="on" aria-selected="true">Chat</button>
+      <button type="button" role="tab" data-tab="reply" aria-selected="false">Reply</button>
+    </nav>
+    <div class="topbar-right">
+      <button class="status" id="statusPill" type="button" title="Model status">
+        <span class="dot"></span><span id="statusText">Not loaded</span>
+      </button>
+      <button class="icon-btn reply-only" id="historyBtn" type="button" aria-label="Reply history" title="Reply history">
+        <svg viewBox="0 0 24 24"><path d="M12 8v4l3 2M3.05 11a9 9 0 1 1 .5 4M3 4v5h5"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ CHAT ============ -->
+  <section class="view chat-view" id="chatView" aria-label="Chat">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-top">
+        <button class="btn primary block" id="newChatBtn" type="button">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New chat</span><kbd id="newChatKbd">Ctrl N</kbd>
+        </button>
+        <div class="side-search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+          <input id="chatSearch" type="search" placeholder="Search chats" autocomplete="off">
+        </div>
+      </div>
+      <nav class="chat-list" id="chatList" aria-label="Chats"></nav>
+      <div class="side-foot">
+        <button type="button" class="side-link" id="quickHint" title="Open Quick Ask from anywhere">
+          <svg viewBox="0 0 24 24"><path d="M13 3L5 13h6l-1 8 8-10h-6l1-8z"/></svg>
+          <span>Quick Ask</span><kbd id="quickKbd">Ctrl ⇧ Space</kbd>
+        </button>
+      </div>
+    </aside>
+
+    <div class="conv">
+      <header class="conv-head">
+        <button class="icon-btn ghosty" id="sidebarToggle" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
+          <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
+        </button>
+        <h2 class="conv-title" id="convTitle" title="Double-click to rename">New chat</h2>
+        <div class="conv-tools">
+          <button class="pill" id="assistantBtn" type="button" title="Assistant"><span class="pill-ic">A</span><span class="pill-label">Assist</span><svg class="caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
+          <button class="pill" id="modelBtn" type="button" title="Model"><svg class="chip-ic" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg><span class="pill-label">Model</span><svg class="caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
+          <button class="icon-btn ghosty" id="memoryBtn" type="button" title="Chat memory" aria-label="Chat memory">
+            <svg viewBox="0 0 24 24"><path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2A3.2 3.2 0 0 0 7.5 18 2.5 2.5 0 0 0 12 19V6a2 2 0 0 0-3-1.5zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.2A3.2 3.2 0 0 1 16.5 18 2.5 2.5 0 0 1 12 19"/></svg>
+          </button>
+          <button class="icon-btn ghosty" id="chatMoreBtn" type="button" title="More" aria-label="More">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="messages" id="messages" aria-live="polite"></div>
+
+      <div class="composer-wrap">
+        <div class="composer2">
+          <div class="att-tray" id="attachTray" hidden></div>
+          <textarea id="prompt" rows="1" placeholder="Message Assist…  (Shift + Enter for a new line)" aria-label="Message"></textarea>
+          <div class="composer-bar">
+            <button class="cbtn" id="attachBtn" type="button" title="Attach files (PDF, Word, text, images)" aria-label="Attach files">
+              <svg viewBox="0 0 24 24"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.4 3.4 0 0 1 4.8 4.8l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+            </button>
+            <button class="tpill" id="webToggle" type="button" aria-pressed="false" title="Let Assist search and read the web for this chat">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>Web</span>
+            </button>
+            <button class="tpill" id="thinkToggle" type="button" aria-pressed="false" title="Think step by step before answering (slower, smarter)">
+              <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span>Think</span>
+            </button>
+            <span class="spacer"></span>
+            <span class="composer-hint" id="composerHint"></span>
+            <button class="send" id="sendBtn" type="button" aria-label="Send"></button>
+          </div>
+        </div>
+        <p class="disclaimer">Assist runs on your computer and can make mistakes. Check important facts.</p>
+        <input type="file" id="fileInput" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.xml,.yaml,.yml,.js,.ts,.py,.css,.sql,.log,image/*">
+      </div>
+      <div class="drop" id="convDrop" hidden><div><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>Drop files to attach</div></div>
+    </div>
+
+    <aside class="memory-panel" id="memoryPanel" hidden>
+      <div class="drawer-head">
+        <h3>Chat memory</h3>
+        <button class="icon-btn" id="memClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="drawer-body">
+        <div class="field">
+          <span class="label">Pinned notes <em>always used in this chat</em></span>
+          <textarea id="memNotes" rows="5" placeholder="Facts, goals or rules for this conversation — e.g. “We're planning the Q4 fiber launch in Katy. Budget $40k.”"></textarea>
+        </div>
+        <div class="field">
+          <div class="label-row"><span class="label">Running summary</span><button class="btn tiny" id="memReset" type="button">Clear</button></div>
+          <div class="mem-summary" id="memSummary"></div>
+          <p class="tiny-text">Assist writes this automatically when a chat gets longer than the model can read at once, so it keeps the thread however long you talk.</p>
+        </div>
+        <div class="field">
+          <span class="label">Across all chats</span>
+          <div class="row gap"><span class="tiny-text" id="memGlobalCount" style="margin:0"></span></div>
+          <button class="btn ghost" id="memManage" type="button">Manage memories</button>
+          <p class="tiny-text">Say “remember that…” in any chat, use <b>/remember</b>, or the bookmark under a reply.</p>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ============ REPLY (Assist 1.x, streamlined) ============ -->
+  <section class="view reply-view" id="replyView" aria-label="Reply" hidden>
+    <main class="grid">
+      <section class="panel composer" aria-label="Compose">
+        <div class="field">
+          <span class="label">Reply to</span>
+          <div class="segmented" id="typeSeg" role="radiogroup">
+            <button type="button" role="radio" data-type="email" class="on">Email</button>
+            <button type="button" role="radio" data-type="text">Text</button>
+            <button type="button" role="radio" data-type="comment">Comment</button>
+            <button type="button" role="radio" data-type="review">Review</button>
+            <button type="button" role="radio" data-type="new">New</button>
+          </div>
+        </div>
+        <div class="field" id="singleField">
+          <div class="label-row">
+            <label class="label" id="incomingLabel" for="incoming">The email you received</label>
+            <div class="segmented mini" id="countSeg" hidden>
+              <button type="button" data-count="single" class="on">One</button>
+              <button type="button" data-count="batch">Several</button>
+            </div>
+          </div>
+          <textarea id="incoming" rows="5" placeholder="Paste the message here…"></textarea>
+          <div class="batch" id="batchList" hidden></div>
+          <div class="batch-foot" id="batchFoot" hidden>
+            <button type="button" class="btn tiny" id="addReviewBtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add review</button>
+            <span class="tiny-text" style="margin:0">Tip: paste several reviews separated by a blank line and they split automatically.</span>
+          </div>
+        </div>
+        <label class="field">
+          <span class="label">What you want to say <em>optional</em></span>
+          <textarea id="intent" rows="3" placeholder="e.g. Accept the meeting but push it to Thursday afternoon."></textarea>
+        </label>
+        <label class="field">
+          <span class="label">Extra context <em>optional</em></span>
+          <textarea id="context" rows="3" placeholder="Who they are, background, facts to include, things to avoid…"></textarea>
+        </label>
+        <div class="row">
+          <div class="field grow">
+            <span class="label">Tone</span>
+            <div class="chips" id="toneChips">
+              <button type="button" data-tone="professional" class="on">Professional</button>
+              <button type="button" data-tone="friendly">Friendly</button>
+              <button type="button" data-tone="casual">Casual</button>
+              <button type="button" data-tone="empathetic">Empathetic</button>
+              <button type="button" data-tone="firm">Firm</button>
+              <button type="button" data-tone="enthusiastic">Upbeat</button>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <span class="label">Length</span>
+            <div class="segmented small" id="lengthSeg">
+              <button type="button" data-len="short">Short</button>
+              <button type="button" data-len="medium" class="on">Medium</button>
+              <button type="button" data-len="long">Detailed</button>
+            </div>
+          </div>
+          <label class="toggle" id="subjectToggleWrap">
+            <input type="checkbox" id="subjectToggle">
+            <span class="switch"></span>
+            <span>Subject line</span>
+          </label>
+        </div>
+        <div class="actions">
+          <button class="btn ghost" id="clearBtn" type="button">Clear</button>
+          <button class="btn primary" id="generateBtn" type="button"><span>Draft reply</span><kbd>Ctrl ↵</kbd></button>
+        </div>
+      </section>
+
+      <section class="panel output" aria-label="Draft">
+        <div class="output-head">
+          <span class="label" id="draftLabel">Draft</span>
+          <div class="output-tools">
+            <button class="btn tiny" id="regenBtn" type="button" disabled>Regenerate</button>
+            <button class="btn tiny accent" id="copyBtn" type="button" disabled>Copy</button>
+          </div>
+        </div>
+        <div class="draft" id="draft" aria-live="polite">
+          <div class="empty" id="emptyState">
+            <img class="empty-mark" src="icons/mark.svg" alt="" aria-hidden="true">
+            <p class="empty-title">Your reply will appear here</p>
+            <p class="empty-sub">Everything runs on this device. Nothing you type leaves it.</p>
+          </div>
+        </div>
+        <div class="refine" id="refine" hidden>
+          <div class="chips small" id="refineChips">
+            <button type="button" data-refine="Make it shorter.">Shorter</button>
+            <button type="button" data-refine="Make it warmer and friendlier.">Warmer</button>
+            <button type="button" data-refine="Make it more formal.">More formal</button>
+            <button type="button" data-refine="Make it more direct and confident.">More direct</button>
+            <button type="button" data-refine="Fix any awkward phrasing and make it sound more natural.">More natural</button>
+          </div>
+          <form class="refine-bar" id="refineForm">
+            <input id="refineInput" type="text" placeholder="Tell Assist what to change…" autocomplete="off">
+            <button class="btn primary sq" type="submit" aria-label="Revise"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <!-- Model loader -->
+  <div class="overlay" id="loader" hidden>
+    <div class="sheet loader-sheet">
+      <img class="mark-img big" src="icons/mark.svg" alt="" aria-hidden="true">
+      <h2 id="loaderTitle">Setting up Assist</h2>
+      <p class="muted" id="loaderSub">Downloading the AI model to this computer. This happens once; after that Assist works offline.</p>
+      <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+      <p class="tiny-text" id="loaderDetail">Starting…</p>
+      <button class="btn ghost tiny" id="loaderHide" type="button" style="margin-top:14px">Hide — keep loading in the background</button>
+    </div>
+  </div>
+
+  <!-- Unsupported -->
+  <div class="overlay" id="unsupported" hidden>
+    <div class="sheet">
+      <img class="mark-img big" src="icons/mark.svg" alt="" aria-hidden="true">
+      <h2 class="desktop-only">This computer can't run Assist yet</h2>
+      <h2 class="web-only">This browser can't run Assist</h2>
+      <p class="muted">Assist runs its AI on your computer's graphics chip, and it couldn't access it. Updating your graphics drivers (Windows) or macOS usually fixes this. Then reopen Assist.</p>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <aside class="drawer wide" id="settings" hidden>
+    <div class="drawer-head">
+      <h3>Settings</h3>
+      <button class="icon-btn" data-close="settings" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <nav class="set-tabs" id="setTabs">
+      <button type="button" data-sec="models" class="on">Models</button>
+      <button type="button" data-sec="memory">Memory</button>
+      <button type="button" data-sec="assistants">Assistants</button>
+      <button type="button" data-sec="general">General</button>
+    </nav>
+    <div class="drawer-body">
+      <section class="set-sec" data-sec="models">
+        <div class="sys-card" id="sysCard"></div>
+        <div class="models" id="modelList"></div>
+        <p class="tiny-text">Everything runs on this computer. Bigger models are smarter but slower and need more memory. Downloaded models stay saved, so switching back is instant.</p>
+      </section>
+
+      <section class="set-sec" data-sec="memory" hidden>
+        <label class="toggle">
+          <input type="checkbox" id="memoryOn">
+          <span class="switch"></span>
+          <span>Use memories in every chat</span>
+        </label>
+        <div class="field">
+          <span class="label">Saved memories</span>
+          <div class="mem-list" id="memList"></div>
+          <form class="mem-add" id="memAdd">
+            <input type="text" id="memInput" placeholder="Add something Assist should remember…" autocomplete="off">
+            <button class="btn tiny primary" type="submit">Add</button>
+          </form>
+          <p class="tiny-text">Memories stay on this computer. In a chat, say “remember that…” or type <b>/remember …</b> to add one.</p>
+        </div>
+        <label class="field">
+          <span class="label">Your name <em>used to sign emails</em></span>
+          <input type="text" id="signName" placeholder="e.g. Bilal">
+        </label>
+        <label class="field">
+          <span class="label">About you / always keep in mind</span>
+          <textarea id="persona" rows="4" placeholder="e.g. I'm a digital marketing supervisor at a fiber internet company in Houston. Use American spelling. Keep things concise."></textarea>
+        </label>
+      </section>
+
+      <section class="set-sec" data-sec="assistants" hidden>
+        <p class="tiny-text" style="margin-top:0">Assistants are ready-made roles with their own instructions. Pick one from the menu at the top of any chat.</p>
+        <div class="asst-list" id="asstList"></div>
+        <button class="btn ghost" id="asstNew" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Create an assistant</button>
+      </section>
+
+      <section class="set-sec" data-sec="general" hidden>
+        <div class="field">
+          <span class="label">Web access</span>
+          <div class="row gap">
+            <div class="segmented small" id="engineSeg">
+              <button type="button" data-engine="auto">DuckDuckGo</button>
+              <button type="button" data-engine="bing">Bing</button>
+            </div>
+            <div class="segmented small" id="pagesSeg" title="Pages read per search">
+              <button type="button" data-pages="2">2 pages</button>
+              <button type="button" data-pages="3">3 pages</button>
+              <button type="button" data-pages="5">5 pages</button>
+            </div>
+          </div>
+          <p class="tiny-text">Web is off until you switch it on in a chat. Searches go straight from this computer to the search engine; the AI itself never leaves your computer.</p>
+        </div>
+        <div class="field desktop-only">
+          <span class="label">Quick Ask</span>
+          <label class="toggle">
+            <input type="checkbox" id="quickOn">
+            <span class="switch"></span>
+            <span>Open with <kbd id="quickKbd2">Ctrl ⇧ Space</kbd> from any app</span>
+          </label>
+        </div>
+        <div class="field desktop-only">
+          <span class="label">Plugins</span>
+          <label class="toggle">
+            <input type="checkbox" id="allowPlugins">
+            <span class="switch"></span>
+            <span>Let my other apps use Assist</span>
+          </label>
+          <p class="tiny-text">Relay and your other apps can ask Assist for drafts and answers. It stays on this computer: Assist only answers apps here that hold its private key. Apps that speak the OpenAI format can use it too.</p>
+        </div>
+        <div class="field">
+          <span class="label">Storage</span>
+          <div class="row gap">
+            <button class="btn ghost" id="clearChatsBtn" type="button">Delete all chats</button>
+            <button class="btn ghost" id="clearHistoryBtn" type="button">Clear reply history</button>
+            <button class="btn ghost danger" id="deleteModelsBtn" type="button">Delete downloaded models</button>
+          </div>
+        </div>
+        <p class="tiny-text" id="aboutLine"></p>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Reply history -->
+  <aside class="drawer" id="history" hidden>
+    <div class="drawer-head">
+      <h3>Reply history</h3>
+      <button class="icon-btn" data-close="history" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="drawer-body" id="historyList"></div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

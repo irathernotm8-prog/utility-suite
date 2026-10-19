@@ -1,0 +1,25 @@
+{{suite}} {{version}} — Mac
+===========================================
+
+What's inside:
+{{apps}}
+
+
+INSTALL (easiest)
+-----------------
+1. Right-click "Install All.command" and choose Open, then Open again.
+   (The right-click is only needed because the apps aren't from the App Store.)
+2. A Terminal window installs everything into Applications. Close it when it says Done.
+
+INSTALL (by hand)
+-----------------
+1. Drag the apps onto the Applications shortcut in this window.
+2. Open each app once by right-clicking it in Applications → Open → Open.
+   If macOS still refuses: System Settings → Privacy & Security → scroll down → Open Anyway.
+
+UPDATING
+--------
+Install a newer suite the same way. Apps are replaced; your settings, accounts and
+files stay where they are (each app keeps its data in ~/Library/Application Support).
+
+These apps run on Apple Silicon Macs (M1 or newer). Apps marked "universal" also run on Intel Macs.

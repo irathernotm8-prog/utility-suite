@@ -1,0 +1,40 @@
+Experian Credit Report
+Prepared for: SAMPLE PERSON   Date generated: Oct 16, 2026
+Accounts
+JPMCB CARD SERVICES
+Account Name JPMCB CARD SERVICES
+Account Number 426684XXXXXXXXXX
+Account Type Credit card
+Responsibility Individual
+Date Opened 04/12/2024
+Status Open/Never late.
+Credit Limit $10,000
+Balance $1,000
+AMERICAN EXPRESS
+Account Number 349991XXXXXXXXX
+Account Type Credit card
+Date Opened 05/05/2025
+Status Open/Never late.
+Credit Limit $0
+Balance $400
+JPMCB CARD SERVICES
+Account Number 414720XXXXXXXXXX
+Account Type Credit card
+Date Opened 07/15/2022
+Status Open/Never late.
+Credit Limit $8,500
+Balance $0
+AUTO FINANCE CO
+Account Number 7001XXXX
+Account Type Auto Loan
+Date Opened 10/01/2023
+Status Open/Never late.
+Original Amount $24,000
+Balance $12,000
+CAPITAL ONE
+Account Number 517805XXXXXX
+Account Type Credit card
+Date Opened 08/2019
+Status Account closed at consumer's request
+Credit Limit $1,500
+Balance $0

@@ -1,0 +1,76 @@
+{
+  "assist": {
+    "version": "2.0.0",
+    "portedAt": "2026-10-17T06:17:13.062Z",
+    "from": "~/Downloads/Assist/Assist-2.0-Source.zip",
+    "changed": 16,
+    "added": 20,
+    "removed": 0
+  },
+  "datum": {
+    "version": "1.5.1",
+    "portedAt": "2026-10-15T18:07:25.102Z",
+    "from": "~/Downloads/Datum",
+    "changed": 4,
+    "added": 0,
+    "removed": 0
+  },
+  "ro3": {
+    "version": "1.2.0",
+    "portedAt": "2026-10-15T14:46:54.214Z",
+    "from": "~/Downloads/RO3",
+    "changed": 11,
+    "added": 1,
+    "removed": 0
+  },
+  "relay": {
+    "version": "2.0.0",
+    "portedAt": "2026-10-12T15:44:51.681Z",
+    "from": "~/Downloads/Relay",
+    "changed": 15,
+    "added": 2,
+    "removed": 0,
+    "note": "2.0: purple look, chats, split view, free AI accounts"
+  },
+  "fresh-desk": {
+    "version": "0.3.0",
+    "portedAt": "2026-10-17T04:56:31.972Z",
+    "from": "~/.codex/.chatgpt-projects/g-p-6acfc864371081918d37870f41aa2825/fresh-desk",
+    "changed": 1,
+    "added": 0,
+    "removed": 0
+  },
+  "hub": {
+    "version": "1.0.0",
+    "portedAt": "2026-10-17T05:05:31.176Z",
+    "from": "./hub",
+    "changed": 0,
+    "added": 18,
+    "removed": 0,
+    "note": "First release: install, update and remove apps from one window"
+  },
+  "onward": {
+    "version": "0.2.0",
+    "portedAt": "2026-10-17T06:17:21.578Z",
+    "from": "~/Downloads/Onward",
+    "changed": 0,
+    "added": 34,
+    "removed": 0
+  },
+  "slate": {
+    "version": "1.0.0",
+    "portedAt": "2026-10-17T06:17:21.776Z",
+    "from": "~/Downloads/Slate",
+    "changed": 0,
+    "added": 78,
+    "removed": 0
+  },
+  "sideby": {
+    "version": "0.1.1",
+    "portedAt": "2026-10-17T06:17:22.034Z",
+    "from": "~/Downloads/Sideby",
+    "changed": 0,
+    "added": 37,
+    "removed": 0
+  }
+}

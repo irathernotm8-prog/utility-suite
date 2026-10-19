@@ -1,0 +1,1652 @@
+{
+ "version": "2026-10",
+ "verifiedNote": "Fees and benefits checked against what was public through mid-2026. Confirm on the issuer site before applying.",
+ "cards": [
+  {
+   "id": "chase-sapphire-preferred",
+   "issuer": "Chase",
+   "name": "Sapphire Preferred",
+   "network": "Visa",
+   "fee": 95,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Travel, dining",
+   "currency": "Ultimate Rewards points",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 5,
+     "unit": "x",
+     "label": "Chase Travel"
+    },
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "groceries",
+     "rate": 3,
+     "unit": "x",
+     "label": "Online grocery"
+    },
+    {
+     "cat": "streaming",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "travel",
+     "rate": 2,
+     "unit": "x"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "hotel",
+     "name": "Chase Travel hotel credit",
+     "amount": 50,
+     "period": "annual",
+     "resets": "cardmember"
+    }
+   ],
+   "perks": [
+    "10% anniversary points bonus",
+    "Primary rental car coverage",
+    "Points transfer to airline and hotel partners"
+   ],
+   "changes": [
+    "Added the $50 hotel credit and online grocery / streaming 3x categories"
+   ],
+   "image": "chase-sapphire-preferred.webp",
+   "firstYearFee": null,
+   "sourceRow": 2
+  },
+  {
+   "id": "chase-sapphire-reserve",
+   "issuer": "Chase",
+   "name": "Sapphire Reserve",
+   "network": "Visa",
+   "fee": 795,
+   "score": [
+    740,
+    850
+   ],
+   "bestFor": "Premium travel, dining, lounges",
+   "currency": "Ultimate Rewards points",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 8,
+     "unit": "x",
+     "label": "Chase Travel"
+    },
+    {
+     "cat": "travel",
+     "rate": 4,
+     "unit": "x",
+     "label": "Flights & hotels booked direct"
+    },
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "travel",
+     "name": "Annual travel credit",
+     "amount": 300,
+     "period": "annual",
+     "resets": "cardmember"
+    },
+    {
+     "id": "edit",
+     "name": "The Edit hotel credit",
+     "amount": 250,
+     "period": "semiannual",
+     "resets": "calendar",
+     "note": "Prepaid 2-night stays through Chase Travel"
+    },
+    {
+     "id": "dining",
+     "name": "Sapphire Exclusive Tables dining",
+     "amount": 150,
+     "period": "semiannual",
+     "resets": "calendar"
+    },
+    {
+     "id": "stubhub",
+     "name": "StubHub / viagogo",
+     "amount": 150,
+     "period": "semiannual",
+     "resets": "calendar",
+     "note": "Requires activation"
+    },
+    {
+     "id": "appletv",
+     "name": "Apple TV+ & Apple Music",
+     "amount": 250,
+     "period": "annual",
+     "resets": "calendar",
+     "note": "Subscriptions billed to the card"
+    },
+    {
+     "id": "doordash",
+     "name": "DoorDash promos",
+     "amount": 25,
+     "period": "monthly",
+     "resets": "calendar",
+     "note": "$5 restaurant + two $10 non-restaurant promos"
+    },
+    {
+     "id": "lyft",
+     "name": "Lyft credit",
+     "amount": 10,
+     "period": "monthly",
+     "resets": "calendar"
+    },
+    {
+     "id": "peloton",
+     "name": "Peloton membership",
+     "amount": 10,
+     "period": "monthly",
+     "resets": "calendar"
+    },
+    {
+     "id": "ge",
+     "name": "Global Entry / TSA PreCheck / NEXUS",
+     "amount": 120,
+     "period": "every4years",
+     "resets": "cardmember"
+    }
+   ],
+   "perks": [
+    "Priority Pass + Sapphire Lounge access",
+    "Primary rental car coverage",
+    "Points transfer to partners"
+   ],
+   "changes": [
+    "Travel earning updated to the 2025 relaunch (8x Chase Travel, 4x direct flights & hotels)",
+    "Added the full credit list"
+   ],
+   "image": "chase-sapphire-reserve.webp",
+   "firstYearFee": null,
+   "sourceRow": 3
+  },
+  {
+   "id": "chase-freedom-flex",
+   "issuer": "Chase",
+   "name": "Freedom Flex",
+   "network": "Mastercard",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Rotating categories, everyday",
+   "currency": "Cash back (Ultimate Rewards)",
+   "rewards": [
+    {
+     "cat": "rotating",
+     "rate": 5,
+     "unit": "%",
+     "label": "Quarterly categories, activate each quarter, up to $1,500"
+    },
+    {
+     "cat": "portal",
+     "rate": 5,
+     "unit": "%",
+     "label": "Chase Travel"
+    },
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "drugstore",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Cell phone protection",
+    "Mastercard World Elite benefits"
+   ],
+   "changes": [
+    "Gas is 1% outside the quarters it rotates in; listed rotating 5% separately"
+   ],
+   "image": "chase-freedom-flex.webp",
+   "firstYearFee": null,
+   "sourceRow": 4
+  },
+  {
+   "id": "chase-freedom-unlimited",
+   "issuer": "Chase",
+   "name": "Freedom Unlimited",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "General cash back",
+   "currency": "Cash back (Ultimate Rewards)",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 5,
+     "unit": "%",
+     "label": "Chase Travel"
+    },
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "drugstore",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "base",
+     "rate": 1.5,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Pairs with Sapphire cards to turn cash back into transferable points"
+   ],
+   "changes": [],
+   "image": "chase-freedom-unlimited.webp",
+   "firstYearFee": null,
+   "sourceRow": 5
+  },
+  {
+   "id": "chase-prime-visa",
+   "issuer": "Chase",
+   "name": "Prime Visa",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Amazon & Whole Foods",
+   "currency": "Cash back (Amazon points)",
+   "note": "Requires an Amazon Prime membership",
+   "rewards": [
+    {
+     "cat": "amazon",
+     "rate": 5,
+     "unit": "%",
+     "label": "Amazon, Whole Foods, Chase Travel"
+    },
+    {
+     "cat": "dining",
+     "rate": 2,
+     "unit": "%"
+    },
+    {
+     "cat": "gas",
+     "rate": 2,
+     "unit": "%"
+    },
+    {
+     "cat": "transit",
+     "rate": 2,
+     "unit": "%"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "No foreign transaction fees"
+   ],
+   "changes": [
+    "Columns were shifted in the sheet: 2% is dining, gas and transit; 5% is Amazon / Whole Foods"
+   ],
+   "image": "chase-prime-visa.webp",
+   "firstYearFee": null,
+   "sourceRow": 6
+  },
+  {
+   "id": "amex-gold",
+   "issuer": "American Express",
+   "name": "Gold Card",
+   "network": "Amex",
+   "fee": 325,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Dining, groceries",
+   "currency": "Membership Rewards points",
+   "rewards": [
+    {
+     "cat": "dining",
+     "rate": 4,
+     "unit": "x",
+     "label": "Restaurants, up to $50k/yr"
+    },
+    {
+     "cat": "groceries",
+     "rate": 4,
+     "unit": "x",
+     "label": "US supermarkets, up to $25k/yr"
+    },
+    {
+     "cat": "travel",
+     "rate": 3,
+     "unit": "x",
+     "label": "Flights booked direct or on amextravel.com"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "dining",
+     "name": "Dining credit (Grubhub, Cheesecake Factory, Five Guys\u2026)",
+     "amount": 10,
+     "period": "monthly",
+     "resets": "calendar"
+    },
+    {
+     "id": "uber",
+     "name": "Uber Cash",
+     "amount": 10,
+     "period": "monthly",
+     "resets": "calendar"
+    },
+    {
+     "id": "resy",
+     "name": "Resy credit",
+     "amount": 50,
+     "period": "semiannual",
+     "resets": "calendar"
+    },
+    {
+     "id": "dunkin",
+     "name": "Dunkin' credit",
+     "amount": 7,
+     "period": "monthly",
+     "resets": "calendar"
+    }
+   ],
+   "perks": [
+    "$100 property credit on The Hotel Collection stays (2+ nights)",
+    "Points transfer to partners"
+   ],
+   "changes": [
+    "Added groceries 4x and the monthly / semiannual credits"
+   ],
+   "image": "amex-gold.webp",
+   "firstYearFee": null,
+   "sourceRow": 7
+  },
+  {
+   "id": "amex-platinum",
+   "issuer": "American Express",
+   "name": "Platinum Card",
+   "network": "Amex",
+   "fee": 895,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Luxury travel, lounges",
+   "currency": "Membership Rewards points",
+   "rewards": [
+    {
+     "cat": "travel",
+     "rate": 5,
+     "unit": "x",
+     "label": "Flights direct/amextravel (up to $500k), prepaid hotels on amextravel"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "hotel",
+     "name": "Fine Hotels + Resorts / Hotel Collection",
+     "amount": 300,
+     "period": "semiannual",
+     "resets": "calendar"
+    },
+    {
+     "id": "resy",
+     "name": "Resy restaurant credit",
+     "amount": 100,
+     "period": "quarterly",
+     "resets": "calendar"
+    },
+    {
+     "id": "lulu",
+     "name": "lululemon credit",
+     "amount": 75,
+     "period": "quarterly",
+     "resets": "calendar"
+    },
+    {
+     "id": "entertainment",
+     "name": "Digital entertainment",
+     "amount": 25,
+     "period": "monthly",
+     "resets": "calendar"
+    },
+    {
+     "id": "uber",
+     "name": "Uber Cash",
+     "amount": 15,
+     "period": "monthly",
+     "resets": "calendar",
+     "note": "$35 in December"
+    },
+    {
+     "id": "uberone",
+     "name": "Uber One membership",
+     "amount": 120,
+     "period": "annual",
+     "resets": "calendar"
+    },
+    {
+     "id": "airline",
+     "name": "Airline incidental fee credit",
+     "amount": 200,
+     "period": "annual",
+     "resets": "calendar"
+    },
+    {
+     "id": "clear",
+     "name": "CLEAR Plus",
+     "amount": 209,
+     "period": "annual",
+     "resets": "calendar"
+    },
+    {
+     "id": "walmart",
+     "name": "Walmart+ membership",
+     "amount": 12.95,
+     "period": "monthly",
+     "resets": "calendar"
+    },
+    {
+     "id": "oura",
+     "name": "Oura Ring",
+     "amount": 200,
+     "period": "annual",
+     "resets": "calendar"
+    },
+    {
+     "id": "ge",
+     "name": "Global Entry / TSA PreCheck",
+     "amount": 120,
+     "period": "every4years",
+     "resets": "cardmember"
+    }
+   ],
+   "perks": [
+    "Centurion, Priority Pass and Delta Sky Club (when flying Delta) lounges",
+    "Hotel elite status (Hilton Gold, Marriott Gold)"
+   ],
+   "changes": [
+    "Annual fee updated from $695 to $895 (2025 refresh)",
+    "Credits updated to the refreshed lineup"
+   ],
+   "image": "amex-platinum.webp",
+   "firstYearFee": null,
+   "sourceRow": 8
+  },
+  {
+   "id": "amex-green",
+   "issuer": "American Express",
+   "name": "Green Card",
+   "network": "Amex",
+   "fee": 150,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Travel, transit, dining",
+   "currency": "Membership Rewards points",
+   "rewards": [
+    {
+     "cat": "travel",
+     "rate": 3,
+     "unit": "x",
+     "label": "Travel incl. transit"
+    },
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "clear",
+     "name": "CLEAR Plus",
+     "amount": 209,
+     "period": "annual",
+     "resets": "calendar"
+    }
+   ],
+   "perks": [
+    "No foreign transaction fees",
+    "Points transfer to partners"
+   ],
+   "changes": [],
+   "image": "amex-green.webp",
+   "firstYearFee": null,
+   "sourceRow": 9
+  },
+  {
+   "id": "amex-blue-cash-everyday",
+   "issuer": "American Express",
+   "name": "Blue Cash Everyday",
+   "network": "Amex",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Groceries, gas, online shopping",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "groceries",
+     "rate": 3,
+     "unit": "%",
+     "label": "US supermarkets, up to $6k/yr"
+    },
+    {
+     "cat": "shopping",
+     "rate": 3,
+     "unit": "%",
+     "label": "US online retail, up to $6k/yr"
+    },
+    {
+     "cat": "gas",
+     "rate": 3,
+     "unit": "%",
+     "label": "US gas, up to $6k/yr"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [
+    {
+     "id": "disney",
+     "name": "Disney streaming bundle",
+     "amount": 7,
+     "period": "monthly",
+     "resets": "calendar"
+    }
+   ],
+   "perks": [],
+   "changes": [
+    "Gas is 3% (up to $6k/yr); dining is 1%"
+   ],
+   "image": "amex-blue-cash-everyday.webp",
+   "firstYearFee": null,
+   "sourceRow": 10
+  },
+  {
+   "id": "amex-blue-cash-preferred",
+   "issuer": "American Express",
+   "name": "Blue Cash Preferred",
+   "network": "Amex",
+   "fee": 95,
+   "firstYearFee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Groceries, streaming",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "groceries",
+     "rate": 6,
+     "unit": "%",
+     "label": "US supermarkets, up to $6k/yr"
+    },
+    {
+     "cat": "streaming",
+     "rate": 6,
+     "unit": "%",
+     "label": "Select US streaming"
+    },
+    {
+     "cat": "transit",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "gas",
+     "rate": 3,
+     "unit": "%",
+     "label": "US gas"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [
+    {
+     "id": "disney",
+     "name": "Disney streaming bundle",
+     "amount": 10,
+     "period": "monthly",
+     "resets": "calendar"
+    }
+   ],
+   "perks": [],
+   "changes": [
+    "Added the $0 intro annual fee and 3% transit"
+   ],
+   "image": "amex-blue-cash-preferred.webp",
+   "sourceRow": 11
+  },
+  {
+   "id": "capone-venture-x",
+   "issuer": "Capital One",
+   "name": "Venture X",
+   "network": "Visa",
+   "fee": 395,
+   "score": [
+    740,
+    850
+   ],
+   "bestFor": "Travel, lounges",
+   "currency": "Capital One miles",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 10,
+     "unit": "x",
+     "label": "Hotels & rental cars via Capital One Travel"
+    },
+    {
+     "cat": "travel",
+     "rate": 5,
+     "unit": "x",
+     "label": "Flights & vacation rentals via Capital One Travel"
+    },
+    {
+     "cat": "base",
+     "rate": 2,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "travel",
+     "name": "Capital One Travel credit",
+     "amount": 300,
+     "period": "annual",
+     "resets": "cardmember"
+    },
+    {
+     "id": "ge",
+     "name": "Global Entry / TSA PreCheck",
+     "amount": 120,
+     "period": "every4years",
+     "resets": "cardmember"
+    }
+   ],
+   "perks": [
+    "10,000 anniversary miles (~$100)",
+    "Capital One Lounges + Priority Pass",
+    "Miles transfer to partners"
+   ],
+   "changes": [
+    "Added the $300 travel credit and anniversary miles"
+   ],
+   "image": "capone-venture-x.webp",
+   "firstYearFee": null,
+   "sourceRow": 12
+  },
+  {
+   "id": "capone-venture",
+   "issuer": "Capital One",
+   "name": "Venture Rewards",
+   "network": "Visa",
+   "fee": 95,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Simple travel rewards",
+   "currency": "Capital One miles",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 5,
+     "unit": "x",
+     "label": "Hotels & rental cars via Capital One Travel"
+    },
+    {
+     "cat": "base",
+     "rate": 2,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "ge",
+     "name": "Global Entry / TSA PreCheck",
+     "amount": 120,
+     "period": "every4years",
+     "resets": "cardmember"
+    }
+   ],
+   "perks": [
+    "Miles transfer to partners"
+   ],
+   "changes": [],
+   "image": "capone-venture.webp",
+   "firstYearFee": null,
+   "sourceRow": 13
+  },
+  {
+   "id": "capone-savor",
+   "issuer": "Capital One",
+   "name": "Savor",
+   "network": "Mastercard",
+   "fee": 0,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Dining, entertainment, groceries",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "entertainment",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "groceries",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "streaming",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "portal",
+     "rate": 5,
+     "unit": "%",
+     "label": "Hotels & rentals via Capital One Travel"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "No foreign transaction fees"
+   ],
+   "changes": [
+    "Added 3% groceries and streaming"
+   ],
+   "image": "capone-savor.webp",
+   "firstYearFee": null,
+   "sourceRow": 14
+  },
+  {
+   "id": "capone-quicksilver",
+   "issuer": "Capital One",
+   "name": "Quicksilver",
+   "network": "Mastercard",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Flat-rate cash back",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 5,
+     "unit": "%",
+     "label": "Hotels & rentals via Capital One Travel"
+    },
+    {
+     "cat": "base",
+     "rate": 1.5,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "No foreign transaction fees"
+   ],
+   "changes": [],
+   "image": "capone-quicksilver.webp",
+   "firstYearFee": null,
+   "sourceRow": 15
+  },
+  {
+   "id": "capone-platinum",
+   "issuer": "Capital One",
+   "name": "Platinum",
+   "network": "Mastercard",
+   "fee": 0,
+   "score": [
+    580,
+    700
+   ],
+   "bestFor": "Credit building",
+   "currency": "No rewards",
+   "rewards": [],
+   "credits": [],
+   "perks": [
+    "Automatic credit line reviews in as little as 6 months"
+   ],
+   "changes": [],
+   "image": "capone-platinum.webp",
+   "firstYearFee": null,
+   "sourceRow": 16
+  },
+  {
+   "id": "citi-double-cash",
+   "issuer": "Citi",
+   "name": "Double Cash",
+   "network": "Mastercard",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Flat-rate cash back",
+   "currency": "Cash back (ThankYou points)",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 5,
+     "unit": "%",
+     "label": "Hotels, cars & attractions via Citi Travel"
+    },
+    {
+     "cat": "base",
+     "rate": 2,
+     "unit": "%",
+     "label": "1% when you buy, 1% when you pay"
+    }
+   ],
+   "credits": [],
+   "perks": [],
+   "changes": [],
+   "image": "citi-double-cash.webp",
+   "firstYearFee": null,
+   "sourceRow": 17
+  },
+  {
+   "id": "citi-custom-cash",
+   "issuer": "Citi",
+   "name": "Custom Cash",
+   "network": "Mastercard",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Top spending category",
+   "currency": "Cash back (ThankYou points)",
+   "rewards": [
+    {
+     "cat": "top",
+     "rate": 5,
+     "unit": "%",
+     "label": "Your top eligible category each billing cycle, up to $500"
+    },
+    {
+     "cat": "portal",
+     "rate": 4,
+     "unit": "%",
+     "label": "Hotels, cars & attractions via Citi Travel"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [],
+   "changes": [
+    "\"Varies\" columns replaced with the top-category rule"
+   ],
+   "image": "citi-custom-cash.webp",
+   "firstYearFee": null,
+   "sourceRow": 18
+  },
+  {
+   "id": "citi-strata-premier",
+   "issuer": "Citi",
+   "name": "Strata Premier",
+   "network": "Mastercard",
+   "fee": 95,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Travel, dining, groceries, gas",
+   "currency": "ThankYou points",
+   "rewards": [
+    {
+     "cat": "portal",
+     "rate": 10,
+     "unit": "x",
+     "label": "Hotels, cars & attractions via Citi Travel"
+    },
+    {
+     "cat": "travel",
+     "rate": 3,
+     "unit": "x",
+     "label": "Air travel & hotels"
+    },
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "groceries",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "gas",
+     "rate": 3,
+     "unit": "x",
+     "label": "Gas & EV charging"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "hotel",
+     "name": "Hotel savings ($500+ stay via Citi Travel)",
+     "amount": 100,
+     "period": "annual",
+     "resets": "calendar"
+    }
+   ],
+   "perks": [
+    "Points transfer to partners"
+   ],
+   "changes": [
+    "Gas is 3x, not 1x",
+    "Added the $100 hotel benefit"
+   ],
+   "image": "citi-strata-premier.webp",
+   "firstYearFee": null,
+   "sourceRow": 19
+  },
+  {
+   "id": "citi-costco",
+   "issuer": "Citi",
+   "name": "Costco Anywhere Visa",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Gas, travel, Costco",
+   "currency": "Cash back (annual Costco reward)",
+   "note": "Requires a Costco membership",
+   "rewards": [
+    {
+     "cat": "gas",
+     "rate": 4,
+     "unit": "%",
+     "label": "Gas & EV charging, up to $7k/yr"
+    },
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "travel",
+     "rate": 3,
+     "unit": "%"
+    },
+    {
+     "cat": "costco",
+     "rate": 2,
+     "unit": "%",
+     "label": "Costco & Costco.com"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Cash back arrives once a year as a Costco reward certificate"
+   ],
+   "changes": [
+    "Columns were shifted in the sheet: 4% is gas, 2% is Costco"
+   ],
+   "image": "citi-costco.webp",
+   "firstYearFee": null,
+   "sourceRow": 20
+  },
+  {
+   "id": "boa-customized-cash",
+   "issuer": "Bank of America",
+   "name": "Customized Cash Rewards",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Choose-your-category cash back",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "choice",
+     "rate": 3,
+     "unit": "%",
+     "label": "Your choice: gas/EV, online shopping, dining, travel, drugstores or home improvement"
+    },
+    {
+     "cat": "groceries",
+     "rate": 2,
+     "unit": "%",
+     "label": "Grocery & wholesale clubs"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "3% and 2% share a $2,500 quarterly cap",
+    "Preferred Rewards members earn 25\u201375% more"
+   ],
+   "changes": [],
+   "image": "boa-customized-cash.webp",
+   "firstYearFee": null,
+   "sourceRow": 21
+  },
+  {
+   "id": "boa-unlimited-cash",
+   "issuer": "Bank of America",
+   "name": "Unlimited Cash Rewards",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Flat-rate cash back",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "base",
+     "rate": 1.5,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Preferred Rewards members earn 25\u201375% more"
+   ],
+   "changes": [],
+   "image": "boa-unlimited-cash.webp",
+   "firstYearFee": null,
+   "sourceRow": 22
+  },
+  {
+   "id": "boa-travel-rewards",
+   "issuer": "Bank of America",
+   "name": "Travel Rewards",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "No-fee travel",
+   "currency": "Points (1\u00a2 toward travel)",
+   "rewards": [
+    {
+     "cat": "base",
+     "rate": 1.5,
+     "unit": "x"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "No foreign transaction fees"
+   ],
+   "changes": [],
+   "image": "boa-travel-rewards.webp",
+   "firstYearFee": null,
+   "sourceRow": 23
+  },
+  {
+   "id": "boa-premium-rewards",
+   "issuer": "Bank of America",
+   "name": "Premium Rewards",
+   "network": "Visa",
+   "fee": 95,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "Travel, dining",
+   "currency": "Points",
+   "rewards": [
+    {
+     "cat": "travel",
+     "rate": 2,
+     "unit": "x"
+    },
+    {
+     "cat": "dining",
+     "rate": 2,
+     "unit": "x"
+    },
+    {
+     "cat": "base",
+     "rate": 1.5,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "airline",
+     "name": "Airline incidental credit",
+     "amount": 100,
+     "period": "annual",
+     "resets": "calendar"
+    },
+    {
+     "id": "ge",
+     "name": "Global Entry / TSA PreCheck",
+     "amount": 120,
+     "period": "every4years",
+     "resets": "cardmember"
+    }
+   ],
+   "perks": [
+    "No foreign transaction fees"
+   ],
+   "changes": [
+    "Added the $100 airline and Global Entry credits"
+   ],
+   "image": "boa-premium-rewards.webp",
+   "firstYearFee": null,
+   "sourceRow": 24
+  },
+  {
+   "id": "discover-it-cash-back",
+   "issuer": "Discover",
+   "name": "Discover it Cash Back",
+   "network": "Discover",
+   "fee": 0,
+   "score": [
+    640,
+    850
+   ],
+   "bestFor": "Rotating categories",
+   "currency": "Cash back",
+   "note": "Discover is now owned by Capital One; cards are still issued as Discover",
+   "rewards": [
+    {
+     "cat": "rotating",
+     "rate": 5,
+     "unit": "%",
+     "label": "Quarterly categories, activate each quarter, up to $1,500"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Cashback Match: first-year cash back doubled"
+   ],
+   "changes": [],
+   "image": "discover-it-cash-back.webp",
+   "firstYearFee": null,
+   "sourceRow": 25
+  },
+  {
+   "id": "discover-it-miles",
+   "issuer": "Discover",
+   "name": "Discover it Miles",
+   "network": "Discover",
+   "fee": 0,
+   "score": [
+    640,
+    850
+   ],
+   "bestFor": "Flat-rate travel",
+   "currency": "Miles (1\u00a2 each)",
+   "note": "Discover is now owned by Capital One",
+   "rewards": [
+    {
+     "cat": "base",
+     "rate": 1.5,
+     "unit": "x"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Miles Match: first-year miles doubled",
+    "No foreign transaction fees"
+   ],
+   "changes": [],
+   "image": "discover-it-miles.webp",
+   "firstYearFee": null,
+   "sourceRow": 26
+  },
+  {
+   "id": "discover-it-student",
+   "issuer": "Discover",
+   "name": "Discover it Student Cash Back",
+   "network": "Discover",
+   "fee": 0,
+   "score": [
+    580,
+    850
+   ],
+   "bestFor": "Students",
+   "currency": "Cash back",
+   "note": "Discover is now owned by Capital One",
+   "rewards": [
+    {
+     "cat": "rotating",
+     "rate": 5,
+     "unit": "%",
+     "label": "Quarterly categories, activate each quarter, up to $1,500"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Cashback Match: first-year cash back doubled"
+   ],
+   "changes": [
+    "\"Same as Cash Back\" filled in with the actual rates"
+   ],
+   "image": "discover-it-student.webp",
+   "firstYearFee": null,
+   "sourceRow": 27
+  },
+  {
+   "id": "wf-active-cash",
+   "issuer": "Wells Fargo",
+   "name": "Active Cash",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Flat-rate cash back",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "base",
+     "rate": 2,
+     "unit": "%"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Cell phone protection"
+   ],
+   "changes": [],
+   "image": "wf-active-cash.webp",
+   "firstYearFee": null,
+   "sourceRow": 28
+  },
+  {
+   "id": "wf-autograph",
+   "issuer": "Wells Fargo",
+   "name": "Autograph",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "No-fee travel, dining, transit",
+   "currency": "Points",
+   "rewards": [
+    {
+     "cat": "dining",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "travel",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "gas",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "transit",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "streaming",
+     "rate": 3,
+     "unit": "x"
+    },
+    {
+     "cat": "phone",
+     "rate": 3,
+     "unit": "x",
+     "label": "Phone plans"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "Cell phone protection",
+    "No foreign transaction fees"
+   ],
+   "changes": [
+    "Shopping is 1x, not 3x; gas is 3x, not 1x"
+   ],
+   "image": "wf-autograph.webp",
+   "firstYearFee": null,
+   "sourceRow": 29
+  },
+  {
+   "id": "wf-reflect",
+   "issuer": "Wells Fargo",
+   "name": "Reflect",
+   "network": "Visa",
+   "fee": 0,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Balance transfers, long 0% intro APR",
+   "currency": "No rewards",
+   "rewards": [],
+   "credits": [],
+   "perks": [
+    "Long 0% intro APR on purchases and balance transfers"
+   ],
+   "changes": [
+    "Reflect has no rewards; the 1% everywhere in the sheet was removed"
+   ],
+   "image": "wf-reflect.webp",
+   "firstYearFee": null,
+   "sourceRow": 30
+  },
+  {
+   "id": "barclays-jetblue-plus",
+   "issuer": "Barclays",
+   "name": "JetBlue Plus",
+   "network": "Mastercard",
+   "fee": 99,
+   "score": [
+    700,
+    850
+   ],
+   "bestFor": "JetBlue flyers",
+   "currency": "TrueBlue points",
+   "rewards": [
+    {
+     "cat": "airline",
+     "rate": 6,
+     "unit": "x",
+     "label": "JetBlue purchases"
+    },
+    {
+     "cat": "dining",
+     "rate": 2,
+     "unit": "x"
+    },
+    {
+     "cat": "groceries",
+     "rate": 2,
+     "unit": "x"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [
+    {
+     "id": "vacations",
+     "name": "JetBlue Vacations credit",
+     "amount": 100,
+     "period": "annual",
+     "resets": "cardmember"
+    }
+   ],
+   "perks": [
+    "Free first checked bag",
+    "5,000 anniversary points",
+    "50% back on inflight purchases"
+   ],
+   "changes": [
+    "Groceries 2x added; gas is 1x"
+   ],
+   "image": "barclays-jetblue-plus.webp",
+   "firstYearFee": null,
+   "sourceRow": 31
+  },
+  {
+   "id": "barclays-wyndham-earner-plus",
+   "issuer": "Barclays",
+   "name": "Wyndham Rewards Earner Plus",
+   "network": "Visa",
+   "fee": 75,
+   "score": [
+    670,
+    850
+   ],
+   "bestFor": "Wyndham hotels, gas",
+   "currency": "Wyndham points",
+   "rewards": [
+    {
+     "cat": "hotel",
+     "rate": 6,
+     "unit": "x",
+     "label": "Wyndham hotels"
+    },
+    {
+     "cat": "gas",
+     "rate": 6,
+     "unit": "x"
+    },
+    {
+     "cat": "dining",
+     "rate": 4,
+     "unit": "x"
+    },
+    {
+     "cat": "groceries",
+     "rate": 4,
+     "unit": "x"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "x"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "7,500 anniversary points",
+    "Automatic Platinum status"
+   ],
+   "changes": [
+    "Gas is 6x and dining/groceries 4x; \"shopping 6x\" in the sheet was gas"
+   ],
+   "image": "barclays-wyndham-earner-plus.webp",
+   "firstYearFee": null,
+   "sourceRow": 32
+  },
+  {
+   "id": "creditone-platinum",
+   "issuer": "Credit One",
+   "name": "Platinum Visa",
+   "network": "Visa",
+   "fee": 0,
+   "feeNote": "Varies by offer, up to $99",
+   "score": [
+    300,
+    650
+   ],
+   "bestFor": "Credit building",
+   "currency": "Cash back",
+   "rewards": [
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%",
+     "label": "Eligible purchases (varies by version)"
+    }
+   ],
+   "credits": [],
+   "perks": [],
+   "changes": [],
+   "image": "creditone-platinum.webp",
+   "firstYearFee": null,
+   "sourceRow": 33
+  },
+  {
+   "id": "apple-card",
+   "issuer": "Goldman Sachs",
+   "name": "Apple Card",
+   "network": "Mastercard",
+   "fee": 0,
+   "score": [
+    660,
+    850
+   ],
+   "bestFor": "Apple Pay spending",
+   "currency": "Daily Cash",
+   "note": "JPMorgan Chase is taking over as issuer from Goldman Sachs; the card keeps working during the transition",
+   "rewards": [
+    {
+     "cat": "apple",
+     "rate": 3,
+     "unit": "%",
+     "label": "Apple & select merchants via Apple Pay"
+    },
+    {
+     "cat": "applepay",
+     "rate": 2,
+     "unit": "%",
+     "label": "Everything paid with Apple Pay"
+    },
+    {
+     "cat": "base",
+     "rate": 1,
+     "unit": "%",
+     "label": "Physical card"
+    }
+   ],
+   "credits": [],
+   "perks": [
+    "No fees of any kind",
+    "Daily Cash can go into an Apple savings account"
+   ],
+   "changes": [
+    "Noted the issuer transition to Chase"
+   ],
+   "image": "apple-card.webp",
+   "firstYearFee": null,
+   "sourceRow": 34
+  }
+ ],
+ "imagesVersion": "2026-10-16c"
+}

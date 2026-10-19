@@ -1,0 +1,22 @@
+{{suite}} {{version}} for Mac
+===========================================
+
+Inside: Utility Hub, plus packages for
+{{apps}}
+
+
+FIRST TIME ON THIS MAC
+----------------------
+1. Right-click "Utility Hub" and choose Open, then Open again.
+   (The right-click is only needed the first time, because the apps aren't from the App Store.
+   If macOS still refuses: System Settings → Privacy & Security → scroll down → Open Anyway.)
+2. Utility Hub asks to set itself up. Tick the apps you want and click Install.
+   The hub copies itself into Applications and reopens from there.
+
+ALREADY USING UTILITY HUB?
+--------------------------
+Just open Utility Hub while this disk image is open (or with this file in Downloads).
+It shows "New packages" — click Add packages, then Update.
+The hub updates itself too when this download has a newer version of it.
+
+Your apps' settings, accounts and files are never touched by installing, updating or removing.

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: http: blob: file:; media-src 'self' https: http: blob: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; connect-src 'self' https: http: blob:;" />
+  <title>Relay</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="assets/relay-mark-64.png">
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="titlebar">
+      <div class="app-brand">
+        <img class="brand-mark" src="assets/relay-mark.png" alt="" aria-hidden="true" draggable="false">
+        <span class="brand-name">relay</span>
+      </div>
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="titlebar-actions">
+        <button class="ai-toggle" id="aiToggle" title="AI assistant (⌘J)">
+          <span class="spark" aria-hidden="true"></span><span>Assistant</span>
+        </button>
+        <button class="icon-btn" id="palBtn" title="Quick switcher — jump anywhere (⌘K)"></button>
+        <button class="icon-btn" id="splitBtn" title="Split view — two accounts side by side (⌘⇧S)"></button>
+        <button class="icon-btn" id="settingsBtn" title="Settings (⌘,)"></button>
+      </div>
+    </header>
+
+    <aside class="sidebar" id="sidebar"></aside>
+    <button class="side-toggle" id="sideToggle" title="Collapse sidebar (⌘\)"></button>
+
+    <main class="main" id="main">
+      <div class="webviews" id="webviews"></div>
+      <div class="empty" id="empty" hidden></div>
+      <section class="home" id="home" hidden></section>
+      <section class="calendar" id="calendar" hidden></section>
+      <section class="vault" id="vault" hidden></section>
+      <section class="browser" id="browser" hidden></section>
+      <section class="downloads home" id="downloads" hidden></section>
+      <section class="tracking home" id="tracking" hidden></section>
+      <section class="library home" id="library" hidden></section>
+    </main>
+
+    <aside class="ai-panel" id="aiPanel" aria-hidden="true"></aside>
+  </div>
+
+  <div class="modal-root" id="modalRoot"></div>
+  <div class="menu-root" id="menuRoot"></div>
+  <div class="toast-root" id="toastRoot"></div>
+
+  <script src="../shared/carriers.js"></script>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="calendar.js"></script>
+  <script src="ai.js"></script>
+  <script src="aiweb.js"></script>
+  <script src="home.js"></script>
+  <script src="briefing.js"></script>
+  <script src="vault.js"></script>
+  <script src="skins.js"></script>
+  <script src="storage.js"></script>
+  <script src="browser.js"></script>
+  <script src="downloads.js"></script>
+  <script src="tracking.js"></script>
+  <script src="../../node_modules/hls.js/dist/hls.min.js"></script>
+  <script src="player.js"></script>
+  <script src="reader.js"></script>
+  <script src="library.js"></script>
+  <script src="palette.js"></script>
+</body>
+</html>

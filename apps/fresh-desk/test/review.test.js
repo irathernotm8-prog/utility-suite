@@ -1,0 +1,6 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {visibleRows,selectedVisible}=require('../renderer/review-model');
+const rows=[{id:'a',name:'Receipt.pdf',from:'/docs/Receipt.pdf',folder:'Documents',old:true,bytes:100,modified:'2020-01-01'},{id:'b',name:'Art.png',from:'/art/Art.png',folder:'Images',old:false,bytes:500,modified:'2026-01-01'},{id:'c',name:'Notes.txt',from:'/docs/Notes.txt',folder:'Documents',old:true,bytes:20,modified:'2021-01-01'}];
+test('age, group and case-insensitive search filters combine',()=>{assert.deepEqual(visibleRows(rows,{age:'old',group:'Documents',query:'RECEIPT'}).map(r=>r.id),['a']);assert.deepEqual(visibleRows(rows,{age:'recent'}).map(r=>r.id),['b']);assert.equal(visibleRows(rows,{query:'missing'}).length,0);});
+test('hidden checked files never enter actions and original scan stays intact',()=>{const checked=new Set(['a','b','c']);assert.deepEqual(selectedVisible(rows,checked,{age:'old',sort:'largest'}).map(r=>r.id),['a','c']);assert.deepEqual(selectedVisible(rows,checked,{age:'old',query:'notes'}).map(r=>r.id),['c']);assert.equal(rows.length,3);assert.deepEqual(visibleRows(rows,{sort:'oldest'}).map(r=>r.id),['a','c','b']);});

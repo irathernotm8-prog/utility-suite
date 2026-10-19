@@ -1,0 +1,32 @@
+name: Build Utility Suite
+
+# Builds the suite on real Mac and Windows machines (useful if a Windows
+# cross-build from the Mac ever fails). In the GitHub
+# repo: Actions → Build Utility Suite → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: "Apps to include (blank = all, or e.g. ro3,datum)"
+        required: false
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/utility.mjs suite --mac ${{ inputs.apps && format('--apps {0}', inputs.apps) || '' }}
+      - uses: actions/upload-artifact@v4
+        with: { name: Utility-Suite-mac, path: releases/suite/*/mac/*.dmg }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/utility.mjs suite --win ${{ inputs.apps && format('--apps {0}', inputs.apps) || '' }}
+      - uses: actions/upload-artifact@v4
+        with: { name: Utility-Suite-windows, path: releases/suite/*/win/*.zip }

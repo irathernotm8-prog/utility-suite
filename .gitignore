@@ -1,0 +1,26 @@
+# Installed dependencies and build output (rebuilt from source)
+node_modules/
+dist/
+dist-*/
+out/
+.build/
+releases/
+
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+
+# Mac / Windows clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# GitHub CLI copy used by Set Up GitHub.command
+tools/bin/

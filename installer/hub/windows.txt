@@ -1,0 +1,26 @@
+{{suite}} {{version}} for Windows
+===========================================
+
+Inside: Utility Hub, plus packages for
+{{apps}}
+
+
+FIRST TIME ON THIS PC
+---------------------
+1. Right-click this zip → Extract All… (don't run anything from inside the zip).
+2. In the extracted folder, double-click Install.cmd.
+   If Windows shows "Windows protected your PC", click More info → Run anyway.
+   (That warning appears because the apps aren't code-signed; it's expected.)
+3. Utility Hub asks to set itself up. Tick the apps you want and click Install.
+   No administrator password is needed. The hub and apps appear in the Start Menu
+   under "Utility Suite", and Utility Hub appears in Settings → Apps.
+
+ALREADY USING UTILITY HUB?
+--------------------------
+Leave this zip in Downloads and open Utility Hub. It shows "New packages" —
+click Add packages, then Update. The hub updates itself too when this download
+has a newer version of it.
+
+Old copies of these apps (installed with their own Setup files, portable .exe files,
+unzipped folders) are replaced automatically, and the hub's Settings tab can find and
+remove any others. Your apps' settings, accounts and files are never touched.

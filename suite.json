@@ -1,0 +1,115 @@
+{
+  "suiteName": "Utility Suite",
+  "publisher": "Bilal",
+  "defaultExcludes": [
+    "node_modules",
+    "dist",
+    ".git",
+    ".DS_Store",
+    "Thumbs.db",
+    ".env",
+    "*.log",
+    "*.blockmap"
+  ],
+  "apps": [
+    {
+      "id": "assist",
+      "name": "Assist",
+      "description": "Private, on-device AI chat and reply assistant",
+      "macArch": "universal",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/Old app folders (safe to delete)/Assist/Assist-2.0-Source.zip"
+    },
+    {
+      "id": "datum",
+      "name": "Datum",
+      "description": "Linked spreadsheets, slides, docs and dashboards",
+      "macArch": "universal",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/Old app folders (safe to delete)/Datum"
+    },
+    {
+      "id": "ro3",
+      "name": "RO3",
+      "description": "Photo editing, video editing and file conversion",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/Old app folders (safe to delete)/RO3"
+    },
+    {
+      "id": "relay",
+      "name": "Relay",
+      "description": "Inboxes, calendars, browser, library and AI in one place",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [
+        "Relay Files"
+      ],
+      "movedFrom": "~/Downloads/Old app folders (safe to delete)/Relay"
+    },
+    {
+      "id": "fresh-desk",
+      "name": "Fresh Desk",
+      "description": "Private folder organization with preview and undo",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/.codex/.chatgpt-projects/g-p-6acfc864371081918d37870f41aa2825/fresh-desk"
+    },
+    {
+      "id": "hub",
+      "name": "Utility Hub",
+      "role": "hub",
+      "description": "Install, update and remove the Utility Suite apps",
+      "macArch": "universal",
+      "winArch": "x64",
+      "exclude": []
+    },
+    {
+      "id": "onward",
+      "name": "Onward",
+      "description": "Job hunting with your AI plugged in",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [
+        "Onward Files",
+        "dist-windows"
+      ],
+      "movedFrom": "~/Downloads/Old app folders (safe to delete)/Onward"
+    },
+    {
+      "id": "slate",
+      "name": "Slate",
+      "description": "Accounts, retirement, credit cards, credit score and a monthly savings plan in one place.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/Old app folders (safe to delete)/Slate"
+    },
+    {
+      "id": "sideby",
+      "name": "Sideby",
+      "description": "Watch anything together with friends, in sync",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/Old app folders (safe to delete)/Sideby"
+    },
+    {
+      "id": "kiln",
+      "name": "Kiln",
+      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/kiln-source"
+    }
+  ],
+  "updates": {
+    "repo": "irathernotm8-prog/utility-suite",
+    "release": "packages"
+  }
+}

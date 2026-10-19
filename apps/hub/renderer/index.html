@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Utility Hub</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Utility Hub</div>
+    <div class="titlebar-actions">
+      <button class="btn ghost" data-action="refresh" title="Check online, and look in Downloads, the Desktop, connected disks and your watched folders">Check for updates</button>
+      <button class="btn" data-action="add-packages">Add packages…</button>
+    </div>
+  </header>
+
+  <section class="pegboard" id="dock" aria-label="Your apps"></section>
+
+  <div id="banners"></div>
+
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+
+  <main id="view" tabindex="-1"></main>
+
+  <div id="toasts" aria-live="polite"></div>
+  <div id="modal-root"></div>
+  <div id="drop" hidden><div>Drop a Utility Suite download to add its packages</div></div>
+  <script src="app.js"></script>
+</body>
+</html>

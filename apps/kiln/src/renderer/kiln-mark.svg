@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4b3832"/>
+      <stop offset="1" stop-color="#170f0d"/>
+    </linearGradient>
+    <linearGradient id="arch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc66b"/>
+      <stop offset="0.6" stop-color="#ff8a3d"/>
+      <stop offset="1" stop-color="#ee5428"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffdea0"/>
+      <stop offset="1" stop-color="#ffb04f"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#bg)"/>
+  <path d="M20.75 46.6V31.3a11.25 11.25 0 0 1 22.5 0v15.3" fill="none" stroke="url(#arch)" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M32 25.6c3 3.9 6.3 6.9 6.3 12.4a6.25 6.5 0 0 1-12.5 0c0-3.5 1.4-5.6 3.1-7.2.4 2.2 1.4 3.6 2.7 4.1-.6-3.4-.5-6.6.4-9.3z" fill="url(#flame)"/>
+</svg>

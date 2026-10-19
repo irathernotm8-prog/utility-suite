@@ -1,0 +1,68 @@
+{
+  "name": "sideby",
+  "version": "2.0.0",
+  "description": "Watch anything together with friends, in sync",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "friend": "SIDEBY_PROFILE=friend electron .",
+    "test": "node --test test/*.test.mjs",
+    "vendor": "node tools/build-vendor.mjs",
+    "relay": "node relay/server.mjs",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac dmg zip --arm64",
+    "dist:win": "electron-builder --win nsis --x64",
+    "test:e2e": "node test/e2e/run.mjs"
+  },
+  "author": "Bilal",
+  "license": "MIT",
+  "type": "commonjs",
+  "build": {
+    "appId": "app.sideby.desktop",
+    "productName": "Sideby",
+    "files": [
+      "electron/**/*",
+      "ui/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "protocols": [
+      {
+        "name": "Sideby Room",
+        "schemes": [
+          "sideby"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.entertainment",
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "Sideby shares a window or your screen with friends when you choose to broadcast.",
+        "NSMicrophoneUsageDescription": "Sideby doesn\u2019t use your microphone."
+      }
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "icon": "build/icon.png"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.20.1"
+  },
+  "devDependencies": {
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@trystero-p2p/ws-relay": "0.26.0",
+    "electron": "44.9.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "hls.js": "^1.7.3",
+    "trystero": "0.26.0"
+  }
+}

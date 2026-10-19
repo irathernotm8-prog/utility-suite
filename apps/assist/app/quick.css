@@ -1,0 +1,21 @@
+html, body.quick { background: transparent !important; height: auto; overflow: hidden; }
+body.quick { display: block; }
+.quick .q-card {
+  margin: 0; background: rgba(23, 24, 28, .97); border: 1px solid var(--line-2); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,.5);
+}
+.os-darwin.quick .q-card { background: rgba(23, 24, 28, .88); }
+.q-row { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 14px; -webkit-app-region: drag; }
+.q-row textarea, .q-row button { -webkit-app-region: no-drag; }
+.q-mark { width: 28px; height: 28px; flex: none; }
+#q { flex: 1; border: 0; outline: none; background: transparent; resize: none; font-size: 17px; padding: 4px 0; line-height: 1.45; max-height: 140px; box-shadow: none !important; }
+.q-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 14px 12px; }
+.q-label { font-size: 12px; color: var(--faint); margin-right: 2px; }
+.q-actions button { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; }
+.q-actions button:hover { color: var(--text); border-color: rgba(255, 201, 41, .5); }
+.q-answer { border-top: 1px solid var(--line); padding: 14px 18px 6px; max-height: 520px; overflow: auto; }
+.q-status { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; margin-bottom: 8px; }
+.q-answer .md { font-size: 14.5px; }
+.q-foot { display: flex; align-items: center; gap: 6px; padding: 8px 12px 12px; }
+.q-meta { font-size: 12px; color: var(--faint); }
+.q-foot .btn.on { color: var(--yellow); border-color: rgba(255, 201, 41, .5); }

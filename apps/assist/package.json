@@ -1,0 +1,100 @@
+{
+  "name": "assist",
+  "version": "2.0.0",
+  "description": "Private, on-device AI chat and reply assistant.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac --universal",
+    "dist:win": "electron-builder --win --x64 && electron-builder --win --arm64"
+  },
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "productName": "Assist",
+  "build": {
+    "appId": "com.bilal.assist",
+    "productName": "Assist",
+    "copyright": "© 2026 Bilal",
+    "files": [
+      "main.js",
+      "preload.js",
+      "web.js",
+      "app/**/*",
+      "!app/**/*.LICENSE"
+    ],
+    "extraResources": [
+      {
+        "from": "app/web-llm.LICENSE",
+        "to": "licenses/web-llm.LICENSE"
+      },
+      {
+        "from": "THIRD_PARTY.md",
+        "to": "licenses/THIRD_PARTY.md"
+      }
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asar": true,
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "darkModeSupport": true,
+      "artifactName": "Assist-${version}-mac.${ext}",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Assist",
+      "contents": [
+        {
+          "x": 150,
+          "y": 190
+        },
+        {
+          "x": 390,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis"
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Assist-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Assist",
+      "uninstallDisplayName": "Assist"
+    },
+    "publish": null
+  }
+}

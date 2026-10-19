@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Quick Ask</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="chat.css">
+  <link rel="stylesheet" href="quick.css">
+</head>
+<body class="quick">
+  <div class="q-card" id="card">
+    <form class="q-row" id="form">
+      <img class="q-mark" src="icons/mark.svg" alt="">
+      <textarea id="q" rows="1" placeholder="Ask Assist anything…" autocomplete="off"></textarea>
+      <button type="button" class="tpill" id="web" title="Search the web"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>Web</span></button>
+      <button type="submit" class="send" id="go" aria-label="Ask"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </form>
+    <div class="q-actions" id="clipActions">
+      <span class="q-label">With clipboard:</span>
+      <button type="button" data-act="reply">Draft a reply</button>
+      <button type="button" data-act="improve">Improve writing</button>
+      <button type="button" data-act="summarize">Summarize</button>
+      <button type="button" data-act="explain">Explain</button>
+      <button type="button" data-act="translate">Translate to English</button>
+    </div>
+    <div class="q-answer" id="answer" hidden>
+      <div class="q-status" id="status" hidden><span class="spin"></span><span id="statusText"></span></div>
+      <div class="md" id="out"></div>
+      <div class="sources" id="sources"></div>
+    </div>
+    <div class="q-foot" id="foot" hidden>
+      <span class="q-meta" id="meta"></span>
+      <span class="spacer"></span>
+      <button type="button" class="btn tiny" id="pin" title="Keep this window open when you click away">Keep open</button>
+      <button type="button" class="btn tiny" id="cont">Continue in Assist</button>
+      <button type="button" class="btn tiny accent" id="copy">Copy</button>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script type="module" src="quick.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 824 824">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1D1E22"/>
+      <stop offset="1" stop-color="#0B0C0E"/>
+    </linearGradient>
+    <linearGradient id="y" gradientUnits="userSpaceOnUse" x1="0" y1="300" x2="0" y2="780">
+      <stop offset="0" stop-color="#FFD84D"/>
+      <stop offset="1" stop-color="#FFC21A"/>
+    </linearGradient>
+    <clipPath id="hull"><polygon points="512,134 222,800 802,800"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="190" fill="url(#tile)"/>
+  <rect x="102" y="102" width="820" height="820" rx="188" fill="none" stroke="#FFFFFF" stroke-opacity=".07" stroke-width="4"/>
+  <g fill="url(#y)">
+    <!-- A legs -->
+    <path d="M318 746 L512 300 L706 746" fill="none" stroke="url(#y)" stroke-width="132" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- solid crossbar block -->
+    <rect x="240" y="528" width="544" height="186" rx="40" clip-path="url(#hull)"/>
+  </g>
+  <!-- dark speech bubble cut into the crossbar -->
+  <path d="M410 562 H614 a46 46 0 0 1 46 46 V632 a46 46 0 0 1 -46 46 H438 L392 708 L398 668 a46 46 0 0 1 -34 -36 V608 a46 46 0 0 1 46 -46 Z" fill="#111215"/>
+  <circle cx="452" cy="620" r="19" fill="#FFC929"/>
+  <circle cx="512" cy="620" r="19" fill="#FFC929"/>
+  <circle cx="572" cy="620" r="19" fill="#FFC929"/>
+</svg>

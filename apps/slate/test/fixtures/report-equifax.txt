@@ -1,0 +1,22 @@
+Equifax Credit Report
+Revolving Accounts
+JPMCB CARD
+Account Number: *3333
+Owner: Individual Account
+Date Opened: Apr 12, 2024
+Account Status: PAYS_AS_AGREED
+Credit Limit: $10,000
+Balance: $1,000
+GS BANK USA
+Account Number: *5555
+Owner: Individual Account
+Date Opened: Sep 9, 2023
+Account Status: PAYS_AS_AGREED
+Credit Limit: $6,000
+Balance: $250
+JPMCB CARD
+Account Number: *4444
+Owner: Authorized User
+Date Opened: Jul 15, 2022
+Credit Limit: $8,500
+Balance: $0

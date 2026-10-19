@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' app:; script-src 'self' app: 'wasm-unsafe-eval'; style-src 'self' app: 'unsafe-inline'; img-src 'self' app: data: blob:; font-src 'self' app: data:; worker-src 'self' app: blob:; connect-src 'self' app: data: blob: https://huggingface.co https://*.huggingface.co https://*.hf.co https://raw.githubusercontent.com">
+  <title>Datum</title>
+  <link rel="stylesheet" href="../node_modules/@fontsource-variable/inter/index.css">
+  <link rel="stylesheet" href="css/elements.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header id="topbar"></header>
+    <nav id="tabs"></nav>
+    <main id="main">
+      <div id="home"></div>
+      <div id="sheet-host" class="sheet-host"></div>
+    </main>
+    <footer id="statusbar"><div id="status-left"></div><div id="status-right"></div></footer>
+  </div>
+  <div id="toasts"></div>
+  <div id="busy"><div><div class="spinner"></div><span>Working…</span></div></div>
+  <div id="drop-overlay"><div>Drop to open - files become sheets, a folder opens as a project</div></div>
+
+  <script src="../node_modules/chart.js/dist/chart.umd.min.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/formula.js"></script>
+  <script src="js/functions.js"></script>
+  <script src="js/functions2.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/canvas.js"></script>
+  <script src="js/fill.js"></script>
+  <script src="js/links.js"></script>
+  <script src="js/sheets/data.js"></script>
+  <script src="js/sheets/slide.js"></script>
+  <script src="js/sheets/docu.js"></script>
+  <script src="js/sheets/report.js"></script>
+  <script src="js/sheets/dashboard.js"></script>
+  <script src="js/insights.js"></script>
+  <script src="js/dashdialog.js"></script>
+  <script src="js/dataset.js"></script>
+  <script src="js/dupes.js"></script>
+  <script src="js/assistant.js"></script>
+  <script src="js/io.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

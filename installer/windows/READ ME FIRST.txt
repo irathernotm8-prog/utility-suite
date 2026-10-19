@@ -1,0 +1,32 @@
+{{suite}} {{version}} — Windows
+===========================================
+
+What's inside:
+{{apps}}
+
+
+INSTALL
+-------
+1. Right-click this zip → Extract All… (don't run it from inside the zip).
+2. In the extracted folder, double-click Install.cmd.
+   If Windows shows "Windows protected your PC", click More info → Run anyway.
+   (That warning appears because the apps aren't code-signed; it's expected.)
+3. Choose whether you want desktop shortcuts.
+4. If older copies of these apps are on the PC (installed with their own Setup files,
+   portable .exe files, unzipped folders or old setup files in Downloads, Desktop or
+   Documents), the installer lists them and offers to remove them first. Installed
+   versions are uninstalled; loose copies go to the Recycle Bin. Your settings,
+   accounts and files are kept. If an old version was installed "for all users",
+   Windows will ask for permission to remove it.
+
+The apps install for your user only — no administrator password needed — and appear
+in the Start Menu under "{{suite}}".
+
+UPDATING
+--------
+Run Install.cmd from a newer suite. Apps are replaced; your settings, accounts and
+files are kept (they live in %APPDATA%).
+
+UNINSTALL
+---------
+Settings → Apps → Installed apps → {{suite}} → Uninstall.

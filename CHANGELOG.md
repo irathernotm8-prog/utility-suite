@@ -1,0 +1,51 @@
+# Changelog
+
+What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
+
+- 2026-10-19 13:42 — **Utility Hub 1.1.0** — Updates from the internet: new versions show up on their own and only the changed app downloads; new computers can set up straight from the GitHub release
+- 2026-10-19 18:17 — **Onward 0.2.1** — Fixes Windows freezing on launch; example text in empty fields is now generic (no personal details)
+- 2026-10-19 16:58 — **Sideby 2.0.0** — Rebuilt from scratch: invites now work from anywhere (no server, friends connect directly), sync works on almost any site including YouTube, Twitch and embedded players, and you can broadcast a page, window, screen or file with sound for live games. New look, reactions, theater mode and a personal room code.
+- 2026-10-19 16:09 — **Kiln 0.1.4** — Fixes the 'Could not open requirements file' error when Forge installs CLIP, and Kiln's colors now match its new ember-and-flame icon
+- 2026-10-19 10:47 — **RO3 1.2.2** — New icon in RO3's green and black, matching the app; the in-app logo matches too
+- 2026-10-19 10:47 — **Datum 1.5.3** — New icon: Datum's blue D on deep navy, matching the app; the in-app logo matches too
+- 2026-10-19 15:41 — **Kiln 0.1.3** — Forge and other older packages install again (fixes the CLIP / pkg_resources error), Forge Neo installs the Mac build of PyTorch on Apple Silicon, and the Stability Matrix import is gone
+- 2026-10-19 15:34 — **Kiln 0.1.2** — Packages built for A1111 now start on Apple Silicon (Kiln adds the Mac launch flags), the catalog shows which packages run well on a Mac, and a quieter install console
+- 2026-10-18 22:47 — **RO3 1.2.1** — New app icon that matches the rest of the Utility Suite
+- 2026-10-18 22:47 — **Kiln 0.1.1** — New app icon that matches the rest of the Utility Suite
+- 2026-10-18 22:47 — **Slate 1.0.1** — New app icon that matches the rest of the Utility Suite
+- 2026-10-18 22:47 — **Fresh Desk 0.3.1** — New app icon that matches the rest of the Utility Suite
+- 2026-10-18 22:47 — **Datum 1.5.2** — New app icon that matches the rest of the Utility Suite
+- 2026-10-18 22:07 — **Kiln 0.1.0** — First release: replaces Stability Matrix
+- 2026-10-18 22:07 — **Kiln 0.1.0** (52 new) — Added to the Utility Package
+- 2026-10-17 01:21 — **Sideby 0.1.1** — First release in the suite: watch parties with shared playback and room chat
+- 2026-10-17 01:21 — **Slate 1.0.0** — First release in the suite
+- 2026-10-17 01:21 — **Onward 0.2.0** — First release in the suite: job board, Discover search, built-in browser, Apply Guide and AI connectors
+- 2026-10-17 01:21 — **Assist 2.0.0** — Assist 2.0: a Chat tab with saved chats, web search with sources, PDF/Word attachments, memory ("remember that…"), Quick Ask from any app (Cmd+Shift+Space), and model recommendations for this computer
+- 2026-10-17 01:17 — **Sideby 0.1.1** (37 new)
+- 2026-10-17 01:17 — **Slate 1.0.0** (78 new)
+- 2026-10-17 01:17 — **Onward 0.2.0** (34 new)
+- 2026-10-17 01:17 — **Assist 2.0.0** (16 changed, 20 new)
+- 2026-10-17 00:05 — **Utility Hub 1.0.0** (18 new) — First release: install, update and remove apps from one window
+- 2026-10-16 23:56 — **Fresh Desk 0.3.0** (1 changed)
+- 2026-10-16 23:54 — **Fresh Desk 0.3.0** (10 changed, 8 new)
+- 2026-10-15 13:07 — **Datum 1.5.1** (4 changed)
+- 2026-10-15 09:46 — **RO3 1.2.0** (11 changed, 1 new)
+- 2026-10-15 09:10 — **Datum 1.5.0** (8 changed)
+- 2026-10-14 14:09 — **Fresh Desk 0.2.0** (9 changed, 4 new)
+- 2026-10-14 13:59 — **Datum 1.4.0** (8 changed, 2 new)
+- 2026-10-14 13:46 — **Fresh Desk 0.1.0** (1 changed, 2 new)
+- 2026-10-14 13:32 — **Fresh Desk 0.1.0** (9 new)
+- 2026-10-14 11:35 — **Datum 1.3.1** (13 changed)
+- 2026-10-14 09:08 — **Datum 1.3.0** (25 changed, 1 new)
+- 2026-10-12 10:44 — **Relay 2.0.0** (15 changed, 2 new) — 2.0: purple look, chats, split view, free AI accounts
+- 2026-10-12 09:51 — **RO3 1.1.1** (2 changed)
+- 2026-10-12 09:47 — **RO3 1.1.0** (2 changed)
+- 2026-10-12 09:44 — **RO3 1.1.0** (13 changed, 7 new)
+- 2026-10-12 00:52 — **Datum 1.2.0** (12 changed, 6 new)
+- 2026-10-09 16:21 — **Datum 1.1.0** (14 changed, 3 new)
+- 2026-10-09 13:54 — **Relay 1.6.0** (12 changed, 5 new) — Assist plugin, real app icon everywhere
+- 2026-10-09 13:54 — **Assist 1.2.0** (7 changed) — Plugin bridge for Relay
+- 2026-10-09 13:16 — **Relay 1.5.0** (33 new) — Initial import into the Utility Package
+- 2026-10-09 13:16 — **RO3 1.0.0** (28 new) — Initial import into the Utility Package
+- 2026-10-09 13:16 — **Datum 1.0.0** (22 new) — Initial import into the Utility Package
+- 2026-10-09 13:16 — **Assist 1.1.0** (21 new) — Initial import into the Utility Package

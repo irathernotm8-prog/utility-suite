@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; font-src 'self'; connect-src 'self' ws: wss: https:; object-src 'none'; base-uri 'none'">
+<title>Sideby</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="booting">
+<div class="titlebar-drag"></div>
+
+<!-- ============ HOME ============ -->
+<section id="home" class="screen" hidden>
+  <div class="home-inner">
+    <header class="home-brand">
+      <img src="assets/icon.png" alt="" width="40" height="40">
+      <span class="wordmark">Sideby</span>
+    </header>
+
+    <div class="home-grid">
+      <div class="home-lede">
+        <h1>Watch together, from anywhere.</h1>
+        <p>Open any site, press play, and everyone in your room sees the same moment. For live games and anything else, broadcast your screen instead.</p>
+      </div>
+
+      <div class="home-actions">
+        <form id="profile-form" class="profile-card">
+          <label for="profile-name">Your name</label>
+          <div class="profile-row">
+            <span class="avatar lg" id="profile-avatar">?</span>
+            <input id="profile-name" maxlength="32" placeholder="What friends call you" autocomplete="off" required>
+          </div>
+          <div class="swatches" id="profile-swatches" role="radiogroup" aria-label="Your color"></div>
+        </form>
+
+        <div class="start-card">
+          <button class="btn primary xl" id="start-room">Open my room</button>
+          <div class="my-code">
+            <span>Room code</span>
+            <code id="my-code">—</code>
+            <button class="btn ghost sm" id="copy-my-invite">Copy invite</button>
+            <button class="btn ghost sm" id="new-code" title="Make a new room code">New code</button>
+          </div>
+        </div>
+
+        <form id="join-form" class="join-card">
+          <label for="join-input">Join a friend</label>
+          <div class="join-row">
+            <input id="join-input" placeholder="Paste an invite or a code like K7Q-M2X-9PD" autocomplete="off" spellcheck="false">
+            <button class="btn secondary" id="join-btn">Join</button>
+          </div>
+          <p class="field-error" id="join-error" hidden></p>
+        </form>
+
+        <div id="clipboard-offer" class="clipboard-offer" hidden>
+          <span>An invite is on your clipboard.</span>
+          <button class="btn primary sm" id="clipboard-join">Join <span id="clipboard-code"></span></button>
+          <button class="btn ghost sm" id="clipboard-dismiss">Not now</button>
+        </div>
+
+        <div class="recent" id="recent-wrap" hidden>
+          <h2>Recent rooms</h2>
+          <ul id="recent-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <footer class="home-foot">
+      <button class="btn ghost sm" id="home-settings">Settings</button>
+      <span id="app-version"></span>
+    </footer>
+  </div>
+</section>
+
+<!-- ============ ROOM ============ -->
+<section id="room" class="screen" hidden>
+  <header class="topbar">
+    <div class="room-id">
+      <h1 id="room-name" class="room-name" title="Room name"></h1>
+      <button class="code-chip" id="room-code-chip" title="Copy invite"><code id="room-code"></code><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2h7a2 2 0 0 1 2 2v7h-1.5V4a.5.5 0 0 0-.5-.5H5V2Zm-2 3h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg></button>
+    </div>
+    <div class="presence" id="presence">Finding your friends…</div>
+    <div class="top-actions">
+      <button class="btn secondary sm" id="invite-btn">Invite</button>
+      <button class="icon-btn" id="theater-btn" title="Theater mode (F)"><svg viewBox="0 0 20 20"><path d="M3 7V4a1 1 0 0 1 1-1h3M13 3h3a1 1 0 0 1 1 1v3M17 13v3a1 1 0 0 1-1 1h-3M7 17H4a1 1 0 0 1-1-1v-3"/></svg></button>
+      <button class="icon-btn" id="room-settings" title="Settings"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/></svg></button>
+      <button class="btn ghost sm" id="leave-btn">Leave</button>
+    </div>
+  </header>
+
+  <div class="room-body">
+    <main class="stage-col">
+      <div class="addressbar">
+        <button class="icon-btn" id="nav-back" title="Back"><svg viewBox="0 0 20 20"><path d="M12 4l-6 6 6 6"/></svg></button>
+        <button class="icon-btn" id="nav-forward" title="Forward"><svg viewBox="0 0 20 20"><path d="M8 4l6 6-6 6"/></svg></button>
+        <button class="icon-btn" id="nav-reload" title="Reload"><svg viewBox="0 0 20 20"><path d="M15.5 9.5A5.5 5.5 0 1 1 13.8 5.6M15.5 3.5v4h-4"/></svg></button>
+        <form id="address-form" class="address">
+          <input id="address" placeholder="Search YouTube or paste any link" autocomplete="off" spellcheck="false">
+        </form>
+        <button class="btn pill follow" id="follow-btn" hidden>Back to the host’s page</button>
+        <div class="broadcast-wrap">
+          <button class="btn secondary sm" id="broadcast-btn" aria-haspopup="menu">Broadcast</button>
+          <div class="menu" id="broadcast-menu" role="menu" hidden>
+            <button role="menuitem" data-broadcast="stage"><strong>Broadcast this page</strong><span>Streams the stage with sound. Best for live games and streams that won’t sync.</span></button>
+            <button role="menuitem" data-broadcast="source"><strong>Share a window or screen</strong><span>Any app on your computer, like a video player.</span></button>
+            <button role="menuitem" data-broadcast="file"><strong>Play a file from my computer</strong><span>Opens it here and broadcasts it to the room.</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-frame">
+        <div class="stage" id="stage">
+          <img class="stage-freeze" id="stage-freeze" alt="" hidden>
+          <video class="stage-video" id="stage-video" playsinline autoplay hidden></video>
+          <div class="reaction-layer" id="reaction-layer" aria-hidden="true"></div>
+
+          <div class="stage-empty" id="stage-empty" hidden>
+            <div class="empty-host" id="empty-host">
+              <h2>What are we watching?</h2>
+              <p>Pick a site, then find something to watch. Everyone’s video follows yours.</p>
+              <div class="launch-grid">
+                <button class="launch" data-url="https://www.youtube.com"><b>YouTube</b><span>Synced</span></button>
+                <button class="launch" data-url="https://www.twitch.tv"><b>Twitch</b><span>Synced or broadcast</span></button>
+                <button class="launch" data-url="https://vimeo.com/watch"><b>Vimeo</b><span>Synced</span></button>
+                <button class="launch" data-url="https://archive.org/details/movies"><b>Internet Archive</b><span>Free films, synced</span></button>
+                <button class="launch" data-action="file"><b>A file on this computer</b><span>Broadcast</span></button>
+                <button class="launch" data-action="source"><b>Another app or screen</b><span>Broadcast</span></button>
+              </div>
+            </div>
+            <div class="empty-guest" id="empty-guest" hidden>
+              <h2 id="guest-title">Waiting for the host to pick something.</h2>
+              <p id="guest-body">When they open a video, it’ll appear here and play in sync.</p>
+            </div>
+          </div>
+
+          <div class="stage-notice" id="stage-notice" hidden>
+            <div>
+              <strong id="notice-title"></strong>
+              <p id="notice-body"></p>
+              <div class="notice-actions" id="notice-actions"></div>
+            </div>
+          </div>
+
+          <div class="broadcast-badge" id="broadcast-badge" hidden><i></i><span id="broadcast-label">Live</span><button class="btn ghost xs" id="broadcast-stop">Stop</button></div>
+          <div class="stream-stats" id="stream-stats" hidden></div>
+        </div>
+      </div>
+
+      <div class="transport" id="transport">
+        <button class="play-btn" id="play-btn" disabled aria-label="Play"><svg viewBox="0 0 20 20" class="i-play"><path d="M6 4.5v11l9-5.5z"/></svg><svg viewBox="0 0 20 20" class="i-pause"><path d="M6 4h3v12H6zM11 4h3v12h-3z"/></svg></button>
+        <span class="time" id="time-now">0:00</span>
+        <input type="range" id="scrub" min="0" max="1000" value="0" step="1" disabled aria-label="Seek">
+        <span class="time" id="time-total">0:00</span>
+        <button class="btn pill live-btn" id="live-btn" hidden>Live</button>
+        <div class="sync-pill" id="sync-pill" data-state="idle"><i></i><span id="sync-text">Nothing playing</span></div>
+        <button class="btn ghost sm" id="resync-btn" hidden>Resync</button>
+      </div>
+    </main>
+
+    <aside class="side" id="side">
+      <div class="couch">
+        <div class="couch-head">
+          <h2>On the couch</h2>
+          <span id="member-count"></span>
+        </div>
+        <ul class="couch-row" id="members"></ul>
+      </div>
+
+      <div class="chat" id="chat">
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="chat-empty" id="chat-empty">
+            <p>Say hi. Paste a link here and anyone can tap it to put it on.</p>
+          </div>
+          <ol class="messages" id="messages"></ol>
+        </div>
+        <div class="typing" id="typing" aria-live="polite"></div>
+        <div class="reactions" id="reactions"></div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" maxlength="1000" placeholder="Message the room" autocomplete="off">
+          <button id="chat-send" aria-label="Send"><svg viewBox="0 0 20 20"><path d="M10 16V4M5 9l5-5 5 5"/></svg></button>
+        </form>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ DIALOGS ============ -->
+<dialog id="invite-dialog" class="sheet">
+  <form method="dialog" class="sheet-inner">
+    <h2>Invite friends</h2>
+    <p>Send them this. They’ll need Sideby installed, then they paste the invite on the home screen.</p>
+    <pre class="invite-text" id="invite-text"></pre>
+    <div class="sheet-actions">
+      <button class="btn primary" id="copy-invite" type="button">Copy invite</button>
+      <button class="btn ghost" id="copy-code" type="button">Copy code only</button>
+      <button class="btn ghost" value="close">Done</button>
+    </div>
+    <p class="fine">This code always opens this room. Anyone with it can join, so share it with people you trust.</p>
+  </form>
+</dialog>
+
+<dialog id="picker-dialog" class="sheet wide">
+  <div class="sheet-inner">
+    <h2>Share a window or screen</h2>
+    <p id="picker-help">Pick what to show the room.</p>
+    <div class="picker-grid" id="picker-grid"></div>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="picker-cancel" type="button">Cancel</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="settings-dialog" class="sheet">
+  <form id="settings-form" class="sheet-inner" method="dialog">
+    <h2>Settings</h2>
+
+    <fieldset>
+      <legend>You</legend>
+      <label>Name<input id="set-name" maxlength="32" required></label>
+      <div class="swatches" id="set-swatches" role="radiogroup" aria-label="Your color"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Watching</legend>
+      <label class="check"><input type="checkbox" id="set-everyone"> Let everyone play, pause and change what’s on</label>
+      <label class="check"><input type="checkbox" id="set-adblock"> Block ads and pop-ups on the stage</label>
+      <label>Broadcast quality
+        <select id="set-quality"></select>
+      </label>
+      <p class="fine">Each friend gets their own copy of your broadcast. With four or more, 720p is smoother on most home internet.</p>
+    </fieldset>
+
+    <details>
+      <summary>Connection</summary>
+      <p class="fine">Friends connect directly to each other. Public relays only help them find each other; video and chat never pass through them.</p>
+      <label>Finding friends
+        <select id="set-signaling">
+          <option value="public">Public relays (no setup)</option>
+          <option value="relay">My own relay server</option>
+        </select>
+      </label>
+      <label id="relay-url-wrap">Relay addresses <small>one per line, wss://…</small><textarea id="set-relay-urls" rows="2" spellcheck="false"></textarea></label>
+      <label>TURN server <small>for friends on strict networks</small><input id="set-turn-url" placeholder="turns:turn.example.com:443" spellcheck="false"></label>
+      <div class="two">
+        <label>Username<input id="set-turn-user" spellcheck="false" autocomplete="off"></label>
+        <label>Password<input id="set-turn-pass" type="password" autocomplete="off"></label>
+      </div>
+      <p class="fine">Changes apply the next time you open a room.</p>
+    </details>
+
+    <div class="sheet-actions">
+      <button class="btn primary" value="save" id="settings-save">Save</button>
+      <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script type="module" src="app.mjs"></script>
+</body>
+</html>
