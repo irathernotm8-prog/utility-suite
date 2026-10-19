@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-19 21:28 — **Kiln 0.1.5** — Forge and Forge Neo start properly: CLIP and OpenCLIP install from ready-made packages, NumPy stays on the version older packages need, CUDA-only options are skipped on Mac, and packages no longer open a separate browser window
 - 2026-10-19 15:41 — **Crate 0.1.0** — First release: download songs, albums and playlists from YouTube and more as tagged MP3s, clean titles and fill in album info and covers automatically, edit tags and audio (trim, fade, volume), organize albums and playlists, and send them to your iPhone or Android
 - 2026-10-19 15:41 — **Crate 0.1.0** (40 new) — Added to the Utility Package
 - 2026-10-19 13:42 — **Utility Hub 1.1.0** — Updates from the internet: new versions show up on their own and only the changed app downloads; new computers can set up straight from the GitHub release

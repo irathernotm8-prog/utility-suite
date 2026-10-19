@@ -1,7 +1,7 @@
 {
   "name": "kiln",
   "productName": "Kiln",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
   "main": "src/main.js",
   "author": "Bilal",

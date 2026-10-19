@@ -42,20 +42,35 @@ function status(id) {
 function emit(id) { send('pkg:status', status(id)); }
 
 /* ---------- paths ---------- */
-function constraintsFile() {
+// Packages built for Python 3.10 and NumPy 1 (Forge, reForge, A1111, Fooocus) break when an extension pulls in NumPy 2
+const isLegacy = (p) => ['forge', 'reforge', 'a1111', 'fooocus'].includes(p?.catalogId);
+function constraintsFile(legacy) {
   // pip and uv split these environment variables on spaces, so the file must live at a path without any
   // ("Kiln Files" has one). The temp folder has none on macOS and normally none on Windows.
-  const f = path.join(require('os').tmpdir(), 'kiln-pip-constraints.txt');
-  const want = 'setuptools<81\n';
+  const f = path.join(require('os').tmpdir(), legacy ? 'kiln-pip-constraints-legacy.txt' : 'kiln-pip-constraints.txt');
+  const want = legacy ? 'setuptools<81\nnumpy<2\n' : 'setuptools<81\n';
   try { if (fs.readFileSync(f, 'utf8') === want) return f; } catch {}
   fs.writeFileSync(f, want);
   return f;
 }
 // Environment for pip/uv inside a package: keep build tools old enough for packages that still use pkg_resources
-function pipEnv() {
-  const f = constraintsFile();
+function pipEnv(legacy = false) {
+  const f = constraintsFile(legacy);
   if (/\s/.test(f)) return {};
   return { PIP_CONSTRAINT: f, PIP_BUILD_CONSTRAINT: f, UV_BUILD_CONSTRAINT: f };
+}
+// Earlier launches may have left NumPy 2 in a NumPy 1 package's environment; put it back
+async function fixNumpy(p) {
+  const v = venvDir(p);
+  const libs = tools.IS_WIN ? [path.join(v, 'Lib', 'site-packages')] : (() => { try { return fs.readdirSync(path.join(v, 'lib')).map(d => path.join(v, 'lib', d, 'site-packages')); } catch { return []; } })();
+  const has2 = libs.some(d => { try { return fs.readdirSync(d).some(n => /^numpy-([2-9]|\d{2,})\..*\.dist-info$/.test(n)); } catch { return false; } });
+  if (!has2) return;
+  log(p.id, 'Putting NumPy back to version 1, which this package needs…');
+  const uv = await tools.findUv();
+  const env = { ...tools.uvEnv(), ...pipEnv(true) };
+  const code = uv ? await tools.run(uv, ['pip', 'install', '--python', venvPython(p), 'numpy==1.26.4'], { env, onLine: (l) => log(p.id, l) })
+                  : await tools.run(venvPython(p), ['-m', 'pip', 'install', 'numpy==1.26.4'], { env, onLine: (l) => log(p.id, l) });
+  if (code !== 0) log(p.id, 'Couldn’t change NumPy. If the launch fails, use Repair.');
 }
 function venvDir(p) {
   for (const v of [p.venv, 'venv', '.venv'].filter(Boolean)) if (fs.existsSync(path.join(p.path, v))) return path.join(p.path, v);
@@ -96,7 +111,7 @@ async function prepareEnv(p, step) {
   const c = catOf(p);
   const id = p.id;
   const uv = await tools.ensureUv((s) => log(id, s));
-  const env = { ...tools.uvEnv(), ...pipEnv() };
+  const env = { ...tools.uvEnv(), ...pipEnv(isLegacy(p)) };
   const ver = p.python || c?.python || '3.11';
   if (!fs.existsSync(venvPython(p))) {
     step(`Setting up Python ${ver}`);
@@ -275,6 +290,17 @@ async function launch(id) {
   if (process.platform === 'darwin' && c?.backend === 'a1111' && c.id !== 'sdnext') {
     for (const f of ['--skip-torch-cuda-test', '--upcast-sampling', '--no-half-vae']) if (!args.includes(f)) args.push(f);
     if (!args.includes('--use-cpu')) args.push('--use-cpu', 'interrogate');
+    for (const f of ['--pin-shared-memory', '--cuda-malloc', '--cuda-stream', '--xformers', '--sage']) { const i = args.indexOf(f); if (i >= 0) args.splice(i, 1); }
+  }
+  if (isLegacy(p)) await fixNumpy(p);
+  // A1111-style UIs open the system browser on start; Kiln opens the web UI in its own browser instead
+  if (c?.backend === 'a1111' && c.id !== 'sdnext') {
+    const cfg = path.join(p.path, 'config.json');
+    try {
+      let j = {};
+      try { j = JSON.parse(fs.readFileSync(cfg, 'utf8')); } catch {}
+      if (j.auto_launch_browser !== 'Disable') { j.auto_launch_browser = 'Disable'; fs.writeFileSync(cfg, JSON.stringify(j, null, 4)); }
+    } catch {}
   }
   if (c?.comfy) {
     args.push('--extra-model-paths-config', path.join(p.path, 'extra_model_paths.yaml'));
@@ -289,9 +315,13 @@ async function launch(id) {
   const base = { ...process.env };
   for (const k of Object.keys(base)) if (/^path$/i.test(k)) delete base[k];
   const env = {
-    ...base, ...tools.uvEnv(), ...pipEnv(), ...(p.env || {}),
+    ...base, ...tools.uvEnv(), ...pipEnv(isLegacy(p)),
+    // A1111-style UIs build CLIP and OpenCLIP from GitHub source zips, which breaks with current
+    // Python build tools. The same code is published as ready-made wheels on PyPI.
+    ...(c?.backend === 'a1111' && c.id !== 'sdnext' ? { CLIP_PACKAGE: 'clip-anytorch==2.6.0', OPENCLIP_PACKAGE: 'open_clip_torch==2.20.0' } : {}),
+    ...(p.env || {}),
     PATH, VIRTUAL_ENV: venvDir(p), PYTHONUNBUFFERED: '1',
-    ...(process.platform === 'darwin' ? { PYTORCH_ENABLE_MPS_FALLBACK: '1', ...(c?.backend === 'a1111' && c.id !== 'sdnext' ? { TORCH_COMMAND: 'pip install torch torchvision', TORCH_INDEX_URL: 'https://pypi.org/simple' } : {}) } : {}), PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1',
+    ...(process.platform === 'darwin' ? { PYTORCH_ENABLE_MPS_FALLBACK: '1', ...(c?.id === 'forge-neo' ? { TORCH_COMMAND: 'pip install torch torchvision', TORCH_INDEX_URL: 'https://pypi.org/simple' } : {}) } : {}), PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1',
     ...(git ? { GIT: git } : {})
   };
   delete env.PYTHONHOME; delete env.ELECTRON_RUN_AS_NODE;
