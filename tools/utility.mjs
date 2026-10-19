@@ -740,11 +740,11 @@ async function cmdPublish(opts) {
   const pick = opts.apps ? pickApps(opts.apps) : m.apps;
   const out = path.join(P.build, 'publish');
   const scratch = path.join(P.build, 'publish-scratch');
-  fs.rmSync(out, { recursive: true, force: true });
-  fs.mkdirSync(out, { recursive: true });
+  fs.mkdirSync(out, { recursive: true }); // kept between runs: an interrupted publish resumes without rebuilding
 
   const files = [], catalogs = [], shipped = [], failed = [], keep = new Set();
   for (const tKey of targets) {
+    const pending = opts.force ? null : readJSON(path.join(out, `catalog-${tKey}.json`), null); // left by an interrupted publish
     const current = await loadPublishedCatalog(tKey, cfg, local);
     const cat = current && current.apps ? current : { format: 1, apps: [] };
     const published = (app) => (isHub(app) ? cat.hub?.version : cat.apps.find((a) => a.id === app.id)?.version);
@@ -759,6 +759,21 @@ async function cmdPublish(opts) {
 
     for (const app of todo) {
       let b, e;
+      const reused = reusableEntry(app, tKey, opts, out, pending);
+      if (reused) {
+        e = reused;
+        files.push(path.join(out, e.file));
+        if (fs.existsSync(path.join(out, `${app.id}.png`))) files.push(path.join(out, `${app.id}.png`));
+        if (isHub(app)) {
+          cat.hub = { version: e.version, file: e.file, sha256: e.sha256, size: e.size, ...(e.bundle ? { bundle: e.bundle } : { folder: e.folder, exe: e.exe }) };
+          files.push(path.join(out, `Utility-Hub-Setup-${tKey === 'win' ? 'windows' : tKey}.zip`));
+        } else {
+          cat.apps = [...cat.apps.filter((a) => a.id !== e.id), e].sort((x, y) => x.name.localeCompare(y.name));
+        }
+        shipped.push(`${app.name} ${e.version} (${OS_LABEL[tKey]})`);
+        ok(`${app.name} ${e.version} already built ${dim('(reusing the earlier build)')}`);
+        continue;
+      }
       try {
         b = buildDir(app, tKey, opts);
         e = await packageEntry(b, tKey, out, scratch, { iconPrefix: '' });
@@ -803,8 +818,8 @@ async function cmdPublish(opts) {
       gh(['release', 'create', RELEASE_TAG, '--repo', cfg.repo, '--title', m.suiteName, '--notes', ' ', '--latest']);
     }
     // packages first, catalogs last, so a hub never sees a catalog pointing at a file that isn't there yet
-    run(q(GH), ['release', 'upload', RELEASE_TAG, ...files, '--clobber', '--repo', cfg.repo]);
-    run(q(GH), ['release', 'upload', RELEASE_TAG, ...catalogs, '--clobber', '--repo', cfg.repo]);
+    uploadAssets(cfg, [...new Set(files)], { skipSame: true });
+    uploadAssets(cfg, catalogs, { skipSame: false });
     const assets = gh(['release', 'view', RELEASE_TAG, '--repo', cfg.repo, '--json', 'assets', '-q', '.assets[].name']).stdout.split('\n').filter(Boolean);
     for (const a of assets) {
       if (/^[a-z0-9-]+-\d[^/]*\.zip$/.test(a) && !keep.has(a)) { gh(['release', 'delete-asset', RELEASE_TAG, a, '--repo', cfg.repo, '-y'], { allowFail: true }); log(dim(`  removed old ${a}`)); }
@@ -814,6 +829,7 @@ async function cmdPublish(opts) {
     gh(['release', 'edit', RELEASE_TAG, '--repo', cfg.repo, '--notes-file', notes, '--title', m.suiteName]);
   }
   shipped.forEach((x) => ok(x));
+  if (!local && !failed.length) fs.rmSync(out, { recursive: true, force: true }); // it's all on GitHub now
   if (failed.length) { log(red('\n  Not published (fix and run publish again):')); failed.forEach((f) => log(red(`    ${f}`))); }
 
   if (!local && fs.existsSync(path.join(ROOT, '.git'))) {
@@ -823,6 +839,45 @@ async function cmdPublish(opts) {
     run('git', ['push'], { cwd: ROOT, allowFail: true });
   }
   log(dim(`\n  Every Utility Hub that checks for updates now sees ${shipped.length === 1 ? 'it' : 'these'}.`));
+}
+
+
+// A package an interrupted publish already built (same app, version, OS and chip): reuse it.
+function reusableEntry(app, tKey, opts, out, pending) {
+  if (!pending) return null;
+  const v = pkgOf(appDir(app))?.version;
+  const file = `${app.id}-${v}-${tKey}-${archFor(app, tKey, opts)}.zip`;
+  const p = isHub(app) ? pending.hub : (pending.apps || []).find((a) => a.id === app.id);
+  if (!p || p.version !== v || p.file !== file) return null;
+  const zip = path.join(out, file);
+  if (!fs.existsSync(zip) || fs.statSync(zip).size !== p.size || !p.sha256) return null;
+  if (isHub(app) && !fs.existsSync(path.join(out, `Utility-Hub-Setup-${tKey === 'win' ? 'windows' : tKey}.zip`))) return null;
+  return isHub(app) ? { ...p, id: app.id, name: app.name } : p;
+}
+
+// Upload files to the release one at a time. skipSame: leave files GitHub already has at the same size.
+function uploadAssets(cfg, files, { skipSame }) {
+  const have = new Map();
+  if (skipSame) {
+    const r = gh(['release', 'view', RELEASE_TAG, '--repo', cfg.repo, '--json', 'assets', '--jq', '.assets[] | [.name, .size] | @tsv'], { allowFail: true });
+    for (const line of (r.stdout || '').split('\n').filter(Boolean)) { const [n, sz] = line.split('\t'); have.set(n, +sz); }
+  }
+  let i = 0;
+  for (const f of files) {
+    i++;
+    const name = path.basename(f);
+    const size = fs.statSync(f).size;
+    if (skipSame && have.get(name) === size) { log(dim(`  ${i}/${files.length}  ${name} already uploaded`)); continue; }
+    log(`  ${i}/${files.length}  ${name} ${dim(fmtSize(size))}`);
+    let tries = 0;
+    for (;;) {
+      const r = run(q(GH), ['release', 'upload', RELEASE_TAG, f, '--clobber', '--repo', cfg.repo], { quiet: true, allowFail: true });
+      if (r.status === 0) break;
+      if (++tries >= 3) fail(`Couldn't upload ${name}: ${(r.stderr || '').trim().split('\n').pop()}\n  Run publish again; files already uploaded are skipped and nothing is rebuilt.`);
+      warn(`upload hiccup, retrying ${name} (${tries}/2)…`);
+      spawnSync(IS_WIN ? 'timeout' : 'sleep', IS_WIN ? ['/t', '5'] : ['5'], { stdio: 'ignore', shell: IS_WIN });
+    }
+  }
 }
 
 // The download a new computer starts from: just Utility Hub, which then installs apps online.
@@ -929,7 +984,7 @@ function writeReleaseNotes(relDir, version, m, apps) {
   fs.writeFileSync(path.join(relDir, 'RELEASE-NOTES.md'), lines.join('\n') + '\n');
 }
 
-const fmtSize = (n) => (n > 1e9 ? `${(n / 1e9).toFixed(2)} GB` : `${(n / 1e6).toFixed(0)} MB`);
+const fmtSize = (n) => (n > 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(0)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
 
 // ───────────────────────── add / adopt / note ─────────────────────────
 // add: copy a project (folder or source .zip) into apps/<id>; from then on it's developed there.
