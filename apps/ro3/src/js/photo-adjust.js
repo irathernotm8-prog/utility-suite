@@ -20,8 +20,24 @@ const PhotoAdjust = (() => {
     invert:       { name: 'Invert', icon: 'invert', make: () => ({}) },
     posterize:    { name: 'Posterize', icon: 'levels', make: () => ({ levels: 4 }) },
     threshold:    { name: 'Threshold', icon: 'invert', make: () => ({ level: 128 }) },
+    channelmixer: { name: 'Channel Mixer', icon: 'balance', make: () => ({ r: [100, 0, 0, 0], g: [0, 100, 0, 0], b: [0, 0, 100, 0], mono: false }) },
+    selectivecolor: { name: 'Selective Color', icon: 'drop', make: () => ({ relative: true, ranges: Object.fromEntries(SC_RANGES.map(([k]) => [k, [0, 0, 0, 0]])) }) },
+    lookup:       { name: 'Color Lookup', icon: 'levels', make: () => ({ lut: null, amount: 100 }) },
+    grade:        { name: 'Color Grade', icon: 'sliders', make: () => ({ grade: ColorGrade.DEFAULT() }) },
   };
-  const ORDER = ['brightness', 'levels', 'curves', 'exposure', 'vibrance', 'huesat', 'colorbalance', 'bw', 'photofilter', 'gradientmap', 'invert', 'posterize', 'threshold'];
+  const ORDER = ['brightness', 'levels', 'curves', 'exposure', 'vibrance', 'huesat', 'colorbalance', 'bw', 'photofilter', 'channelmixer', 'selectivecolor', 'gradientmap', 'lookup', 'grade', 'invert', 'posterize', 'threshold'];
+  // Selective Color hue/tone ranges (PhotoCraft compose/src/adjust.rs)
+  const SC_RANGES = [['reds', 'Reds'], ['yellows', 'Yellows'], ['greens', 'Greens'], ['cyans', 'Cyans'], ['blues', 'Blues'], ['magentas', 'Magentas'], ['whites', 'Whites'], ['neutrals', 'Neutrals'], ['blacks', 'Blacks']];
+  /** Parsed LUT files, keyed by a content hash. The text is kept so projects can save it. */
+  const LUTS = new Map();
+  function registerLut(text, name) {
+    let hsh = 0; for (let i = 0; i < text.length; i += Math.max(1, (text.length / 4096) | 0)) hsh = (hsh * 31 + text.charCodeAt(i)) | 0;
+    const key = 'lut' + (hsh >>> 0).toString(36) + text.length.toString(36);
+    if (!LUTS.has(key)) LUTS.set(key, { ...ColorGrade.parseLut(text, name), text, name });
+    return key;
+  }
+  const bakedCache = new Map();
+  function bakedFor(k, make) { if (!bakedCache.has(k)) { if (bakedCache.size > 12) bakedCache.clear(); bakedCache.set(k, make()); } return bakedCache.get(k); }
   const make = kind => ({ kind, ...KINDS[kind].make() });
 
   // ---------- lookup tables ----------
@@ -166,6 +182,51 @@ const PhotoAdjust = (() => {
         }
         return;
       }
+      case 'channelmixer': {
+        const R = a.mono ? a.r : a.r, G = a.mono ? a.r : a.g, B = a.mono ? a.r : a.b, k = 1 / 100;
+        for (let i = 0; i < n; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          d[i] = clamp255((R[0] * r + R[1] * g + R[2] * b) * k + R[3] * 2.55);
+          d[i + 1] = clamp255((G[0] * r + G[1] * g + G[2] * b) * k + G[3] * 2.55);
+          d[i + 2] = clamp255((B[0] * r + B[1] * g + B[2] * b) * k + B[3] * 2.55);
+        }
+        return;
+      }
+      case 'selectivecolor': {
+        // weights per range, then CMYK-style shifts (PhotoCraft compose/src/adjust.rs:828-876)
+        const rs = SC_RANGES.map(([key]) => a.ranges[key] || [0, 0, 0, 0]);
+        if (rs.every(v => v.every(x => !x))) return;
+        const w = new Float32Array(9), c = [0, 0, 0];
+        for (let i = 0; i < n; i += 4) {
+          c[0] = d[i] / 255; c[1] = d[i + 1] / 255; c[2] = d[i + 2] / 255;
+          const mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]), md = c[0] + c[1] + c[2] - mx - mn;
+          const top = j => c[j] >= mx ? mx - md : 0, bot = j => c[j] <= mn ? md - mn : 0;
+          w[0] = top(0); w[1] = bot(2); w[2] = top(1); w[3] = bot(0); w[4] = top(2); w[5] = bot(1);
+          w[6] = Math.max(0, (mn - 0.5) * 2); w[7] = Math.max(0, 1 - Math.abs(mx - 0.5) - Math.abs(mn - 0.5)); w[8] = Math.max(0, (0.5 - mx) * 2);
+          for (let ch = 0; ch < 3; ch++) {
+            const ink = 1 - c[ch]; let shift = 0;
+            for (let r = 0; r < 9; r++) {
+              if (!w[r]) continue;
+              const dd = (rs[r][ch] + rs[r][3]) / 100; if (!dd) continue;
+              shift += w[r] * (a.relative ? dd * ink : dd > 0 ? dd * Math.min(1, 2 * (1 - ink)) : dd * Math.min(1, 2 * ink));
+            }
+            d[i + ch] = clamp255((c[ch] - shift) * 255);
+          }
+        }
+        return;
+      }
+      case 'lookup': case 'grade': {
+        let L, amt = 1;
+        if (a.kind === 'lookup') { const lut = a.lut && LUTS.get(a.lut.key); if (!lut) return; L = lut; amt = (a.amount ?? 100) / 100; }
+        else { if (!ColorGrade.isColorActive(a.grade)) return; L = bakedFor(ColorGrade.key(a.grade), () => ColorGrade.bake(a.grade, 33)); }
+        if (amt <= 0) return;
+        const S = ColorGrade.sampleLut;
+        for (let i = 0; i < n; i += 4) {
+          const c = S(L, d[i] / 255, d[i + 1] / 255, d[i + 2] / 255);
+          d[i] += (c[0] * 255 - d[i]) * amt; d[i + 1] += (c[1] * 255 - d[i + 1]) * amt; d[i + 2] += (c[2] * 255 - d[i + 2]) * amt;
+        }
+        return;
+      }
       case 'photofilter': {
         const c = hexRgb(a.color), k = a.density / 100;
         for (let i = 0; i < n; i += 4) {
@@ -253,6 +314,48 @@ const PhotoAdjust = (() => {
       }
       case 'photofilter': { const row = h('<div class="row" style="align-items:flex-end"></div>'); row.append(col('Filter color', a, 'color')); wrap.append(row, sl('Density', a, 'density', 0, 100, 1, v => v + '%'), chk('Preserve luminosity', a, 'preserve')); break; }
       case 'gradientmap': { const row = h('<div class="row" style="align-items:flex-end"></div>'); row.append(col('Shadows', a, 'c1'), col('Highlights', a, 'c2')); wrap.append(row, chk('Reverse', a, 'reverse')); break; }
+      case 'channelmixer': {
+        let out = 'r';
+        const seg = h(`<div class="seg">${[['r', 'Red'], ['g', 'Green'], ['b', 'Blue']].map(([v, l]) => `<button data-v="${v}" class="${v === out ? 'on' : ''}">${l} out</button>`).join('')}</div>`);
+        const box = h('<div class="stack"></div>');
+        const paint = () => {
+          box.innerHTML = ''; const row = a[out];
+          const mk = (label, i, min, max) => { const s = slider({ label, min, max, value: row[i], fmt: v => (v > 0 && i < 3 ? '+' : '') + v + '%' }); s.input.addEventListener('input', () => { row[i] = s.get(); live(); }); s.input.addEventListener('change', done); return s; };
+          box.append(mk('Red', 0, -200, 200), mk('Green', 1, -200, 200), mk('Blue', 2, -200, 200), mk('Constant', 3, -100, 100));
+          const tot = row[0] + row[1] + row[2]; box.appendChild(h(`<p class="hint">Total ${tot}%${tot > 100 ? ' — over 100% can clip highlights' : ''}</p>`));
+        };
+        $$('button', seg).forEach(b => b.addEventListener('click', () => { out = b.dataset.v; $$('button', seg).forEach(x => x.classList.toggle('on', x === b)); paint(); }));
+        paint();
+        wrap.append(chk('Monochrome', a, 'mono'), seg, box); break;
+      }
+      case 'selectivecolor': {
+        const pick = selectField('Colors', SC_RANGES, 'reds');
+        const box = h('<div class="stack"></div>');
+        const paint = () => {
+          box.innerHTML = ''; const row = a.ranges[pick.get()];
+          const mk = (label, i) => { const s = slider({ label, min: -100, max: 100, value: row[i], fmt: v => sgn(v) + '%' }); s.input.addEventListener('input', () => { row[i] = s.get(); live(); }); s.input.addEventListener('change', done); return s; };
+          box.append(mk('Cyan', 0), mk('Magenta', 1), mk('Yellow', 2), mk('Black', 3));
+        };
+        pick.select.addEventListener('change', paint); paint();
+        const mode = selectField('Method', [['rel', 'Relative'], ['abs', 'Absolute']], a.relative ? 'rel' : 'abs');
+        mode.select.addEventListener('change', () => { a.relative = mode.get() === 'rel'; live(); done(); });
+        wrap.append(pick, box, mode); break;
+      }
+      case 'lookup': {
+        const lut = a.lut && LUTS.get(a.lut.key);
+        const info = h(`<p class="hint">${lut ? `${esc(a.lut.name)} · ${lut.size}³` : 'Load a 3D LUT (.cube or .3dl) — the same files you use in Premiere, Resolve or Photoshop.'}</p>`);
+        const btn = h(`<button class="btn btn-sm">${lut ? 'Load another LUT…' : 'Load LUT file…'}</button>`);
+        btn.addEventListener('click', async () => {
+          const ps = await ro3.openDialog({ title: 'Choose a LUT', filters: [{ name: '3D LUT', extensions: ['cube', '3dl'] }] }).catch(() => null);
+          const p = ps && (Array.isArray(ps) ? ps[0] : ps); if (!p) return;
+          try {
+            const text = await ro3.readText(p), name = p.split(/[\\/]/).pop();
+            a.lut = { key: registerLut(text, name), name }; live(); done(); if (ctx.rebuild) ctx.rebuild();
+          } catch (e) { toast('Could not load that LUT: ' + e.message, 'error'); }
+        });
+        wrap.append(info, btn, sl('Intensity', a, 'amount', 0, 100, 1, v => v + '%')); break;
+      }
+      case 'grade': return gradeEditor(a.grade, wrap, live, done);
       case 'posterize': wrap.append(sl('Levels', a, 'levels', 2, 32)); break;
       case 'threshold': wrap.append(sl('Threshold level', a, 'level', 1, 255)); break;
       case 'invert': wrap.append(h('<p class="hint">Inverts every color below this layer. Paint on the layer to limit where it applies.</p>')); break;
@@ -381,5 +484,47 @@ const PhotoAdjust = (() => {
     return wrap;
   }
 
-  return { KINDS, ORDER, make, apply, histogram, editor, levelsLut, curveLut, hexRgb };
+  /** Lumetri-style grade controls; shared with the video editor's Color panel. */
+  function gradeEditor(g, wrap, live, done, opts = {}) {
+    const sgn = v => (v > 0 ? '+' : '') + v;
+    const sl = (label, key, min, max, step = 1, fmt = sgn, obj = g) => {
+      const s = slider({ label, min, max, step, value: obj[key] ?? 0, fmt });
+      s.input.addEventListener('input', () => { obj[key] = s.get(); live(); });
+      s.input.addEventListener('change', done);
+      return s;
+    };
+    const sec = (title, open = true) => { const d = h(`<details class="grade-sec" ${open ? 'open' : ''}><summary>${esc(title)}</summary><div class="stack"></div></details>`); wrap.appendChild(d); return $('.stack', d); };
+    const basic = sec('Basic correction');
+    basic.append(sl('Temperature', 'temperature', -100, 100), sl('Tint', 'tint', -100, 100), sl('Exposure', 'exposure', -4, 4, 0.05, v => sgn(+v.toFixed(2))),
+      sl('Contrast', 'contrast', -100, 100), sl('Highlights', 'highlights', -100, 100), sl('Shadows', 'shadows', -100, 100), sl('Whites', 'whites', -100, 100), sl('Blacks', 'blacks', -100, 100),
+      sl('Vibrance', 'vibrance', -100, 100), sl('Saturation', 'saturation', 0, 200, 1, v => v + '%'));
+    const cre = sec('Creative', false);
+    const look = selectField('Look', Object.entries(ColorGrade.LOOKS).map(([k, v]) => [k, v.name]), g.look || 'none');
+    look.select.addEventListener('change', () => { g.look = look.get(); live(); done(); });
+    cre.append(look, sl('Look intensity', 'lookAmount', 0, 100, 1, v => v + '%'), sl('Faded film', 'fade', 0, 100, 1, v => v));
+    if (opts.spatial) cre.append(sl('Sharpen', 'sharpen', 0, 100, 1, v => v), sl('Vignette', 'vignette', -100, 100), sl('Vignette midpoint', 'vignetteMid', 0, 100, 1, v => v));
+    const wh = sec('Color wheels', false);
+    g.wheels = g.wheels || {};
+    for (const [k, label] of [['shadows', 'Shadows'], ['midtones', 'Midtones'], ['highlights', 'Highlights']]) {
+      const w = g.wheels[k] = g.wheels[k] || { hue: 0, amount: 0 };
+      const row = h(`<div class="wheel-row"><span class="wheel-name">${label}</span><span class="wheel-swatch"></span></div>`);
+      const sw = $('.wheel-swatch', row), paintSw = () => { sw.style.background = w.amount ? `hsl(${w.hue} 80% 55% / ${0.25 + w.amount / 133})` : 'transparent'; };
+      const hs = sl('Hue', 'hue', 0, 359, 1, v => v + '°', w), as = sl('Amount', 'amount', 0, 100, 1, v => v, w);
+      hs.input.classList.add('hue-track'); hs.input.addEventListener('input', paintSw); as.input.addEventListener('input', paintSw); paintSw();
+      wh.append(row, hs, as);
+    }
+    const cv = sec('Curves', false);
+    g.curves = g.curves || { rgb: [[0, 0], [255, 255]], r: [[0, 0], [255, 255]], g: [[0, 0], [255, 255]], b: [[0, 0], [255, 255]] };
+    const fake = { kind: 'curves', ...g.curves };
+    const cw = h('<div class="stack"></div>');
+    curvesEditor({ adj: fake, hist: opts.hist || null, onInput: () => { Object.assign(g.curves, { rgb: fake.rgb, r: fake.r, g: fake.g, b: fake.b }); live(); }, onCommit: done }, cw);
+    cv.append(cw);
+    if (opts.extra) opts.extra(wrap);
+    const reset = h('<button class="btn btn-sm btn-ghost">Reset all</button>');
+    reset.addEventListener('click', () => { const d = ColorGrade.DEFAULT(); for (const k of Object.keys(g)) delete g[k]; Object.assign(g, d); live(); done(); if (opts.rebuild) opts.rebuild(); });
+    wrap.appendChild(reset);
+    return wrap;
+  }
+
+  return { KINDS, ORDER, make, apply, histogram, editor, levelsLut, curveLut, hexRgb, LUTS, registerLut, gradeEditor, SC_RANGES };
 })();

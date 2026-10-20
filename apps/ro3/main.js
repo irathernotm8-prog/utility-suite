@@ -87,12 +87,17 @@ function buildMenu() {
   const send = (cmd) => () => win && win.webContents.send('menu', cmd);
   // Shortcuts the page already handles are shown here but not registered twice.
   const hint = (accelerator) => ({ accelerator, registerAccelerator: false });
-  const item = (label, cmd, accel, extra = {}) => ({ label, click: send(cmd), ...(accel ? hint(accel) : {}), ...extra });
+  const item = (label, cmd, accel, extra = {}) => ({ label, id: cmd, click: send(cmd), ...(accel ? hint(accel) : {}), ...extra });
   const recentItems = recent.length
     ? [...recent.map(p => ({ label: path.basename(p), sublabel: path.dirname(p), click: send('open-path:' + p) })), { type: 'separator' }, { label: 'Clear recent', click: () => { recent = []; try { fs.writeFileSync(RECENT_FILE(), '[]'); } catch (_) {} buildMenu(); } }]
     : [{ label: 'No recent files', enabled: false }];
   const adjKinds = [['brightness', 'Brightness/Contrast…'], ['levels', 'Levels…'], ['curves', 'Curves…'], ['exposure', 'Exposure…'], ['vibrance', 'Vibrance…'], ['huesat', 'Hue/Saturation…'],
-    ['colorbalance', 'Color Balance…'], ['bw', 'Black & White…'], ['photofilter', 'Photo Filter…'], ['gradientmap', 'Gradient Map…'], ['invert', 'Invert'], ['posterize', 'Posterize…'], ['threshold', 'Threshold…']];
+    ['colorbalance', 'Color Balance…'], ['bw', 'Black & White…'], ['photofilter', 'Photo Filter…'], ['channelmixer', 'Channel Mixer…'], ['selectivecolor', 'Selective Color…'], ['gradientmap', 'Gradient Map…'], ['lookup', 'Color Lookup…'], ['grade', 'Color Grade…'], ['invert', 'Invert'], ['posterize', 'Posterize…'], ['threshold', 'Threshold…']];
+  // Filter menu straight from the filter catalogue (shared with the renderer).
+  const PF = require('./src/js/photo-filters.js').F, fgroups = {};
+  for (const f of Object.values(PF)) (fgroups[f.group] = fgroups[f.group] || []).push(f);
+  const filterMenus = Object.entries(fgroups).filter(([g]) => g !== 'Adjust').map(([g, list]) => ({ label: g, submenu: list.map(f => item(f.name, 'photo:filter:' + f.id)) }));
+  const adjustItems = (fgroups.Adjust || []).map(f => item(f.name, 'photo:filter:' + f.id));
   const template = [
     ...(isMac ? [{ role: 'appMenu' }] : []),
     { label: 'File', submenu: [
@@ -116,7 +121,9 @@ function buildMenu() {
     ] },
     { label: 'Image', submenu: [
       { label: 'Adjustments', submenu: [
-        item('Auto Tone', 'photo:filter:autotone'), item('Brightness / Color sliders', 'photo:panel:adjust'),
+        item('Auto Tone', 'photo:filter:autotone', 'CmdOrCtrl+Shift+L'), ...adjustItems.slice(0, 2), item('Brightness / Color sliders', 'photo:panel:adjust'),
+        { type: 'separator' }, ...adjustItems.slice(2),
+        { type: 'separator' }, { label: 'As Adjustment Layer', submenu: adjKinds.map(([k, l]) => item(l, 'photo:adjlayer:' + k)) },
         { type: 'separator' }, item('Black & White', 'photo:filter:grayscale'), item('Sepia', 'photo:filter:sepia'), item('Invert', 'photo:filter:invert', 'CmdOrCtrl+I'), item('Posterize…', 'photo:filter:posterize'),
       ] },
       { type: 'separator' },
@@ -128,7 +135,7 @@ function buildMenu() {
       item('New Layer', 'photo:new-layer', 'CmdOrCtrl+Shift+N'), item('Duplicate Layer', 'photo:duplicate', 'CmdOrCtrl+J'), item('Delete Layer', 'photo:delete-layer'),
       { label: 'New Adjustment Layer', submenu: adjKinds.map(([k, l]) => item(l, 'photo:adjlayer:' + k)) },
       { type: 'separator' },
-      item('Layer Style…', 'photo:layer-style'), item('Add Layer Mask', 'photo:add-mask'),
+      item('Layer Style…', 'photo:layer-style'), { label: 'Layer Style Clipboard', submenu: [item('Copy Layer Style', 'photo:copy-style'), item('Paste Layer Style', 'photo:paste-style'), item('Clear Layer Style', 'photo:clear-style')] }, item('Add Layer Mask', 'photo:add-mask'),
       item('Create / Release Clipping Mask', 'photo:clip', 'CmdOrCtrl+Alt+G'), item('Lock / Unlock Layer', 'photo:lock', 'CmdOrCtrl+/'),
       { type: 'separator' },
       item('Group Layers', 'photo:group', 'CmdOrCtrl+G'), item('Ungroup Layers', 'photo:ungroup', 'CmdOrCtrl+Shift+G'),
@@ -146,13 +153,28 @@ function buildMenu() {
       item('Save Selection as Mask', 'photo:sel-to-mask'),
     ] },
     { label: 'Filter', submenu: [
+      item('Last Filter', 'photo:last-filter', 'CmdOrCtrl+Alt+F'), { type: 'separator' },
       item('Liquify…', 'photo:liquify', 'CmdOrCtrl+Shift+X'), { type: 'separator' },
-      item('Gaussian Blur…', 'photo:filter:blur'), item('Sharpen…', 'photo:filter:sharpen'), item('Add Noise…', 'photo:filter:noise'), item('Pixelate…', 'photo:filter:pixelate'), item('Vignette…', 'photo:filter:vignette'),
+      ...filterMenus,
+      { type: 'separator' },
+      { label: 'Classic', submenu: [item('Sharpen…', 'photo:filter:sharpen'), item('Pixelate…', 'photo:filter:pixelate'), item('Vignette…', 'photo:filter:vignette'), item('Posterize…', 'photo:filter:posterize')] },
+    ] },
+    { label: 'Timeline', submenu: [
+      item('Split at Playhead', 'video:split', 'S'), item('Add Marker', 'video:marker', 'M'), item('Add Title', 'video:title', 'T'), item('Add Caption', 'video:caption', 'C'),
+      item('Freeze Frame', 'video:freeze', 'Shift+F'), item('Paste Effects onto Clip', 'video:paste-attrs', 'CmdOrCtrl+Alt+V'),
+      { type: 'separator' },
+      item('Import Captions…', 'video:import-captions'), item('Save Captions as SRT…', 'video:export-srt'), item('Save Captions as VTT…', 'video:export-vtt'), item('Copy YouTube Chapters', 'video:chapters'),
+      { type: 'separator' },
+      { label: 'Export Timeline', submenu: [item('Final Cut Pro / Resolve (FCPXML)…', 'video:export-fcpxml'), item('EDL (CMX 3600)…', 'video:export-edl'), item('OpenTimelineIO…', 'video:export-otio')] },
+      { type: 'separator' },
+      item('Video Scopes', 'video:scopes'), item('Audio Meters', 'video:meters'), item('Render Preview', 'video:render-preview'),
     ] },
     { label: 'View', submenu: [
       { label: 'Photo', accelerator: 'CmdOrCtrl+1', click: send('tab:photo') },
       { label: 'Video', accelerator: 'CmdOrCtrl+2', click: send('tab:video') },
       { label: 'Quick Convert', accelerator: 'CmdOrCtrl+3', click: send('tab:convert') },
+      { type: 'separator' },
+      item('Command Palette…', 'palette', 'CmdOrCtrl+K'),
       { type: 'separator' },
       item('Rulers', 'photo:rulers', 'CmdOrCtrl+R'), item('Guides', 'photo:guides', 'CmdOrCtrl+;'), item('Rule of Thirds Grid', 'photo:thirds', "'"), item('Clear Guides', 'photo:clear-guides'),
       { type: 'separator' },
@@ -162,7 +184,15 @@ function buildMenu() {
     ] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  // Flattened list for the command palette.
+  menuCommands = [];
+  const walk = (items, trail) => items.forEach(it => {
+    if (it.submenu && Array.isArray(it.submenu)) return walk(it.submenu, [...trail, it.label]);
+    if (it.id && it.label) menuCommands.push({ label: it.label.replace('…', ''), cmd: it.id, path: trail.join(' › '), accel: it.accelerator || '' });
+  });
+  walk(template, []);
 }
+let menuCommands = [];
 
 // ---------- helpers ----------
 
@@ -226,6 +256,9 @@ handle('fs:readText', (p) => fs.promises.readFile(p, 'utf8'));
 handle('fs:readBytes', async (p) => new Uint8Array(await fs.promises.readFile(p)));
 handle('fs:writeBytes', async (p, bytes) => { const tmp = p + '.ro3tmp'; await fs.promises.writeFile(tmp, Buffer.from(bytes)); await fs.promises.rename(tmp, p); return p; });
 handle('recent:add', (p) => { addRecent(p); return true; });
+handle('ora:read', async (p) => require('./engine/ora').readORA(p));
+handle('ora:write', async (p, d) => { const ora = require('./engine/ora'); const buf = ora.buildORA({ ...d, layers: d.layers.map(l => ({ ...l, png: Buffer.from(l.png) })), merged: Buffer.from(d.merged) }); const tmp = p + '.ro3tmp'; await fs.promises.writeFile(tmp, buf); await fs.promises.rename(tmp, p); return buf.length; });
+handle('text:export', async (p, text) => { await fs.promises.writeFile(p, text, 'utf8'); return p; });
 handle('recent:list', () => recent);
 
 // Crash-recovery copies live in the app-data folder, never next to the user's files.
@@ -250,6 +283,18 @@ handle('media:thumb', async (p) => {
 handle('media:filmstrip', (p, duration, frames) => media.filmstrip(p, duration, frames));
 handle('media:waveform', (p) => media.waveform(p));
 handle('media:frame', (p, t) => media.frameAt(p, t, 360));
+handle('media:still', async (p, t) => {
+  fs.mkdirSync(TMP, { recursive: true });
+  const out = path.join(TMP, `still-${Buffer.from(p).toString('base64url').slice(-24)}-${Math.round(t * 1000)}.png`);
+  if (!fs.existsSync(out)) await require('./engine/ffmpeg').runFfmpeg(['-ss', String(Math.max(0, t)), '-i', p, '-frames:v', '1', out]);
+  return out;
+});
+handle('video:interchange', async (project, fmt, out) => {
+  const ic = require('./engine/interchange');
+  const text = fmt === 'edl' ? ic.toEDL(project, { title: project.name }) : fmt === 'otio' ? ic.toOTIO(project) : ic.toFCPXML(project, { eventName: 'RO3' });
+  await fs.promises.writeFile(out, text, 'utf8'); return out;
+});
+handle('video:transitions', () => [...timeline.supportedTransitions()]);
 handle('media:proxy', (jobId, p) => withJob(jobId, (signal, progress) => {
   const out = path.join(TMP, 'proxy-' + Buffer.from(p).toString('base64url').slice(-40) + '.mp4');
   if (fs.existsSync(out)) return out;
@@ -322,6 +367,7 @@ app.on('second-instance', (_e, argv) => {
   argv.slice(1).filter(openableArg).forEach(p => win.webContents.send('menu', 'open-path:' + p));
 });
 handle('app:pendingOpen', () => pendingOpen.splice(0));
+handle('app:commands', () => menuCommands);
 
 app.whenReady().then(() => {
   loadRecent();

@@ -31,7 +31,7 @@
   function openPath(p) {
     const ext = (p.split('.').pop() || '').toLowerCase();
     if (ext === 'ro3v') { show('video'); return VideoEditor.openProjectPath(p); }
-    if (ext === 'ro3' || FORMATS.IMAGE_IN.includes(ext)) { show('photo'); return PhotoEditor.openPath(p, false); }
+    if (ext === 'ro3' || ext === 'ora' || FORMATS.IMAGE_IN.includes(ext)) { show('photo'); return PhotoEditor.openPath(p, false); }
     if (FORMATS.VIDEO_IN.includes(ext) || FORMATS.AUDIO_IN.includes(ext)) { show('video'); return VideoEditor.importPaths([p]); }
     toast(`RO3 can't open .${ext} files.`, 'error');
   }
@@ -42,7 +42,47 @@
     unsaved: () => [...PhotoEditor.unsaved(), ...VideoEditor.unsaved()],
   };
 
-  ro3.onMenu(cmd => {
+  /** Command palette (Ctrl/Cmd+K): every menu command plus the tools of the open workspace, fuzzy-searched. */
+  async function palette() {
+    if (document.querySelector('.palette')) return;
+    const menuCmds = await ro3.commands().catch(() => []);
+    const extra = (modules[active] && modules[active].commands ? modules[active].commands() : []);
+    const all = [...extra, ...menuCmds];
+    const root = h(`<div class="palette-backdrop"><div class="palette" role="dialog" aria-label="Command palette"><input type="search" placeholder="Type a command, tool or filter…" spellcheck="false"><div class="palette-list" role="listbox"></div></div></div>`);
+    const input = $('input', root), list = $('.palette-list', root);
+    let items = [], sel = 0;
+    const score = (c, q) => {
+      if (!q) return 1;
+      const s = (c.label + ' ' + (c.path || '')).toLowerCase(); let i = 0, run = 0, sc = 0;
+      for (const ch of q) { const j = s.indexOf(ch, i); if (j < 0) return 0; run = j === i ? run + 1 : 0; sc += 1 + run * 2 + (j === 0 || s[j - 1] === ' ' ? 3 : 0); i = j + 1; }
+      return sc + (c.label.toLowerCase().startsWith(q) ? 20 : 0) + (c.cmd && c.cmd.startsWith(active) ? 2 : 0);
+    };
+    const paint = () => {
+      const q = input.value.trim().toLowerCase();
+      items = all.map(c => ({ c, s: score(c, q) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 60).map(x => x.c);
+      sel = Math.min(sel, Math.max(0, items.length - 1));
+      list.innerHTML = items.length ? items.map((c, i) => `<div class="palette-item ${i === sel ? 'on' : ''}" data-i="${i}"><span>${esc(c.label)}</span><em>${esc(c.path || '')}</em>${c.accel ? `<kbd>${esc(String(c.accel).replace('CmdOrCtrl', ro3.platform === 'darwin' ? '⌘' : 'Ctrl'))}</kbd>` : ''}</div>`).join('') : '<div class="palette-empty">No matching commands</div>';
+      const on = $('.palette-item.on', list); on && on.scrollIntoView({ block: 'nearest' });
+    };
+    const close = () => root.remove();
+    const run = i => { const c = items[i]; if (!c) return; close(); if (c.run) return c.run(); window.dispatchEvent(new CustomEvent('ro3-menu', { detail: c.cmd })); };
+    input.addEventListener('input', () => { sel = 0; paint(); });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { sel = Math.min(items.length - 1, sel + 1); paint(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); paint(); e.preventDefault(); }
+      else if (e.key === 'Enter') { run(sel); e.preventDefault(); }
+      else if (e.key === 'Escape') { close(); e.preventDefault(); }
+    });
+    list.addEventListener('click', e => { const it = e.target.closest('.palette-item'); if (it) run(Number(it.dataset.i)); });
+    root.addEventListener('mousedown', e => { if (e.target === root) close(); });
+    document.body.appendChild(root); paint(); input.focus();
+  }
+  window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); palette(); } });
+  window.addEventListener('ro3-menu', e => handleMenu(e.detail));
+
+  ro3.onMenu(cmd => handleMenu(cmd));
+  function handleMenu(cmd) {
+    if (cmd === 'palette') return palette();
     if (cmd.startsWith('tab:')) return show(cmd.slice(4));
     if (cmd.startsWith('open-path:')) return openPath(cmd.slice(10));
     if ((cmd === 'undo' || cmd === 'redo') && isTyping()) { document.execCommand(cmd); return; }
@@ -50,7 +90,7 @@
     if (cmd.startsWith('photo:')) { if (active !== 'photo') show('photo'); return PhotoEditor.menu(cmd); }
     if (cmd.startsWith('video:')) { if (active !== 'video') show('video'); return VideoEditor.menu(cmd); }
     modules[active].menu && modules[active].menu(cmd);
-  });
+  }
 
   // Stop the window from navigating when a file is dropped somewhere unhandled.
   window.addEventListener('dragover', e => e.preventDefault());

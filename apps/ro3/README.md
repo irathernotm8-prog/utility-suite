@@ -15,19 +15,20 @@ Everything runs locally; nothing is uploaded anywhere.
 
    `npm install` downloads Electron, FFmpeg and the image libraries for your machine (about 250 MB, one time).
 
-## Build an installable app
+## Shipping an update
 
-> **Important:** always run `npm install` on the same computer you build on. Don't copy `node_modules` or `package-lock.json` between a Mac and a PC, because each one downloads engine files made for its own system.
+RO3 lives in the Utility Package at `apps/ro3`. To ship a change: bump `version` in `package.json`, run `./utility note ro3 "what changed"` from the Utility Package folder, then `./utility publish`. Every computer's Utility Hub picks the update up from there.
 
+## Build an installable app (for a friend)
 
-Build on the computer you want the app for — a Mac build has to be made on a Mac, and a Windows build on Windows.
+> **Important:** always run `npm install` on the same computer you build on. Don't copy `node_modules` between a Mac and a PC, because each one downloads engine files made for its own system.
 
 | Platform | Command | Output in `dist/` |
 | --- | --- | --- |
-| macOS | `npm run dist:mac` | `RO3-1.2.0-arm64.dmg` (drag to Applications) |
-| Windows | `npm run dist:win` | `RO3 Setup 1.2.0.exe` installer + portable `RO3 1.2.0.exe` |
+| macOS | `npm run dist:mac` | `RO3-1.3.0-arm64.dmg` (drag to Applications) |
+| Windows | `npm run dist:win` | `RO3 Setup 1.3.0.exe` installer + portable `RO3 1.3.0.exe` |
 
-If you use the Utility Package, `./utility port ro3` then `./utility suite` does all of this for you.
+`./utility build ro3` in the Utility Package does the same for both platforms.
 
 The app isn't code-signed, which is fine for personal use:
 
@@ -35,6 +36,28 @@ The app isn't code-signed, which is fine for personal use:
 - **Windows:** if SmartScreen appears, click *More info* → *Run anyway*.
 
 ## What's inside
+
+**New in 1.3 — Photo** (features modelled on the open-source PhotoCraft editor)
+- **Filter galleries**, all with a live on-canvas preview (big images preview at reduced size and render full size on Apply), heavy maths running in the background:
+  - *Blur:* Gaussian, Box, Motion, Radial (spin/zoom, click to place the centre), Tilt-Shift, Iris, Surface.
+  - *Sharpen:* Unsharp Mask, Smart Sharpen, High Pass.
+  - *Noise:* Add Noise (uniform/Gaussian, mono), Median, Reduce Noise, Dust & Scratches.
+  - *Distort:* Twirl, Wave, Ripple, Zigzag, Spherize/Pinch, Polar Coordinates, Shear, Lens Correction (distortion, vignette, fringing).
+  - *Stylize & Pixelate:* Oil Paint, Emboss, Find Edges, Glowing Edges, Wind, Solarize, Diffuse, Mosaic, Crystallize, Color Halftone.
+  - *Render:* Clouds, Difference Clouds, Fibers, Lens Flare. *Other:* Maximum, Minimum, Offset, Color to Alpha.
+  - Filter › Last Filter (Ctrl/Cmd+Alt+F) repeats the last one; the Filters panel has a search box.
+- **Image › Adjustments:** Auto Contrast, Auto Color, Equalize, Desaturate, Shadows/Highlights (Photoshop-style, radius-based), Replace Color (click to pick), Neutralize Color Cast.
+- **New adjustment layers:** Channel Mixer, Selective Color (CMYK per colour range, relative/absolute), **Color Lookup** (load .cube / .3dl LUTs; saved inside .ro3 projects) and **Color Grade** — a Lumetri-style panel (white balance, exposure, contrast, highlights/shadows/whites/blacks, vibrance, saturation, 11 creative looks, faded film, three-way colour wheels, RGB curves). The same grade engine powers the Video tab.
+- **11 more blend modes:** Linear Burn, Linear Dodge (Add), Vivid Light, Linear Light, Pin Light, Hard Mix, Subtract, Divide, Darker Color, Lighter Color, Dissolve — all saved to and read from PSD.
+- **Layer styles:** Inner Shadow, Inner Glow, Satin, Gradient Overlay and Bevel & Emboss join Drop Shadow, Outer Glow, Stroke and Color Overlay; copy, paste and clear styles (Layer › Layer Style Clipboard). All round-trip through PSD.
+- **Retouching tools:** Healing Brush (Alt-click a source; it blends seamlessly), Patch, Content-Aware Move (move or extend), Red Eye, History Brush (paint back any history state), Sharpen brush, Color Replacement, Pencil.
+- **Erasers:** Background Eraser (sample continuously or once, contiguous or not, protect foreground) and Magic Eraser.
+- **Measure & crop:** Color Sampler (up to four pinned readouts), Ruler with **Straighten**, and **Perspective Crop**.
+- **Shapes:** Triangle, Polygon and Star (sides / inner radius).
+- **Pen pressure** for Brush and Eraser (size, opacity or both) on drawing tablets.
+- **Info panel:** live histogram (RGB, luminosity or per channel) with mean, standard deviation, median and clipping, plus sampler readouts.
+- **Command palette (Ctrl/Cmd+K):** search every menu command, tool and filter.
+- **OpenRaster (.ora)** open and export — the layered format shared by Krita, GIMP and MyPaint.
 
 **Photo**
 - **Quick Selection (W):** paint over an object and the selection grows out to its edges. Shift adds, Alt subtracts. **Select and Mask** (Ctrl/Cmd+Alt+R) then refines the edge with smooth, feather, contrast and shift-edge controls and a live red overlay or black/white view. It can output a selection, a layer mask, a new layer, or a new layer with a mask.
@@ -74,6 +97,21 @@ The app isn't code-signed, which is fine for personal use:
 - Export to PNG, JPG, WebP, AVIF, TIFF, GIF, BMP, ICO, PDF or **SVG**. SVG export traces the raster image into vector shapes in colour, black & white or posterized style, with a live preview.
 - Save (Ctrl/Cmd+S saves straight back to the same file) and reopen layered work as `.ro3` projects.
 
+**New in 1.3 — Video** (features modelled on the open-source FilmCraft editor)
+- **Color grade per clip** (and per overlay): the Lumetri-style panel — white balance, exposure, tone, vibrance/saturation, looks, colour wheels, curves, **.cube/.3dl LUTs**, vignette and sharpening. The viewer shows the exact grade (GPU, with a CPU fallback) and export bakes the same maths into a 3D LUT, so what you see is what you get. "Copy grade to all clips" matches a sequence in one click.
+- **Video scopes:** waveform, RGB parade, vectorscope (with skin-tone line) and histogram. **Audio meters** with peak hold.
+- **Keyframes** for overlays and titles: position, size, opacity and rotation with linear, ease, ease-in/out and hold curves; dragging an animated overlay keys it at the playhead.
+- **Green / blue screen keying** for overlays (tolerance, edge softness, spill suppression), previewed live.
+- **Effects:** blur, sharpen, denoise, film grain, glow, RGB split, echo/trails, choppy frame rate, find edges, **stabilize**, **reverse**, crop, Fit/Fill framing and **Ken Burns** pan & zoom.
+- **Audio effects** on clips, overlays and music: Enhance Speech, presets (podcast, telephone, radio, music), 3-band EQ, high/low-pass, noise reduction, hum removal (50/60 Hz), de-ess, compressor, limiter, reverb, pitch shift and gain. EQ, filters and compressor preview live.
+- **Mixer & auto-ducking:** levels for the main track, overlays and music, and music that dips automatically under dialogue. Audio crossfades can be constant power, constant gain or exponential.
+- **58 transitions** in groups (dissolves, wipes and diagonals, push/slide-over/reveal, smooth and wind, iris and barn doors, slices and squeeze, stylized).
+- **Captions track:** add (C), edit, drag and trim captions; import and save **SRT/VTT**; one caption style for all; burn them in on export or save a sidecar .srt.
+- **Named markers → chapters:** double-click a marker to name it; Copy YouTube chapters, or embed chapters in MP4/MOV/MKV on export.
+- **Editing:** slip (Alt-drag a clip), roll (Alt-drag an edge), rate stretch (Shift-drag the right edge), copy/paste clips, **paste effects** (Ctrl/Cmd+Alt+V), freeze frame (Shift+F).
+- **Export presets:** YouTube 1080p/4K, TikTok · Reels · Shorts (9:16), Instagram 4:5 and 1:1, Vimeo, ProRes 422 HQ/LT, **DNxHR HQ**, H.265, **PNG sequence**, GIF and podcast MP3; loudness targets −14/−16/−23 LUFS; **23.976, 29.97 and 59.94 fps**.
+- **Hand-off to other editors:** export the timeline as **FCPXML** (Final Cut Pro, DaVinci Resolve), **CMX 3600 EDL** or **OpenTimelineIO** (Timeline › Export Timeline).
+
 **Video**
 - Import video, audio and images; MKV/AVI/WMV etc. get an automatic preview copy so they play in the viewer (export always uses the originals).
 - **Overlay track:** picture-in-picture video, logos and still images. Drag them in the viewer to place them (they snap to the thirds), and set size, opacity and fades. Overlapping overlays stack into lanes.
@@ -101,22 +139,24 @@ The app isn't code-signed, which is fine for personal use:
 
 | | Photo | Video |
 | --- | --- | --- |
-| Tools | V move, Ctrl/Cmd+T transform, M rect, Shift+M ellipse, L lasso, Shift+L polygonal lasso, Q selection brush, W quick selection, Shift+W wand, P pen, Ctrl/Cmd+Shift+X liquify, C crop, B brush, E eraser, J spot heal, S clone, R blur, Shift+R smudge, O dodge, Shift+O burn, Alt+O sponge, Shift+G gradient, G fill, U shapes, T text, I eyedropper, H hand, Z zoom | T title, M marker, N snapping, J/K/L shuttle |
+| Tools | V move, Ctrl/Cmd+T transform, M rect, Shift+M ellipse, L lasso, Shift+L polygonal lasso, Q selection brush, W quick selection, Shift+W wand, P pen, Ctrl/Cmd+Shift+X liquify, C crop, Shift+C perspective crop, B brush, Shift+B pencil, Alt+B color replacement, E eraser, Shift+E background eraser, Alt+E magic eraser, J spot heal, Shift+J healing brush, Alt+J patch, S clone, Y history brush, R blur, Alt+R sharpen, Shift+R smudge, Shift+I color sampler, Alt+I ruler, O dodge, Shift+O burn, Alt+O sponge, Shift+G gradient, G fill, U shapes, T text, I eyedropper, H hand, Z zoom | T title, C caption, M marker, N snapping, J/K/L shuttle, Shift+F freeze frame, Ctrl/Cmd+C/V copy/paste clip, Ctrl/Cmd+Alt+V paste effects |
 | Selection | Ctrl/Cmd+A all, Ctrl/Cmd+D deselect, Ctrl/Cmd+Shift+D reselect, Ctrl/Cmd+Shift+I invert, Ctrl/Cmd+Alt+R select and mask, Shift+F6 feather, Delete clears inside it, Shift+Delete content-aware fill | — |
 | Layers | Ctrl/Cmd+E merge down, Ctrl/Cmd+Shift+E merge visible, Ctrl/Cmd+G group, Ctrl/Cmd+Shift+G ungroup, Ctrl/Cmd+Alt+G clipping mask, Ctrl/Cmd+/ lock, Ctrl/Cmd+I invert, Ctrl/Cmd+R rulers, Ctrl/Cmd+; guides | — |
 | Clipboard | Ctrl/Cmd+C copy, X cut, V paste as new layer, Shift+C copy merged, Shift+V paste as new image | — |
 | Transform | Enter apply, Esc cancel, arrows nudge | — |
 | Editing | [ ] brush size, X swap colours, Ctrl/Cmd+J duplicate layer, ' thirds grid, Space+drag pan, Ctrl/Cmd+scroll zoom | Space play, S split, Delete remove, ←/→ frame step, Shift+←/→ 1 s, +/− timeline zoom |
-| Everywhere | Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (Mac) / Ctrl+Y (Win) redo, Ctrl/Cmd+S save, Ctrl/Cmd+Shift+S save as, Ctrl/Cmd+Alt+E export, Ctrl/Cmd+1/2/3 switch tabs | |
+| Everywhere | Ctrl/Cmd+K command palette, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (Mac) / Ctrl+Y (Win) redo, Ctrl/Cmd+S save, Ctrl/Cmd+Shift+S save as, Ctrl/Cmd+Alt+E export, Ctrl/Cmd+1/2/3 switch tabs | |
 
 ## Known limits
 
 - HEIC/HEIF photos can't be opened (the bundled codecs don't include them). Convert them to JPG on your phone or Mac first.
 - Vector tracing is great for logos, icons and flat art. Photos turn into stylised posters, which is a limit of tracing itself.
 - Very large photos (over about 100 megapixels) will be slow in the editor.
-- PSD: smart objects and text layers open as pixels. Groups nested inside groups are merged into their outer group, and effects beyond the four supported styles are dropped. RO3 tells you when a file used them.
-- Playback in the viewer shows transitions as crossfades and approximates color effects. Render preview and Export show the exact result.
-- RO3 has no AI features such as Select Subject or Generative Fill, no 3D, and no keyframe animation. Content-aware fill is pattern-based (the same family of technique Photoshop's original version used), so it is excellent on texture, sky, grass and walls and weaker at inventing complex objects.
+- PSD: smart objects and text layers open as pixels. Groups nested inside groups are merged into their outer group. Color Lookup and Color Grade layers are flattened into pixels in the PSD (Photoshop can't store them).
+- Timeline exports (FCPXML/EDL/OTIO) carry cuts, timing, speed, transitions, overlays, music and markers; titles, effects and grades stay in RO3.
+- Playback in the viewer shows transitions as crossfades. Colour grades, LUTs, keying, Ken Burns, crop and blur preview exactly; grain, glow, RGB split, echo, stabilize, noise reduction, reverb and pitch appear in Render preview and Export.
+- Keyframes are for overlays and titles; main-track clips animate with Ken Burns.
+- RO3 has no AI features such as Select Subject, Generative Fill or auto-captions, and no 3D. Content-aware fill is pattern-based (the same family of technique Photoshop's original version used), so it is excellent on texture, sky, grass and walls and weaker at inventing complex objects.
 - Liquify works on the layer's pixels; it doesn't warp the layer's mask.
 
 ## Project layout
@@ -129,10 +169,20 @@ src/             the interface — index.html, styles.css, js/ (photo, video, co
   js/photo-compose.js   layer compositor (masks, styles, clipping, adjustment layers)
   js/photo-adjust.js    adjustment maths and the Levels/Curves editors
   js/photo-psd.js       Photoshop import/export
+  js/photo-filters.js   filter galleries (runs in js/filter-worker.js)
+  js/color-grade.js     shared colour-grade / LUT engine (photo, video preview and export)
+  js/glview.js          WebGL viewer layer for graded / keyed video
   vendor/ag-psd.js      PSD library (MIT)
+engine/interchange.js  FCPXML, EDL and OpenTimelineIO export
+engine/captions.js     SRT / VTT / chapters
+engine/ora.js          OpenRaster read/write
 scripts/         install and build checks
 test/            npm run test:engine — converts sample media in every format, renders timelines
 ```
+
+## Credits
+
+Many 1.3 features follow the designs of **PhotoCraft** and **FilmCraft** by the ArtCraft team (https://github.com/storytold/photocraft, https://github.com/storytold/filmcraft), dual-licensed MIT / Apache-2.0. Their algorithms were re-implemented here in JavaScript; no code from those projects is bundled.
 
 ## Troubleshooting
 

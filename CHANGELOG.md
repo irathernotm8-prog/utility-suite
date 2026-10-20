@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-20 16:42 — **RO3 1.3.0** — Big upgrade inspired by PhotoCraft & FilmCraft: 40+ new photo filters, Channel Mixer, Selective Color, LUTs and a Color Grade panel, 11 new blend modes, inner shadow/glow, satin, gradient and bevel styles, healing brush, patch, content-aware move, red eye, background/magic eraser, perspective crop, command palette (Ctrl/Cmd+K) and OpenRaster. Video gets colour grading with LUTs, scopes, keyframes, green screen, effects, audio effects and ducking, 58 transitions, captions (SRT/VTT), chapters, slip/roll edits, export presets and FCPXML/EDL/OTIO hand-off.
 - 2026-10-20 09:05 — **Lumen 0.1.0** — First release
 - 2026-10-20 09:04 — **Lumen 0.1.0** (23 new) — Added to the Utility Package
 - 2026-10-20 03:29 — **Fresh Desk 1.0.1** — Fixes the crash when opening Applications or Pictures on Mac (app icons are now read safely), and adds a setting to hide recent folders in the sidebar

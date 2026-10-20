@@ -3,7 +3,9 @@ const PhotoEditor = (() => {
   const O = PhotoOps;
   const BLENDS = [['source-over', 'Normal'], ['multiply', 'Multiply'], ['screen', 'Screen'], ['overlay', 'Overlay'], ['darken', 'Darken'], ['lighten', 'Lighten'],
     ['color-dodge', 'Color dodge'], ['color-burn', 'Color burn'], ['hard-light', 'Hard light'], ['soft-light', 'Soft light'], ['difference', 'Difference'],
-    ['exclusion', 'Exclusion'], ['hue', 'Hue'], ['saturation', 'Saturation'], ['color', 'Color'], ['luminosity', 'Luminosity']];
+    ['exclusion', 'Exclusion'], ['hue', 'Hue'], ['saturation', 'Saturation'], ['color', 'Color'], ['luminosity', 'Luminosity'],
+    ['linear-burn', 'Linear burn'], ['linear-dodge', 'Linear dodge (add)'], ['vivid-light', 'Vivid light'], ['linear-light', 'Linear light'], ['pin-light', 'Pin light'],
+    ['hard-mix', 'Hard mix'], ['subtract', 'Subtract'], ['divide', 'Divide'], ['darker-color', 'Darker color'], ['lighter-color', 'Lighter color'], ['dissolve', 'Dissolve']];
   const TOOLS = [
     { id: 'move', icon: 'move', name: 'Move', key: 'v' },
     { id: 'transform', icon: 'transform', name: 'Transform', key: 'ctrl+t', label: 'Ctrl+T' },
@@ -15,12 +17,23 @@ const PhotoEditor = (() => {
     { id: 'quick', icon: 'quick', name: 'Quick selection', key: 'w' },
     { id: 'wand', icon: 'wand', name: 'Magic wand', key: 'shift+w' },
     { id: 'crop', icon: 'crop', name: 'Crop', key: 'c' },
+    { id: 'perspcrop', icon: 'perspcrop', name: 'Perspective crop', key: 'shift+c' },
     'sep',
     { id: 'brush', icon: 'brush', name: 'Brush', key: 'b' },
+    { id: 'pencil', icon: 'pencil', name: 'Pencil (hard edge)', key: 'shift+b' },
+    { id: 'colorreplace', icon: 'colorreplace', name: 'Color replacement', key: 'alt+b' },
     { id: 'eraser', icon: 'eraser', name: 'Eraser', key: 'e' },
+    { id: 'bgeraser', icon: 'bgeraser', name: 'Background eraser', key: 'shift+e' },
+    { id: 'magiceraser', icon: 'magiceraser', name: 'Magic eraser', key: 'alt+e' },
     { id: 'heal', icon: 'heal', name: 'Spot healing brush', key: 'j' },
+    { id: 'healbrush', icon: 'healbrush', name: 'Healing brush', key: 'shift+j' },
+    { id: 'patch', icon: 'patch', name: 'Patch', key: 'alt+j' },
+    { id: 'camove', icon: 'camove', name: 'Content-aware move', key: '', label: 'J' },
+    { id: 'redeye', icon: 'redeye', name: 'Red eye', key: '', label: 'J' },
     { id: 'clone', icon: 'clone', name: 'Clone stamp', key: 's' },
+    { id: 'historybrush', icon: 'historybrush', name: 'History brush', key: 'y' },
     { id: 'blur', icon: 'blur', name: 'Blur brush', key: 'r' },
+    { id: 'sharpenbrush', icon: 'sharpenbrush', name: 'Sharpen brush', key: 'alt+r' },
     { id: 'smudge', icon: 'smudge', name: 'Smudge', key: 'shift+r' },
     { id: 'liquify', icon: 'liquify', name: 'Liquify', key: 'ctrl+shift+x', label: 'Ctrl+Shift+X' },
     { id: 'dodge', icon: 'dodge', name: 'Dodge (lighten)', key: 'o' },
@@ -32,14 +45,16 @@ const PhotoEditor = (() => {
     { id: 'text', icon: 'text', name: 'Text', key: 't' },
     { id: 'pen', icon: 'pen', name: 'Pen (paths)', key: 'p' },
     { id: 'dropper', icon: 'dropper', name: 'Eyedropper', key: 'i' },
+    { id: 'sampler', icon: 'sampler', name: 'Color sampler', key: 'shift+i' },
+    { id: 'ruler', icon: 'ruler', name: 'Ruler (straighten)', key: 'alt+i' },
     'sep',
     { id: 'hand', icon: 'hand', name: 'Hand', key: 'h' },
     { id: 'zoom', icon: 'zoom', name: 'Zoom', key: 'z' },
   ];
-  const PAINT_TOOLS = ['brush', 'eraser', 'blur', 'clone', 'selbrush', 'heal', 'smudge', 'dodge', 'burn', 'sponge', 'quick'];
+  const PAINT_TOOLS = ['brush', 'pencil', 'colorreplace', 'eraser', 'bgeraser', 'blur', 'sharpenbrush', 'clone', 'historybrush', 'selbrush', 'heal', 'healbrush', 'smudge', 'dodge', 'burn', 'sponge', 'quick'];
   // Rail slots: related tools share one button (right-click or long-press to switch, like Photoshop).
-  const GROUPS = [['move', 'transform'], ['rect', 'ellipse'], ['lasso', 'polylasso', 'selbrush'], ['quick', 'wand'], ['crop'], 'sep',
-    ['brush'], ['eraser'], ['heal', 'clone'], ['blur', 'smudge', 'liquify'], ['dodge', 'burn', 'sponge'], ['gradient', 'fill'], ['shape', 'pen'], ['text'], ['dropper'], 'sep', ['hand'], ['zoom']];
+  const GROUPS = [['move', 'transform'], ['rect', 'ellipse'], ['lasso', 'polylasso', 'selbrush'], ['quick', 'wand'], ['crop', 'perspcrop'], 'sep',
+    ['brush', 'pencil', 'colorreplace'], ['eraser', 'bgeraser', 'magiceraser'], ['heal', 'healbrush', 'patch', 'camove', 'redeye'], ['clone', 'historybrush'], ['blur', 'sharpenbrush', 'smudge', 'liquify'], ['dodge', 'burn', 'sponge'], ['gradient', 'fill'], ['shape', 'pen'], ['text'], ['dropper', 'sampler', 'ruler'], 'sep', ['hand'], ['zoom']];
   const groupOf = id => GROUPS.find(g => g !== 'sep' && g.includes(id));
   const groupCurrent = new Map();
   const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M19 11a7 7 0 1 0-2 5" fill="none" stroke="black" stroke-width="4" stroke-linecap="round"/><path d="M19 11a7 7 0 1 0-2 5" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M15 9.5h5.5V4z" fill="white" stroke="black" stroke-width="1"/></svg>')}") 12 12, crosshair`;
@@ -61,11 +76,21 @@ const PhotoEditor = (() => {
     clone: { size: 60, hardness: 0.6, opacity: 1, aligned: true },
     heal: { size: 40, hardness: 0.7, mode: 'content' },
     smudge: { size: 40, strength: 60 },
+    pencil: { size: 4, opacity: 1 },
+    colorreplace: { size: 40, hardness: 0.6, tolerance: 30, mode: 'color' },
+    bgeraser: { size: 60, hardness: 0.8, tolerance: 50, sampling: 'continuous', limits: 'contiguous', protect: false },
+    magiceraser: { tolerance: 32, contiguous: true, opacity: 1 },
+    healbrush: { size: 40, hardness: 0.6 },
+    patch: { mode: 'source' },
+    camove: { mode: 'move' },
+    redeye: { pupil: 30, darken: 50 },
+    historybrush: { size: 50, hardness: 0.5, opacity: 1, source: 0 },
+    sharpenbrush: { size: 60, hardness: 0.4, strength: 50 },
     dodge: { size: 80, hardness: 0.3, exposure: 30 },
     burn: { size: 80, hardness: 0.3, exposure: 30 },
     sponge: { size: 80, hardness: 0.3, flow: 40, mode: 'desaturate' },
     gradient: { type: 'linear', mode: 'fgbg', opacity: 1 },
-    shape: { kind: 'rect', fill: true, stroke: false, width: 8, radius: 0 },
+    shape: { kind: 'rect', fill: true, stroke: false, width: 8, radius: 0, sides: 5, inner: 50 },
     transform: { mode: 'free' },
     liquify: { size: 120, pressure: 50, mode: 'push' },
   };
@@ -267,10 +292,19 @@ const PhotoEditor = (() => {
       const paint = `fill="${o.fill ? fg : 'none'}" stroke="${o.stroke ? bg : 'none'}" stroke-width="${o.width}" opacity=".85"`;
       if (d.kind === 'rect') s += `<rect x="${x}" y="${y}" width="${sw}" height="${sh}" rx="${Math.min(o.radius, sw / 2, sh / 2)}" ${paint}/>`;
       else if (d.kind === 'ellipse') s += `<ellipse cx="${x + sw / 2}" cy="${y + sh / 2}" rx="${sw / 2}" ry="${sh / 2}" ${paint}/>`;
+      else if (['polygon', 'star', 'triangle'].includes(d.kind)) s += `<polygon points="${polyPoints(d).map(q => q.join(',')).join(' ')}" ${paint}/>`;
       else s += `<line x1="${d.x0}" y1="${d.y0}" x2="${d.x1}" y2="${d.y1}" stroke="${fg}" stroke-width="${o.width}" stroke-linecap="round" opacity=".85"/>`;
     }
-    if (tool === 'clone' && (cloneMark || cloneSrc)) {
-      const m = cloneMark || cloneSrc, r = Math.max(6 / view.zoom, T.clone.size / 2);
+    if (patchDraft && doc.selection && antsEdge) s += `<image href="${patchOutline()}" x="${patchDraft.dx}" y="${patchDraft.dy}" width="${doc.width}" height="${doc.height}" opacity=".9"/>`;
+    if (doc.samplers && (tool === 'sampler' || tool === 'dropper')) doc.samplers.forEach((sp, i) => { const r = 6 / view.zoom; s += `<g class="sampler"><circle cx="${sp.x}" cy="${sp.y}" r="${r}"/><path d="M${sp.x - r * 1.8} ${sp.y}h${r * 3.6}M${sp.x} ${sp.y - r * 1.8}v${r * 3.6}"/><text x="${sp.x + r * 1.4}" y="${sp.y - r * 1.2}" font-size="${12 / view.zoom}">${i + 1}</text></g>`; });
+    if (ruler && tool === 'ruler') s += `<line class="ruler-line" x1="${ruler.x0}" y1="${ruler.y0}" x2="${ruler.x1}" y2="${ruler.y1}"/><circle class="tf-handle" cx="${ruler.x0}" cy="${ruler.y0}" r="${3 / view.zoom}"/><circle class="tf-handle" cx="${ruler.x1}" cy="${ruler.y1}" r="${3 / view.zoom}"/>`;
+    if (pcrop && tool === 'perspcrop') {
+      s += `<polygon class="tf-box" points="${pcrop.map(p => p.x + ',' + p.y).join(' ')}"/>`;
+      for (let k = 1; k < 3; k++) { const at = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }); const t = k / 3, p1 = at(pcrop[0], pcrop[1], t), p2 = at(pcrop[3], pcrop[2], t), p3 = at(pcrop[0], pcrop[3], t), p4 = at(pcrop[1], pcrop[2], t); s += `<line class="thirds" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/><line class="thirds" x1="${p3.x}" y1="${p3.y}" x2="${p4.x}" y2="${p4.y}"/>`; }
+      const hs = 9 / view.zoom; for (const p of pcrop) s += `<rect class="tf-handle" x="${p.x - hs / 2}" y="${p.y - hs / 2}" width="${hs}" height="${hs}"/>`;
+    }
+    if ((tool === 'clone' || tool === 'healbrush') && (cloneMark || cloneSrc)) {
+      const m = cloneMark || cloneSrc, r = Math.max(6 / view.zoom, T[tool].size / 2);
       s += `<circle class="clone-src" cx="${m.x}" cy="${m.y}" r="${r}"/><path class="clone-src" d="M${m.x - r * 0.4} ${m.y}h${r * 0.8}M${m.x} ${m.y - r * 0.4}v${r * 0.8}"/>`;
     }
     const a = active();
@@ -391,13 +425,13 @@ const PhotoEditor = (() => {
     if (!l.visible) return toast('This layer is hidden. Show it to paint on it.', 'error');
     commitAdjust();
     const onMask = (l.editMask || isAdj(l)) && l.mask;
-    if (isAdj(l) && ['blur', 'clone', 'smudge', 'heal', 'dodge', 'burn', 'sponge'].includes(tool)) return toast('Use the brush or eraser to paint an adjustment layer\'s mask.', 'error');
+    if (isAdj(l) && ['blur', 'clone', 'smudge', 'heal', 'healbrush', 'dodge', 'burn', 'sponge', 'colorreplace', 'bgeraser', 'historybrush', 'sharpenbrush'].includes(tool)) return toast('Use the brush or eraser to paint an adjustment layer\'s mask.', 'error');
     if (l.text && !onMask) l.text = null; // painting turns text into pixels
     const target = targetOf(l);
     const o = tool === 'blur' ? T.blur : T[tool];
     let offset = null;
-    if (tool === 'clone') {
-      if (!cloneSrc) { toast('Alt-click (Option-click on Mac) to choose where to clone from.', 'error'); return; }
+    if (tool === 'clone' || tool === 'healbrush') {
+      if (!cloneSrc) { toast(`Alt-click (Option-click on Mac) to choose where to ${tool === 'clone' ? 'clone' : 'sample'} from.`, 'error'); return; }
       if (!T.clone.aligned || !cloneOffset) cloneOffset = { x: cloneSrc.x - p.x, y: cloneSrc.y - p.y };
       offset = cloneOffset;
     }
@@ -408,14 +442,34 @@ const PhotoEditor = (() => {
       last: null, size: o.size, pending: false, offset,
     };
     if (['dodge', 'burn', 'sponge'].includes(tool)) st.effect = retouchEffect(st.snap, e && e.altKey);
+    if (tool === 'sharpenbrush') {
+      const id0 = O.cx(st.snap).getImageData(0, 0, st.snap.width, st.snap.height);
+      const r = PhotoFilters.run('unsharp', { width: id0.width, height: id0.height, data: id0.data }, { amount: 40 + T.sharpenbrush.strength * 2.6, radius: 1.2, threshold: 2 });
+      st.effect = O.mk(r.width, r.height); O.cx(st.effect).putImageData(new ImageData(r.data, r.width, r.height), 0, 0);
+    }
+    if (tool === 'historybrush') {
+      const snap = history.stack[clamp(T.historybrush.source, 0, history.stack.length - 1)], sl = snap && snap.layers.find(x => x.id === l.id);
+      if (!sl) { toast('This layer didn\'t exist in the chosen history state. Pick a later state in the options bar.', 'error'); return; }
+      st.effect = O.mk(target.width, target.height); O.cx(st.effect).drawImage(sl.canvas, sl.x - l.x, sl.y - l.y);
+      st.replace = true;
+    }
+    if (tool === 'colorreplace') {
+      const sx = clamp(Math.round(p.x - l.x), 0, target.width - 1), sy = clamp(Math.round(p.y - l.y), 0, target.height - 1);
+      const sd = O.cx(st.snap).getImageData(0, 0, target.width, target.height), d = sd.data, k = (sy * target.width + sx) * 4, s0 = [d[k], d[k + 1], d[k + 2]], tol = T.colorreplace.tolerance / 100 * 255;
+      const rec = O.clone(st.snap), rc = O.cx(rec); rc.globalCompositeOperation = T.colorreplace.mode; rc.fillStyle = fg; rc.fillRect(0, 0, rec.width, rec.height);
+      const rd = rc.getImageData(0, 0, rec.width, rec.height), q = rd.data;
+      for (let i = 0; i < d.length; i += 4) { const dist = Math.max(Math.abs(d[i] - s0[0]), Math.abs(d[i + 1] - s0[1]), Math.abs(d[i + 2] - s0[2])), m = clamp((tol - dist) / Math.max(1, tol * 0.25), 0, 1); for (let c = 0; c < 3; c++) q[i + c] = d[i + c] + (q[i + c] - d[i + c]) * m; q[i + 3] = d[i + 3]; }
+      rc.globalCompositeOperation = 'source-over'; rc.putImageData(rd, 0, 0); st.effect = rec;
+    }
+    if (tool === 'bgeraser') { st.snapData = O.cx(st.snap).getImageData(0, 0, target.width, target.height).data; st.erase = new Uint8Array(target.width * target.height); if (st.sel) st.selData = O.cx(st.sel).getImageData(0, 0, target.width, target.height).data; }
     if (tool === 'heal') { const sp = el.selPaint; O.cx(sp).clearRect(0, 0, sp.width, sp.height); sp.hidden = false; st.healPreview = O.stamp(o.size, o.hardness, '#ff5fd2'); }
     if (tool === 'smudge') st.blurStamp = O.stamp(o.size, 0.5, '#000000');
     if (tool !== 'blur' && tool !== 'smudge') {
       // On a mask: light colours reveal, dark colours hide. Eraser on a mask hides.
       let color = fg;
-      if (onMask || ['clone', 'heal', 'dodge', 'burn', 'sponge'].includes(tool)) color = '#000000';
-      st.reveal = onMask ? (tool === 'brush' && luminance(fg) > 0.5) : null;
-      st.dab = O.stamp(o.size, o.hardness, color);
+      if (onMask || ['clone', 'heal', 'healbrush', 'dodge', 'burn', 'sponge', 'colorreplace', 'historybrush', 'sharpenbrush', 'bgeraser'].includes(tool)) color = '#000000';
+      st.reveal = onMask ? ((tool === 'brush' || tool === 'pencil') && luminance(fg) > 0.5) : null;
+      st.dab = O.stamp(o.size, tool === 'pencil' ? 1 : (o.hardness ?? 1), color);
     } else {
       st.blurStamp = O.stamp(o.size, 0.3, '#000000');
     }
@@ -444,14 +498,23 @@ const PhotoEditor = (() => {
       for (const [px, py] of pts) { sc.drawImage(st.dab, px - r, py - r); pc.drawImage(st.healPreview, px - r + st.l.x, py - r + st.l.y); }
       return;
     }
+    if (tool === 'bgeraser') {
+      for (const [px, py] of pts) bgEraseDab(st, px, py);
+      if (!st.pending) { st.pending = true; requestAnimationFrame(() => { st.pending = false; composeBgErase(st); }); }
+      return;
+    }
     if (tool === 'blur') {
       for (const [px, py] of pts) blurDab(st, px, py);
       O.cx(st.target); markDirty(st.l); requestRender();
       return;
     }
     const sc = O.cx(st.stroke);
-    sc.globalAlpha = tool === 'brush' ? (T.brush.flow ?? 1) : 1;
-    for (const [px, py] of pts) sc.drawImage(st.dab, px - r, py - r);
+    // pen pressure: size and/or flow follow the stylus (Brush and Eraser options)
+    const pr = st.pressure ?? 1, pm = (T[tool] && T[tool].pressure) || 'off';
+    const k = pm === 'size' || pm === 'both' ? Math.max(0.08, pr) : 1, fa = pm === 'opacity' || pm === 'both' ? pr : 1;
+    sc.globalAlpha = (tool === 'brush' ? (T.brush.flow ?? 1) : 1) * fa;
+    if (k === 1) for (const [px, py] of pts) sc.drawImage(st.dab, px - r, py - r);
+    else for (const [px, py] of pts) sc.drawImage(st.dab, px - r * k, py - r * k, st.size * k, st.size * k);
     sc.globalAlpha = 1;
     if (!st.pending) { st.pending = true; requestAnimationFrame(() => { st.pending = false; composeStroke(st); }); }
   }
@@ -468,11 +531,18 @@ const PhotoEditor = (() => {
       markDirty(st.l); requestRender();
       return;
     }
-    if (tool === 'clone') {
+    if (st.replace) {
+      // history brush: reveal the old state, including transparency
+      const src = O.clone(st.effect), sc = O.cx(src); sc.globalCompositeOperation = 'destination-in'; sc.drawImage(stroke, 0, 0);
+      tc.globalAlpha = o.opacity ?? 1; tc.globalCompositeOperation = 'destination-out'; tc.drawImage(stroke, 0, 0);
+      tc.globalCompositeOperation = 'source-over'; tc.drawImage(src, 0, 0); tc.globalAlpha = 1;
+      markDirty(st.l); requestRender(); return;
+    }
+    if (tool === 'clone' || tool === 'healbrush') {
       const src = O.mk(st.target.width, st.target.height), sc = O.cx(src);
       sc.drawImage(st.snap, -st.offset.x, -st.offset.y);
       sc.globalCompositeOperation = 'destination-in'; sc.drawImage(stroke, 0, 0);
-      tc.globalCompositeOperation = 'source-over'; tc.globalAlpha = o.opacity; tc.drawImage(src, 0, 0); tc.globalAlpha = 1;
+      tc.globalCompositeOperation = 'source-over'; tc.globalAlpha = o.opacity ?? 1; tc.drawImage(src, 0, 0); tc.globalAlpha = 1;
       if (st.onMask) markMask(st.l); else markDirty(st.l);
       requestRender();
       return;
@@ -514,8 +584,10 @@ const PhotoEditor = (() => {
       return;
     }
     if (tool === 'smudge') { pushHistory('Smudge'); renderLayers(); return; }
+    if (tool === 'bgeraser') { composeBgErase(st); pushHistory('Background eraser'); renderLayers(); return; }
+    if (tool === 'healbrush') { finishHealBrush(st); markDirty(st.l); requestRender(); pushHistory('Healing brush'); renderLayers(); return; }
     if (tool !== 'blur') composeStroke(st);
-    pushHistory({ brush: st.onMask ? 'Paint mask' : 'Brush', eraser: 'Erase', clone: 'Clone stamp', dodge: 'Dodge', burn: 'Burn', sponge: 'Sponge' }[tool] || 'Blur brush');
+    pushHistory({ brush: st.onMask ? 'Paint mask' : 'Brush', pencil: 'Pencil', eraser: 'Erase', clone: 'Clone stamp', dodge: 'Dodge', burn: 'Burn', sponge: 'Sponge', colorreplace: 'Color replacement', historybrush: 'History brush', sharpenbrush: 'Sharpen' }[tool] || 'Blur brush');
     renderLayers();
   }
   function luminance(hex) {
@@ -530,13 +602,16 @@ const PhotoEditor = (() => {
     // Brush size gesture: Alt + right-drag (Windows) / Ctrl + Option + drag (Mac)
     if (PAINT_TOOLS.includes(tool) && ((e.button === 2 && e.altKey) || (e.button === 0 && e.ctrlKey && e.altKey && ro3.platform === 'darwin'))) { e.preventDefault(); return brushResizeGesture(e); }
     if (e.button !== 0) return;
+    if (canvasPick) { canvasPick(docPoint(e)); return; }
     if (e.altKey && ALT_PICK_TOOLS.includes(tool)) return altPick(docPoint(e), e);
     if ((tool === 'move' || e.ctrlKey || e.metaKey) && !tf) { const gi = guideNear(e); if (gi >= 0) return dragGuide(e, gi); }
     const p = docPoint(e);
     const handlers = {
       move: startMove, transform: transformDown, rect: startShapeSel, ellipse: startShapeSel, lasso: startLasso, wand: wandAt, crop: startCrop,
       selbrush: startSelBrush, quick: startQuickSelect, polylasso: polyClick, pen: penDown, brush: startPaint, eraser: startPaint, blur: startPaint, clone: startPaint,
-      heal: startPaint, smudge: startPaint, liquify: startLiquify, dodge: startPaint, burn: startPaint, sponge: startPaint, gradient: startGradient, shape: startShape,
+      heal: startPaint, healbrush: startPaint, pencil: startPaint, colorreplace: startPaint, bgeraser: startPaint, historybrush: startPaint, sharpenbrush: startPaint,
+      patch: startPatch, camove: startContentMove, redeye: redEyeAt, magiceraser: magicEraseAt, sampler: samplerClick, ruler: startRuler, perspcrop: startPerspCrop,
+      smudge: startPaint, liquify: startLiquify, dodge: startPaint, burn: startPaint, sponge: startPaint, gradient: startGradient, shape: startShape,
       fill: fillAt, dropper: pickColor, text: textAt, zoom: zoomClick,
     };
     const fn = handlers[tool];
@@ -629,7 +704,7 @@ const PhotoEditor = (() => {
     combineSelection(shape, mode);
   }
   function startPaint(p, e) {
-    if (tool === 'clone' && e.altKey) {
+    if ((tool === 'clone' || tool === 'healbrush') && e.altKey) {
       cloneSrc = { x: p.x, y: p.y }; cloneOffset = null; renderOverlay(); renderOptions();
       toast('Clone source set. Now paint where you want the copy.', 'info', 2200);
       return;
@@ -643,6 +718,7 @@ const PhotoEditor = (() => {
       for (const ce of evs) {
         let q = docPoint(ce);
         if (smooth) { sm = { x: sm.x + (q.x - sm.x) * (1 - smooth * 0.92), y: sm.y + (q.y - sm.y) * (1 - smooth * 0.92) }; q = sm; }
+        st.pressure = ce.pointerType === 'pen' && ce.pressure > 0 ? ce.pressure : 1;
         dabTo(st, q.x - st.l.x, q.y - st.l.y);
       }
       if (st.offset) { const q = docPoint(ev); cloneMark = { x: q.x + st.offset.x, y: q.y + st.offset.y }; renderOverlay(); }
@@ -1164,7 +1240,20 @@ const PhotoEditor = (() => {
     glow: { on: false, color: '#2fd67f', opacity: 75, size: 24 },
     stroke: { on: false, color: '#ffffff', size: 6, opacity: 100 },
     overlay: { on: false, color: '#2fd67f', opacity: 100 },
+    gradient: { on: false, color: '#000000', color2: '#2fd67f', opacity: 100, angle: 90, scale: 100, style: 'linear', reverse: false },
+    satin: { on: false, color: '#000000', opacity: 50, angle: 19, distance: 11, size: 14, invert: true },
+    innerGlow: { on: false, color: '#ffffbe', opacity: 75, size: 10, choke: 0 },
+    innerShadow: { on: false, color: '#000000', opacity: 75, angle: 120, distance: 5, size: 5, choke: 0 },
+    bevel: { on: false, color: '#ffffff', shadowColor: '#000000', hiOpacity: 75, loOpacity: 75, size: 8, depth: 100, angle: 120, altitude: 30, direction: 'up' },
   });
+  let styleClipboard = null;
+  function copyStyle() { const l = active(); if (!l || !PhotoCompose.fxOn(l.fx)) return toast('This layer has no style to copy.', 'info'); styleClipboard = deep(l.fx); toast('Layer style copied.', 'ok'); }
+  function pasteStyle() {
+    if (!styleClipboard) return toast('Copy a layer style first.', 'info');
+    const ls = selectedLayers().filter(l => !isAdj(l)); if (!ls.length) return;
+    ls.forEach(l => { l.fx = deep(styleClipboard); markDirty(l); }); pushHistory('Paste layer style'); refreshAll();
+  }
+  function clearStyle() { const ls = selectedLayers().filter(l => l.fx); if (!ls.length) return; ls.forEach(l => { l.fx = null; markDirty(l); }); pushHistory('Clear layer style'); refreshAll(); }
   function layerStyleDialog(focus) {
     const l = active();
     if (!l) return toast('Select a layer first.', 'error');
@@ -1182,10 +1271,14 @@ const PhotoEditor = (() => {
       c.input.addEventListener('change', () => { e.on = c.get(); sec.classList.toggle('on', e.on); live(); });
       const b = $('.fx-body', sec);
       const row = h('<div class="row" style="align-items:flex-end"></div>');
-      const col = h(`<label class="field" style="flex:none"><span>Color</span><input type="color" value="${e.color}"></label>`);
-      $('input', col).addEventListener('input', ev => { e.color = ev.target.value; e.on = true; c.input.checked = true; sec.classList.add('on'); live(); });
-      row.appendChild(col);
+      const turnOn = () => { e.on = true; c.input.checked = true; sec.classList.add('on'); };
+      const colorField = (k, label) => { const col = h(`<label class="field" style="flex:none"><span>${label}</span><input type="color" value="${e[k]}"></label>`); $('input', col).addEventListener('input', ev => { e[k] = ev.target.value; turnOn(); live(); }); row.appendChild(col); };
+      colorField('color', key === 'bevel' ? 'Highlight' : key === 'gradient' ? 'From' : 'Color');
+      if (key === 'gradient') colorField('color2', 'To');
+      if (key === 'bevel') colorField('shadowColor', 'Shadow');
       controls.forEach(([k, label, min, max, unit]) => {
+        if (Array.isArray(min)) { const s = selectField(label, min, e[k]); s.select.addEventListener('change', () => { e[k] = s.get(); turnOn(); live(); }); row.appendChild(s); return; }
+        if (min === 'check') { const ch = checkField(label, !!e[k]); ch.input.addEventListener('change', () => { e[k] = ch.get(); turnOn(); live(); }); b.appendChild(ch); return; }
         const s = slider({ label, min, max, value: e[k], unit: unit || '' });
         s.input.addEventListener('input', () => { e[k] = s.get(); if (!e.on) { e.on = true; c.input.checked = true; sec.classList.add('on'); } live(); });
         b.appendChild(s);
@@ -1198,6 +1291,11 @@ const PhotoEditor = (() => {
       section('glow', 'Outer glow', [['opacity', 'Opacity', 0, 100, '%'], ['size', 'Size', 1, 150, 'px']]),
       section('stroke', 'Stroke (outside)', [['size', 'Size', 1, 60, 'px'], ['opacity', 'Opacity', 0, 100, '%']]),
       section('overlay', 'Color overlay', [['opacity', 'Opacity', 0, 100, '%']]),
+      section('gradient', 'Gradient overlay', [['style', 'Style', [['linear', 'Linear'], ['radial', 'Radial']]], ['opacity', 'Opacity', 0, 100, '%'], ['angle', 'Angle', -180, 180, '°'], ['scale', 'Scale', 10, 150, '%'], ['reverse', 'Reverse', 'check']]),
+      section('innerShadow', 'Inner shadow', [['opacity', 'Opacity', 0, 100, '%'], ['angle', 'Angle', -180, 180, '°'], ['distance', 'Distance', 0, 100, 'px'], ['size', 'Size', 0, 100, 'px'], ['choke', 'Choke', 0, 100, '%']]),
+      section('innerGlow', 'Inner glow', [['opacity', 'Opacity', 0, 100, '%'], ['size', 'Size', 1, 100, 'px'], ['choke', 'Choke', 0, 100, '%']]),
+      section('satin', 'Satin', [['opacity', 'Opacity', 0, 100, '%'], ['angle', 'Angle', -180, 180, '°'], ['distance', 'Distance', 1, 100, 'px'], ['size', 'Size', 1, 100, 'px'], ['invert', 'Invert', 'check']]),
+      section('bevel', 'Bevel & emboss', [['direction', 'Direction', [['up', 'Up'], ['down', 'Down']]], ['size', 'Size', 1, 60, 'px'], ['depth', 'Depth', 10, 500, '%'], ['angle', 'Angle', -180, 180, '°'], ['altitude', 'Altitude', 0, 90, '°'], ['hiOpacity', 'Highlight opacity', 0, 100, '%'], ['loOpacity', 'Shadow opacity', 0, 100, '%']]),
     );
     let ok = false;
     modal({ title: `Layer style — ${l.name}`, body, width: 560, actions: [
@@ -1209,7 +1307,7 @@ const PhotoEditor = (() => {
       else { l.fx = before; }
       requestRender(); renderLayers();
     } });
-    if (focus) { const s = body.querySelector(`.fx-sec:nth-child(${['shadow', 'glow', 'stroke', 'overlay'].indexOf(focus) + 1})`); s && s.scrollIntoView(); }
+    if (focus) { const s = body.querySelector(`.fx-sec:nth-child(${['shadow', 'glow', 'stroke', 'overlay', 'gradient', 'innerShadow', 'innerGlow', 'satin', 'bevel'].indexOf(focus) + 1})`); s && s.scrollIntoView(); }
   }
 
   /** Histogram of everything beneath layer `l` (downscaled for speed). */
@@ -1230,6 +1328,7 @@ const PhotoEditor = (() => {
       adj: l.adj, hist: histogramBelow(l),
       onInput: () => { if (q) return; q = true; requestAnimationFrame(() => { q = false; markDirty(l); requestRender(); }); },
       onCommit: (label) => { markDirty(l); pushHistory(label); },
+      rebuild: () => renderSideBody(),
     });
     wrap.append(head, ed, h('<p class="hint">Non-destructive: changes everything below this layer. Paint black on it to hide the effect, white to bring it back. Use Layer ▸ Create clipping mask to affect only the layer beneath.</p>'));
     return wrap;
@@ -1310,6 +1409,141 @@ const PhotoEditor = (() => {
       { label: 'Apply', kind: 'primary', onClick: () => { applied = true; write(values()); done(); } },
     ], onClose: () => { if (!applied) { const c = O.cx(l.canvas); c.globalCompositeOperation = 'copy'; c.drawImage(backup, 0, 0); c.globalCompositeOperation = 'source-over'; requestRender(); } } });
   }
+
+  /** For PSD export: the look of everything up to an adjustment layer, limited by its mask. */
+  function bakeAdjustForPsd(l) {
+    const i = doc.layers.indexOf(l), c = O.mk(doc.width, doc.height), x = O.cx(c);
+    PhotoCompose.renderStack(x, doc.layers.slice(0, i + 1).map((q, k) => k === i ? { ...q, opacity: 1, visible: true } : q), { noCache: true, groups: doc.groups });
+    if (l.mask && l.maskOn) { x.globalCompositeOperation = 'destination-in'; x.drawImage(l.mask, l.x, l.y); }
+    return c;
+  }
+  /** Info panel: histogram with stats (PhotoCraft's Histogram panel) and colour sampler readouts. */
+  function infoPanel() {
+    const wrap = h('<div class="ph-adjust info-panel"></div>');
+    if (!doc) { wrap.appendChild(h('<p class="hint">Open an image to see its histogram.</p>')); return wrap; }
+    render();
+    const src = h('<div class="row"></div>'), chSel = selectField('Channel', [['l', 'Luminosity'], ['rgb', 'RGB'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']], infoPanel.ch || 'rgb');
+    const from = selectField('Source', [['image', 'Entire image'], ['layer', 'Selected layer']], infoPanel.from || 'image');
+    src.append(chSel, from);
+    const cv = h('<canvas class="info-hist" width="512" height="200"></canvas>'), stats = h('<div class="info-stats"></div>');
+    const paint = () => {
+      infoPanel.ch = chSel.get(); infoPanel.from = from.get();
+      let c = el.composite; const l = active();
+      if (infoPanel.from === 'layer' && l && !isAdj(l)) c = bakeLayer(l);
+      const k = Math.min(1, 900 / Math.max(c.width, c.height)), sm = O.mk(Math.max(1, c.width * k), Math.max(1, c.height * k)); O.cx(sm).drawImage(c, 0, 0, sm.width, sm.height);
+      let data = O.data(sm).data;
+      if (doc.selection && infoPanel.from === 'image') { const m = O.mk(sm.width, sm.height), mc = O.cx(m); mc.drawImage(sm, 0, 0); mc.globalCompositeOperation = 'destination-in'; mc.drawImage(doc.selection, 0, 0, sm.width, sm.height); data = O.data(m).data; }
+      const H = PhotoAdjust.histogram(data), g = cv.getContext('2d'); g.clearRect(0, 0, 512, 200);
+      const draw = (arr, color) => { const sorted = Array.from(arr).sort((a, b) => b - a), mx = Math.max(1, sorted[2] || sorted[0]); g.fillStyle = color; g.beginPath(); g.moveTo(0, 200); for (let i = 0; i < 256; i++) g.lineTo(i * 2, 200 - Math.min(1, arr[i] / mx) * 190); g.lineTo(512, 200); g.fill(); };
+      const ch = infoPanel.ch;
+      if (ch === 'rgb') { g.globalCompositeOperation = 'screen'; draw(H.r, 'rgba(255,70,70,.75)'); draw(H.g, 'rgba(70,230,110,.75)'); draw(H.b, 'rgba(80,140,255,.8)'); g.globalCompositeOperation = 'source-over'; }
+      else draw(ch === 'l' ? H.l : H[ch], { l: 'rgba(228,236,231,.7)', r: 'rgba(255,90,90,.8)', g: 'rgba(90,230,120,.8)', b: 'rgba(90,150,255,.85)' }[ch]);
+      const arr = ch === 'rgb' || ch === 'l' ? H.l : H[ch]; let n = 0, sum = 0, sq = 0; for (let i = 0; i < 256; i++) { n += arr[i]; sum += i * arr[i]; sq += i * i * arr[i]; }
+      const mean = n ? sum / n : 0, sd = n ? Math.sqrt(Math.max(0, sq / n - mean * mean)) : 0; let acc = 0, med = 0; for (let i = 0; i < 256; i++) { acc += arr[i]; if (2 * acc >= n) { med = i; break; } }
+      const clipLo = n ? arr[0] / n * 100 : 0, clipHi = n ? arr[255] / n * 100 : 0;
+      stats.innerHTML = `<span>Mean</span><b>${mean.toFixed(1)}</b><span>Std dev</span><b>${sd.toFixed(1)}</b><span>Median</span><b>${med}</b><span>Pixels</span><b>${Math.round(n / k / k).toLocaleString()}</b><span>Shadows clipped</span><b>${clipLo.toFixed(2)}%</b><span>Highlights clipped</span><b>${clipHi.toFixed(2)}%</b>`;
+    };
+    chSel.select.addEventListener('change', paint); from.select.addEventListener('change', paint);
+    const refresh = h(`<button class="btn btn-sm btn-ghost">${icon('redo')}Refresh</button>`); refresh.addEventListener('click', paint);
+    wrap.append(src, cv, stats, refresh);
+    const rs = samplerReadouts();
+    wrap.append(h('<h4>Color samplers</h4>'), rs.length ? h(`<div class="info-samplers">${rs.map(r => `<div><i style="background:${r.hex}"></i><b>#${r.i}</b> R ${r.r} · G ${r.g} · B ${r.b} <span>${r.hex}</span></div>`).join('')}</div>`) : h('<p class="hint">Use the Color Sampler tool (Shift+I) to pin up to four readouts.</p>'));
+    wrap.append(h('<h4>Document</h4>'), h(`<div class="info-stats"><span>Size</span><b>${doc.width} × ${doc.height}px</b><span>Megapixels</span><b>${(doc.width * doc.height / 1e6).toFixed(1)}</b><span>Layers</span><b>${doc.layers.length}</b></div>`));
+    paint();
+    return wrap;
+  }
+  // ---------- pixel filters (Blur / Sharpen / Noise / Distort / Stylize / Render galleries) ----------
+  // Heavy maths runs in filter-worker.js. While dragging sliders, big layers preview on a reduced copy;
+  // Apply always renders at full resolution.
+  let filterWorker = null, fwSeq = 0;
+  const fwPending = new Map();
+  function filterJob(msg, transfer) {
+    if (!filterWorker) {
+      filterWorker = new Worker('js/filter-worker.js');
+      filterWorker.onmessage = e => { const p = fwPending.get(e.data.id); if (!p) return; fwPending.delete(e.data.id); e.data.error ? p.reject(new Error(e.data.error)) : p.resolve(e.data); };
+      filterWorker.onerror = e => { for (const p of fwPending.values()) p.reject(new Error(e.message || 'Filter failed')); fwPending.clear(); filterWorker = null; };
+    }
+    const id = ++fwSeq;
+    return new Promise((resolve, reject) => { fwPending.set(id, { resolve, reject }); filterWorker.postMessage({ ...msg, id }, transfer); });
+  }
+  const hexRgb = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  /** Run filter `id` on canvas `src` (optionally scaled by k for previews). Resolves to a canvas the size of src. */
+  async function filterCanvas(id, src, params, k = 1) {
+    const f = PhotoFilters.F[id];
+    let w = src.width, hh = src.height, work = src;
+    const p = { ...params };
+    if (k < 1) {
+      w = Math.max(1, Math.round(src.width * k)); hh = Math.max(1, Math.round(src.height * k));
+      work = O.mk(w, hh); const wc = O.cx(work); wc.imageSmoothingQuality = 'high'; wc.drawImage(src, 0, 0, w, hh);
+      for (const q of f.params) if (q.unit === 'px') p[q.key] = Math.max(q.min, p[q.key] * k);
+    }
+    const id0 = O.cx(work).getImageData(0, 0, w, hh);
+    const r = await filterJob({ filter: id, w, h: hh, data: id0.data.buffer, params: p, ctx: { fg: hexRgb(fg), bg: hexRgb(bg) } }, [id0.data.buffer]);
+    const out = O.mk(r.w, r.h); O.cx(out).putImageData(new ImageData(new Uint8ClampedArray(r.data), r.w, r.h), 0, 0);
+    if (k >= 1) return out;
+    const up = O.mk(src.width, src.height), uc = O.cx(up); uc.imageSmoothingQuality = 'high'; uc.drawImage(out, 0, 0, src.width, src.height);
+    return up;
+  }
+  let lastFilter = null;
+  /** Filter dialog: live preview on the canvas, click the image to place centre-based effects. */
+  function pixelFilter(id, opts = {}) {
+    const f = PhotoFilters.F[id]; if (!f) return;
+    const l = active(); if (!editable(l, { pixelsOnly: true })) return;
+    commitAdjust();
+    const backup = O.clone(l.canvas);
+    const sel = O.selIn(doc.selection, l.canvas.width, l.canvas.height, l.x, l.y);
+    const vals = Object.fromEntries(f.params.map(q => [q.key, opts.params && opts.params[q.key] != null ? opts.params[q.key] : (T.filters && T.filters[id] && T.filters[id][q.key] != null ? T.filters[id][q.key] : q.value)]));
+    const write = res => {
+      const out = sel ? O.mixMasked(backup, res, sel) : res;
+      const c = O.cx(l.canvas); c.globalCompositeOperation = 'copy'; c.drawImage(out, 0, 0); c.globalCompositeOperation = 'source-over';
+      markDirty(l); requestRender();
+    };
+    const finish = async () => {
+      el.stage.classList.add('busy');
+      try { write(await filterCanvas(id, backup, vals, 1)); }
+      catch (e) { toast('Filter failed: ' + e.message, 'error'); const c = O.cx(l.canvas); c.globalCompositeOperation = 'copy'; c.drawImage(backup, 0, 0); c.globalCompositeOperation = 'source-over'; requestRender(); return; }
+      finally { el.stage.classList.remove('busy'); }
+      l.text = null; markDirty(l); (T.filters = T.filters || {})[id] = { ...vals }; lastFilter = { id, params: { ...vals } };
+      pushHistory(f.name.replace('…', '')); renderLayers();
+    };
+    if (!f.params.length || opts.repeat) return finish();
+    const px = backup.width * backup.height, k = px > 1.6e6 ? Math.sqrt(1.6e6 / px) : 1;
+    let seq = 0, busy = false, again = false;
+    const preview = async () => {
+      if (busy) { again = true; return; }
+      busy = true; const my = ++seq;
+      try { const res = await filterCanvas(id, backup, vals, k); if (my === seq && open) write(res); } catch (e) { toast('Filter failed: ' + e.message, 'error'); }
+      busy = false; if (again) { again = false; preview(); }
+    };
+    const body = h('<div class="stack"></div>');
+    const ctrls = {};
+    for (const q of f.params) {
+      if (q.options) {
+        const s = selectField(q.label, q.options.map(([v, n]) => [String(v), n]), String(vals[q.key]));
+        s.select.addEventListener('change', () => { vals[q.key] = Number(s.get()); preview(); }); body.appendChild(s); ctrls[q.key] = s;
+      } else {
+        const s = slider({ label: q.label, min: q.min, max: q.max, step: q.step || 1, value: vals[q.key], unit: q.unit && q.unit !== 'levels' ? (q.unit === 'px' ? ' px' : q.unit) : '' });
+        s.input.addEventListener('input', () => { vals[q.key] = s.get(); preview(); }); body.appendChild(s); ctrls[q.key] = s;
+      }
+    }
+    const hasCenter = f.params.some(q => q.key === 'cx');
+    body.appendChild(h(`<p class="hint">${hasCenter ? 'Click the image to set the centre. ' : ''}Previews live on the canvas${sel ? ', inside the selection' : ''}${k < 1 ? ' (at reduced size while you adjust; Apply renders full size)' : ''}.</p>`));
+    let open = true, applied = false;
+    if (hasCenter) canvasPick = q => {
+      vals.cx = clamp(Math.round((q.x - l.x) / backup.width * 100), 0, 100); vals.cy = clamp(Math.round((q.y - l.y) / backup.height * 100), 0, 100);
+      ctrls.cx && ctrls.cx.set(vals.cx); ctrls.cy && ctrls.cy.set(vals.cy); preview();
+    };
+    preview();
+    modal({ title: f.name.replace('…', ''), body, width: 340, side: true, actions: [
+      { label: 'Cancel', kind: 'ghost' },
+      { label: 'Apply', kind: 'primary', onClick: () => { applied = true; } },
+    ], onClose: () => {
+      open = false; canvasPick = null; seq++;
+      if (applied) return finish();
+      const c = O.cx(l.canvas); c.globalCompositeOperation = 'copy'; c.drawImage(backup, 0, 0); c.globalCompositeOperation = 'source-over'; markDirty(l); requestRender();
+    } });
+  }
+  let canvasPick = null;
 
   // ---------- image-level operations ----------
   function transformDoc(kind) {
@@ -1407,7 +1641,7 @@ const PhotoEditor = (() => {
   }
 
   // ---------- open / save / export ----------
-  const imageFilters = () => [{ name: 'Images & RO3 projects', extensions: [...FORMATS.IMAGE_IN, 'ro3'] }, { name: 'RO3 project', extensions: ['ro3'] }];
+  const imageFilters = () => [{ name: 'Images & RO3 projects', extensions: [...FORMATS.IMAGE_IN, 'ora', 'ro3'] }, { name: 'RO3 project', extensions: ['ro3'] }];
   async function openDialog(asLayer) {
     const paths = await ro3.openDialog({ title: asLayer ? 'Place image as layer' : 'Open image', multi: asLayer, filters: imageFilters() });
     for (const p of paths) await openPath(p, asLayer);
@@ -1416,6 +1650,17 @@ const PhotoEditor = (() => {
     try {
       if (/\.ro3$/i.test(p)) return loadProject(p);
       if (!asLayer && doc && doc.dirty && !(await confirmBox('Replace the open image?', 'Unsaved changes to the current image will be lost. Use Place to add it as a layer instead.', 'Open anyway', 'danger'))) return;
+      if (/\.ora$/i.test(p) && !asLayer) {
+        const r = await ro3.oraRead(p), layers = [];
+        for (const s of r.layers) {
+          const url = URL.createObjectURL(new Blob([s.png], { type: 'image/png' }));
+          const c = O.fromImage(await O.loadImage(url)); URL.revokeObjectURL(url);
+          const l = newLayer(c, s.name || 'Layer', s.x || 0, s.y || 0); l.opacity = s.opacity ?? 1; l.visible = s.visible !== false; l.blend = s.blend || 'source-over'; layers.push(l);
+        }
+        openLayers(r.width, r.height, stripExt(baseName(p)), layers);
+        doc.path = p; ro3.addRecent(p); refreshAll(); toast(`Opened ${layers.length} layer${layers.length === 1 ? '' : 's'} from OpenRaster.`, 'ok');
+        return;
+      }
       if (/\.psd$/i.test(p) && !asLayer) {
         const r = await PhotoPSD.load(p, newLayer);
         openLayers(r.width, r.height, stripExt(baseName(p)), r.layers, null, r.groups);
@@ -1454,7 +1699,9 @@ const PhotoEditor = (() => {
     } }] });
   }
   function projectData() {
-    return { app: 'RO3', version: 2, width: doc.width, height: doc.height, activeId: doc.activeId, guides: doc.guides || [], groups: doc.groups || {},
+    const luts = {};
+    for (const l of doc.layers) { const k = l.adj && l.adj.lut && l.adj.lut.key; if (k && PhotoAdjust.LUTS.has(k)) luts[k] = { name: PhotoAdjust.LUTS.get(k).name, text: PhotoAdjust.LUTS.get(k).text }; }
+    return { app: 'RO3', version: 2, width: doc.width, height: doc.height, activeId: doc.activeId, guides: doc.guides || [], groups: doc.groups || {}, luts,
       layers: doc.layers.map(l => ({ id: l.id, name: l.name, x: l.x, y: l.y, opacity: l.opacity, blend: l.blend, visible: l.visible, maskOn: l.maskOn, text: l.text,
         type: l.type || 'pixel', adj: l.adj, fx: l.fx, clip: !!l.clip, locked: !!l.locked, group: l.group || null,
         png: isAdj(l) ? null : l.canvas.toDataURL('image/png'), mask: l.mask ? l.mask.toDataURL('image/png') : null })) };
@@ -1467,7 +1714,7 @@ const PhotoEditor = (() => {
     if (!out) out = await ro3.saveDialog({ title: 'Save RO3 project', defaultPath: (doc.name || 'Untitled') + '.ro3', filters: [{ name: 'RO3 project', extensions: ['ro3'] }, { name: 'Photoshop (layers kept)', extensions: ['psd'] }] });
     if (!out) return;
     try {
-      if (/\.psd$/i.test(out)) { await PhotoPSD.save(out, doc, el.composite); }
+      if (/\.psd$/i.test(out)) { await PhotoPSD.save(out, doc, el.composite, { bake: bakeAdjustForPsd }); }
       else { await ro3.writeText(out, JSON.stringify(projectData())); doc.projectPath = out; }
       doc.dirty = false; doc.name = stripExt(baseName(out));
       ro3.addRecent && ro3.addRecent(out);
@@ -1487,6 +1734,7 @@ const PhotoEditor = (() => {
     try {
       const j = JSON.parse(opts.text || await ro3.readText(p));
       if (j.app !== 'RO3') throw new Error('This is not an RO3 project file.');
+      for (const v of Object.values(j.luts || {})) { try { PhotoAdjust.registerLut(v.text, v.name); } catch (_) {} }
       const layers = [];
       for (const s of j.layers) {
         const canvas = s.png ? O.fromImage(await O.loadImage(s.png)) : O.mk(j.width, j.height);
@@ -1507,7 +1755,7 @@ const PhotoEditor = (() => {
   function exportDialog() {
     if (!doc) return toast('Open or create an image first.', 'error');
     commitAdjust(); render();
-    const fmt = selectField('Format', FORMATS.IMAGE_OUT, 'png');
+    const fmt = selectField('Format', [...FORMATS.IMAGE_OUT, { ext: 'ora', label: 'OpenRaster (layers for Krita/GIMP)' }], 'png');
     const quality = slider({ label: 'Quality', min: 30, max: 100, value: 90, unit: '%' });
     const w = numberField('Width', doc.width, { min: 1, suffix: 'px' }), hh = numberField('Height', doc.height, { min: 1, suffix: 'px' });
     const ratio = doc.width / doc.height;
@@ -1533,14 +1781,15 @@ const PhotoEditor = (() => {
       quality.style.display = ['jpg', 'webp', 'avif', 'pdf'].includes(f) ? '' : 'none';
       bgc.style.display = ['jpg', 'bmp', 'pdf'].includes(f) ? '' : 'none';
       svgBox.style.display = f === 'svg' ? '' : 'none';
-      sizeRow.style.display = f === 'psd' ? 'none' : '';
+      sizeRow.style.display = f === 'psd' || f === 'ora' ? 'none' : '';
       const m = mode.get();
       colors.style.display = m === 'bw' ? 'none' : ''; thresh.style.display = m === 'bw' ? '' : 'none'; fill.style.display = m === 'color' ? 'none' : '';
       $('.sf-top span', colors).textContent = m === 'posterize' ? 'Gray levels' : 'Colors';
       if (m === 'posterize' && colors.get() > 8) colors.set(4);
       info.textContent = {
         svg: 'Traces the image into vector shapes. Logos, icons and flat art trace best; photos become stylised.',
-        psd: 'Keeps every layer, mask, blend mode, clipping mask, adjustment layer and basic layer style so the file opens editable in Photoshop.',
+        psd: 'Keeps layers, groups, masks, blend modes, clipping masks, adjustment layers and layer styles so the file opens editable in Photoshop. Color Lookup and Color Grade layers are flattened.',
+        ora: 'OpenRaster keeps each layer with its position, opacity and blend mode — the open layered format used by Krita, GIMP and MyPaint. Masks and styles are baked into the pixels.',
         ico: 'Builds a multi-size Windows/web icon (16–256 px). Square images work best.',
         pdf: 'Single page sized to the image. Transparency is filled with the background color.',
         gif: 'GIF is limited to 256 colors.',
@@ -1575,7 +1824,16 @@ const PhotoEditor = (() => {
       if (!out) return false;
       btn.disabled = true; btn.textContent = j.format === 'svg' ? 'Tracing…' : 'Exporting…';
       try {
-        if (j.format === 'psd') { await PhotoPSD.save(out, doc, el.composite); toast(`Exported ${baseName(out)} with ${doc.layers.length} layers`, 'ok'); return; }
+        if (j.format === 'psd') { await PhotoPSD.save(out, doc, el.composite, { bake: bakeAdjustForPsd }); toast(`Exported ${baseName(out)} with ${doc.layers.length} layers`, 'ok'); return; }
+        if (j.format === 'ora') {
+          const layers = [];
+          for (const l of doc.layers) {
+            const c = isAdj(l) ? bakeAdjustForPsd(l) : bakeLayer(l);
+            layers.push({ name: l.name + (isAdj(l) ? ' (flattened)' : ''), png: await O.toBytes(c), x: isAdj(l) ? 0 : l.x, y: isAdj(l) ? 0 : l.y, opacity: l.opacity, visible: l.visible, blend: PhotoCompose.EXTRA_BLENDS.includes(l.blend) ? 'source-over' : l.blend });
+          }
+          await ro3.oraWrite(out, { width: doc.width, height: doc.height, layers, merged: await O.toBytes(el.composite) });
+          toast(`Exported ${baseName(out)} with ${layers.length} layers (opens in Krita, GIMP and MyPaint)`, 'ok'); return;
+        }
         const bytes = await O.toBytes(el.composite);
         const r = await ro3.exportImage(bytes, { ...j, output: out });
         toast(`Exported ${baseName(out)} (${fmtBytes(r.bytes)})`, 'ok');
@@ -2033,6 +2291,239 @@ const PhotoEditor = (() => {
     finally { el.stage.classList.remove('busy'); }
   }
 
+  // ---------- retouching & utility tools ported from PhotoCraft ----------
+  let patchUrl = null, patchKey = null;
+  /** Data URL of the current selection's outline, used to preview a Patch / Content-Aware Move drag. */
+  function patchOutline() {
+    if (patchKey === history.index + ':' + (doc.selection && doc.selection.width)) return patchUrl;
+    const c = O.mk(doc.width, doc.height), x = O.cx(c); x.drawImage(antsEdge, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = '#ff3dbb'; x.fillRect(0, 0, c.width, c.height);
+    patchUrl = c.toDataURL(); patchKey = history.index + ':' + (doc.selection && doc.selection.width); return patchUrl;
+  }
+  /** Seamless (Poisson) blend: replace `dst` inside mask with `src` but keep dst's boundary colours.
+   *  Solves Δh = 0 inside the mask with h = dst − src on its edge (SOR, ω≈1.7) — PhotoCraft algo/src/poisson.rs. */
+  function poissonBlend(dst, src, mask, bbox) {
+    const W = dst.width, x0 = Math.max(0, bbox.x - 2), y0 = Math.max(0, bbox.y - 2), x1 = Math.min(W, bbox.x + bbox.w + 2), y1 = Math.min(dst.height, bbox.y + bbox.h + 2);
+    const w = x1 - x0, hh = y1 - y0; if (w < 3 || hh < 3) return;
+    const D = O.cx(dst).getImageData(x0, y0, w, hh), S = O.cx(src).getImageData(x0, y0, w, hh).data, M = O.cx(mask).getImageData(x0, y0, w, hh).data, d = D.data;
+    const n = w * hh, inside = new Uint8Array(n), H = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
+    for (let i = 0; i < n; i++) inside[i] = M[i * 4 + 3] > 8 && (i % w) > 0 && (i % w) < w - 1 && i >= w && i < n - w ? 1 : 0;
+    for (let i = 0; i < n; i++) if (!inside[i]) for (let c = 0; c < 3; c++) H[c][i] = d[i * 4 + c] - S[i * 4 + c];
+    const iters = Math.min(400, 60 + Math.round(Math.sqrt(n) * 1.5)), om = 1.7;
+    for (let it = 0; it < iters; it++) for (let i = w; i < n - w; i++) {
+      if (!inside[i]) continue;
+      for (let c = 0; c < 3; c++) { const Hc = H[c], v = (Hc[i - 1] + Hc[i + 1] + Hc[i - w] + Hc[i + w]) * 0.25; Hc[i] += om * (v - Hc[i]); }
+    }
+    for (let i = 0; i < n; i++) {
+      const a = M[i * 4 + 3] / 255; if (!a) continue;
+      for (let c = 0; c < 3; c++) d[i * 4 + c] = d[i * 4 + c] * (1 - a) + (S[i * 4 + c] + H[c][i]) * a;
+      d[i * 4 + 3] = Math.max(d[i * 4 + 3], S[i * 4 + 3] * a);
+    }
+    O.cx(dst).putImageData(D, x0, y0);
+  }
+  /** Healing brush end of stroke: clone source pixels into the stroke, then Poisson-match them to the surroundings. */
+  function finishHealBrush(st) {
+    const mask = O.clone(st.stroke);
+    if (st.sel) { const mc = O.cx(mask); mc.globalCompositeOperation = 'destination-in'; mc.drawImage(st.sel, 0, 0); }
+    const b = O.bounds(mask); if (!b) return false;
+    const src = O.mk(st.target.width, st.target.height); O.cx(src).drawImage(st.snap, -st.offset.x, -st.offset.y);
+    const out = O.clone(st.snap); poissonBlend(out, src, mask, b);
+    const tc = O.cx(st.target); tc.globalCompositeOperation = 'copy'; tc.drawImage(out, 0, 0); tc.globalCompositeOperation = 'source-over';
+    return true;
+  }
+  /** Patch tool: drag a selection to a clean area; that texture is healed into the selection. */
+  let patchDraft = null;
+  function startPatch(p, e) {
+    const l = active(); if (!editable(l, { pixelsOnly: true })) return;
+    const inSel = doc.selection && O.cx(doc.selection).getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data[3] > 0;
+    if (!inSel) return startLasso(p, e);
+    commitAdjust();
+    const selC = doc.selection;
+    track(e, ev => { const q = docPoint(ev); patchDraft = { dx: q.x - p.x, dy: q.y - p.y }; renderOverlay(); }, () => {
+      const d = patchDraft; patchDraft = null; renderOverlay();
+      if (!d || Math.hypot(d.dx, d.dy) < 2) return;
+      const mask = O.mk(l.canvas.width, l.canvas.height); O.cx(mask).drawImage(selC, -l.x, -l.y);
+      const b = O.bounds(mask); if (!b) return;
+      const mode = T.patch.mode;
+      const src = O.mk(l.canvas.width, l.canvas.height), sc = O.cx(src);
+      // Source mode: the selection is the damaged area, healed from where you drop it.
+      // Destination mode: the selected pixels are copied to where you drop them, and blended in there.
+      if (mode === 'source') { sc.drawImage(l.canvas, -Math.round(d.dx), -Math.round(d.dy)); poissonBlend(l.canvas, src, mask, b); }
+      else {
+        sc.drawImage(l.canvas, Math.round(d.dx), Math.round(d.dy));
+        const m2 = O.mk(mask.width, mask.height); O.cx(m2).drawImage(mask, Math.round(d.dx), Math.round(d.dy));
+        poissonBlend(l.canvas, src, m2, { x: b.x + Math.round(d.dx), y: b.y + Math.round(d.dy), w: b.w, h: b.h });
+      }
+      l.text = null; markDirty(l); pushHistory('Patch'); refreshAll();
+    });
+  }
+  /** Content-Aware Move: drag the selection; the pixels move (or are copied, in Extend mode) and the gap is filled. */
+  function startContentMove(p, e) {
+    const l = active(); if (!editable(l, { pixelsOnly: true })) return;
+    const inSel = doc.selection && O.cx(doc.selection).getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data[3] > 0;
+    if (!inSel) return startLasso(p, e);
+    commitAdjust();
+    const selC = doc.selection;
+    track(e, ev => { const q = docPoint(ev); patchDraft = { dx: q.x - p.x, dy: q.y - p.y }; renderOverlay(); }, async () => {
+      const d = patchDraft; patchDraft = null; renderOverlay();
+      if (!d || Math.hypot(d.dx, d.dy) < 2) return;
+      const dx = Math.round(d.dx), dy = Math.round(d.dy);
+      const mask = O.mk(l.canvas.width, l.canvas.height); O.cx(mask).drawImage(selC, -l.x, -l.y);
+      const piece = O.clone(l.canvas), pc = O.cx(piece); pc.globalCompositeOperation = 'destination-in'; pc.drawImage(mask, 0, 0);
+      const hole = O.clone(mask), hc = O.cx(hole); hc.globalCompositeOperation = 'destination-out'; hc.drawImage(mask, dx, dy);
+      el.stage.classList.add('busy');
+      try {
+        if (T.camove.mode === 'move') await inpaintInto(l.canvas, hole, { margin: 48 });
+        const lc = O.cx(l.canvas); lc.drawImage(piece, dx, dy);
+        const moved = O.mk(doc.width, doc.height); O.cx(moved).drawImage(selC, dx, dy); setSelection(moved);
+      } catch (err) { toast('Content-aware move failed: ' + err.message, 'error'); }
+      finally { el.stage.classList.remove('busy'); }
+      l.text = null; markDirty(l); pushHistory(T.camove.mode === 'move' ? 'Content-aware move' : 'Content-aware extend'); refreshAll();
+    });
+  }
+  /** Red Eye: find the red pupil nearest the click, flood it, and desaturate/darken it (PhotoCraft algo/src/redeye.rs). */
+  function redEyeAt(p) {
+    const l = active(); if (!editable(l, { pixelsOnly: true })) return;
+    commitAdjust();
+    const cx0 = Math.round(p.x - l.x), cy0 = Math.round(p.y - l.y), R = clamp(Math.round(4 + 1.2 * T.redeye.pupil), 8, 160);
+    const x0 = Math.max(0, cx0 - R), y0 = Math.max(0, cy0 - R), x1 = Math.min(l.canvas.width, cx0 + R), y1 = Math.min(l.canvas.height, cy0 + R);
+    const w = x1 - x0, hh = y1 - y0; if (w < 2 || hh < 2) return;
+    const img = O.cx(l.canvas).getImageData(x0, y0, w, hh), d = img.data;
+    const red = i => { const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255; return r > g + 0.15 && r > b + 0.15 && (0.2126 * r + 0.7152 * g + 0.0722 * b) < 0.92 && Math.max(r, g, b) - Math.min(r, g, b) >= 0.08; };
+    let seed = -1, best = 1e9;
+    for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (!red(i)) continue; const dd = (x + x0 - cx0) ** 2 + (y + y0 - cy0) ** 2; if (dd < best) { best = dd; seed = y * w + x; } }
+    if (seed < 0) return toast('No red eye found there — click right on the red pupil, or raise the pupil size.', 'info');
+    const m = new Float32Array(w * hh), stack = [seed]; m[seed] = 1;
+    while (stack.length) { const q = stack.pop(), x = q % w, y = (q / w) | 0; for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + ax, ny = y + ay; if (nx < 0 || ny < 0 || nx >= w || ny >= hh) continue; const k = ny * w + nx; if (m[k] || !red(k * 4)) continue; m[k] = 1; stack.push(k); } }
+    // soften the mask edge a little
+    const s = new Float32Array(m); for (let y = 1; y < hh - 1; y++) for (let x = 1; x < w - 1; x++) { const k = y * w + x; s[k] = (m[k] * 4 + m[k - 1] + m[k + 1] + m[k - w] + m[k + w]) / 8; }
+    const dk = T.redeye.darken / 100;
+    for (let k = 0; k < w * hh; k++) {
+      const t = s[k] * dk; if (!t) continue; const i = k * 4;
+      const r = d[i]; d[i] = r + ((d[i + 1] + d[i + 2]) / 2 - r) * Math.min(1, s[k] * 1.2);
+      for (let c = 0; c < 3; c++) d[i + c] *= 1 - 0.45 * t;
+    }
+    O.cx(l.canvas).putImageData(img, x0, y0);
+    l.text = null; markDirty(l); pushHistory('Red eye'); renderLayers(); requestRender();
+  }
+  /** Magic Eraser: erase the colour region under the click (tolerance / contiguous like the wand). */
+  function magicEraseAt(p) {
+    const l = active(); if (!editable(l, { pixelsOnly: true })) return;
+    commitAdjust();
+    const lx = p.x - l.x, ly = p.y - l.y;
+    if (lx < 0 || ly < 0 || lx >= l.canvas.width || ly >= l.canvas.height) return;
+    const region = O.maskToCanvas(O.region(l.canvas, lx, ly, T.magiceraser.tolerance, T.magiceraser.contiguous), l.canvas.width, l.canvas.height);
+    const sel = O.selIn(doc.selection, l.canvas.width, l.canvas.height, l.x, l.y);
+    const rc = O.cx(region); if (sel) { rc.globalCompositeOperation = 'destination-in'; rc.drawImage(sel, 0, 0); }
+    const lc = O.cx(l.canvas); lc.globalAlpha = T.magiceraser.opacity; lc.globalCompositeOperation = 'destination-out'; lc.drawImage(region, 0, 0); lc.globalCompositeOperation = 'source-over'; lc.globalAlpha = 1;
+    l.text = null; markDirty(l); pushHistory('Magic eraser'); renderLayers(); requestRender();
+  }
+  // Color samplers and ruler
+  function samplerClick(p) {
+    if (!doc) return;
+    doc.samplers = doc.samplers || [];
+    const hit = doc.samplers.findIndex(s => Math.hypot(s.x - p.x, s.y - p.y) * view.zoom < 8);
+    if (hit >= 0) doc.samplers.splice(hit, 1);
+    else { if (doc.samplers.length >= 4) doc.samplers.shift(); doc.samplers.push({ x: Math.round(p.x), y: Math.round(p.y) }); }
+    renderOverlay(); renderOptions();
+  }
+  function samplerReadouts() {
+    if (!doc || !doc.samplers || !doc.samplers.length) return [];
+    render();
+    return doc.samplers.map((s, i) => { const d = O.cx(el.composite).getImageData(clamp(s.x, 0, doc.width - 1), clamp(s.y, 0, doc.height - 1), 1, 1).data; return { i: i + 1, r: d[0], g: d[1], b: d[2], hex: '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('') }; });
+  }
+  let ruler = null;
+  function startRuler(p, e) { ruler = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; track(e, ev => { const q = docPoint(ev); let x1 = q.x, y1 = q.y; if (ev.shiftKey) { const a = Math.round(Math.atan2(y1 - p.y, x1 - p.x) / (Math.PI / 4)) * Math.PI / 4, dd = Math.hypot(x1 - p.x, y1 - p.y); x1 = p.x + Math.cos(a) * dd; y1 = p.y + Math.sin(a) * dd; } ruler = { x0: p.x, y0: p.y, x1, y1 }; renderOverlay(); renderOptions(); }); }
+  const rulerInfo = () => { if (!ruler) return null; const dx = ruler.x1 - ruler.x0, dy = ruler.y1 - ruler.y0; let a = -Math.atan2(dy, dx) * 180 / Math.PI; return { len: Math.hypot(dx, dy), angle: a, dx, dy }; };
+  /** Rotate every layer so the ruler line becomes level (or plumb, whichever is nearer). */
+  function straighten() {
+    const r = rulerInfo(); if (!r || r.len < 3) return toast('Drag along something that should be level first.', 'info');
+    let a = r.angle; while (a > 45) a -= 90; while (a < -45) a += 90;
+    const rad = a * Math.PI / 180; commitAdjust();
+    const cx0 = doc.width / 2, cy0 = doc.height / 2;
+    for (const l of doc.layers) {
+      if (isAdj(l)) continue;
+      const w = l.canvas.width, hh = l.canvas.height, cw = Math.ceil(Math.abs(w * Math.cos(rad)) + Math.abs(hh * Math.sin(rad))), ch = Math.ceil(Math.abs(w * Math.sin(rad)) + Math.abs(hh * Math.cos(rad)));
+      const rot = c => { const o = O.mk(cw, ch), x = O.cx(o); x.imageSmoothingQuality = 'high'; x.translate(cw / 2, ch / 2); x.rotate(rad); x.drawImage(c, -w / 2, -hh / 2); return o; };
+      const lcx = l.x + w / 2 - cx0, lcy = l.y + hh / 2 - cy0, nx = lcx * Math.cos(rad) - lcy * Math.sin(rad), ny = lcx * Math.sin(rad) + lcy * Math.cos(rad);
+      l.canvas = rot(l.canvas); if (l.mask) l.mask = rot(l.mask);
+      l.x = Math.round(cx0 + nx - cw / 2); l.y = Math.round(cy0 + ny - ch / 2); l.text = null; markDirty(l); markMask(l);
+    }
+    ruler = null; setSelection(null); pushHistory('Straighten'); refreshAll();
+    toast(`Rotated ${a.toFixed(1)}°. Crop away the corners with the Crop tool (C).`, 'ok', 4000);
+  }
+  // Perspective crop: drag four corners over something rectangular, Enter flattens it.
+  let pcrop = null;
+  function startPerspCrop(p, e) {
+    if (pcrop) {
+      const i = pcrop.findIndex(q => Math.hypot(q.x - p.x, q.y - p.y) * view.zoom < 10);
+      if (i >= 0) return track(e, ev => { const q = docPoint(ev); pcrop[i] = { x: q.x, y: q.y }; renderOverlay(); });
+    }
+    const p0 = p;
+    track(e, ev => { const q = docPoint(ev); pcrop = [{ x: p0.x, y: p0.y }, { x: q.x, y: p0.y }, { x: q.x, y: q.y }, { x: p0.x, y: q.y }]; renderOverlay(); renderOptions(); });
+  }
+  function applyPerspCrop() {
+    if (!pcrop) return;
+    const q = pcrop, len = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const W = Math.max(2, Math.round((len(q[0], q[1]) + len(q[3], q[2])) / 2)), H = Math.max(2, Math.round((len(q[0], q[3]) + len(q[1], q[2])) / 2));
+    commitAdjust();
+    const map = O.quadMap(q);
+    for (const l of doc.layers) {
+      if (isAdj(l)) continue;
+      const un = c => {
+        const src = O.cx(c).getImageData(0, 0, c.width, c.height), sd = src.data, sw = c.width, sh = c.height, out = new ImageData(W, H), d = out.data;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const s = map((x + 0.5) / W, (y + 0.5) / H), fx = s.x - l.x - 0.5, fy = s.y - l.y - 0.5;
+          if (fx < -1 || fy < -1 || fx > sw || fy > sh) continue;
+          const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, o = (y * W + x) * 4;
+          for (let ch = 0; ch < 4; ch++) {
+            const at = (xx, yy) => (xx < 0 || yy < 0 || xx >= sw || yy >= sh) ? 0 : sd[(yy * sw + xx) * 4 + ch];
+            d[o + ch] = (at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx) * (1 - ty) + (at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx) * ty;
+          }
+        }
+        const oc = O.mk(W, H); O.cx(oc).putImageData(out, 0, 0); return oc;
+      };
+      l.canvas = un(l.canvas); if (l.mask) l.mask = un(l.mask); l.x = 0; l.y = 0; l.text = null; markDirty(l); markMask(l);
+    }
+    doc.width = W; doc.height = H; pcrop = null;
+    resizeSurfaces(); setSelection(null); pushHistory('Perspective crop'); refreshAll();
+  }
+  /** Background eraser: erase pixels close to the colour under the brush centre. */
+  function bgEraseDab(st, x, y) {
+    const r = st.size / 2, o = T.bgeraser, W = st.target.width, H = st.target.height, sd = st.snapData;
+    const sx = clamp(Math.round(x), 0, W - 1), sy = clamp(Math.round(y), 0, H - 1);
+    if (o.sampling === 'continuous' || !st.sample) { const i = (sy * W + sx) * 4; if (sd[i + 3] > 8) st.sample = [sd[i], sd[i + 1], sd[i + 2]]; }
+    if (!st.sample) return;
+    const tol = o.tolerance / 100 * 255, x0 = Math.max(0, Math.floor(x - r)), y0 = Math.max(0, Math.floor(y - r)), x1 = Math.min(W, Math.ceil(x + r)), y1 = Math.min(H, Math.ceil(y + r));
+    const fg3 = o.protect ? PhotoAdjust.hexRgb(fg) : null;
+    let reach = null;
+    if (o.limits === 'contiguous') {
+      // flood from the centre through matching pixels inside the brush circle
+      const bw = x1 - x0, bh = y1 - y0; reach = new Uint8Array(bw * bh);
+      const ok = (px, py) => { const i = (py * W + px) * 4; return Math.max(Math.abs(sd[i] - st.sample[0]), Math.abs(sd[i + 1] - st.sample[1]), Math.abs(sd[i + 2] - st.sample[2])) <= tol && (px - x) ** 2 + (py - y) ** 2 <= r * r; };
+      if (sx >= x0 && sx < x1 && sy >= y0 && sy < y1 && ok(sx, sy)) { const stack = [(sy - y0) * bw + (sx - x0)]; reach[stack[0]] = 1; while (stack.length) { const k = stack.pop(), px = k % bw, py = (k / bw) | 0; for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = px + ax, ny = py + ay; if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue; const kk = ny * bw + nx; if (reach[kk] || !ok(nx + x0, ny + y0)) continue; reach[kk] = 1; stack.push(kk); } } }
+    }
+    for (let py = y0; py < y1; py++) for (let px = x0; px < x1; px++) {
+      const dd = (px - x) ** 2 + (py - y) ** 2; if (dd > r * r) continue;
+      if (reach && !reach[(py - y0) * (x1 - x0) + (px - x0)]) continue;
+      const i = (py * W + px) * 4, dist = Math.max(Math.abs(sd[i] - st.sample[0]), Math.abs(sd[i + 1] - st.sample[1]), Math.abs(sd[i + 2] - st.sample[2]));
+      if (fg3 && Math.max(Math.abs(sd[i] - fg3[0]), Math.abs(sd[i + 1] - fg3[1]), Math.abs(sd[i + 2] - fg3[2])) < 24) continue;
+      const wgt = clamp((tol - dist) / Math.max(1, 0.25 * tol), 0, 1) * 255;
+      const k = py * W + px; if (wgt > st.erase[k]) st.erase[k] = wgt;
+    }
+    st.dirty = st.dirty ? { x0: Math.min(st.dirty.x0, x0), y0: Math.min(st.dirty.y0, y0), x1: Math.max(st.dirty.x1, x1), y1: Math.max(st.dirty.y1, y1) } : { x0, y0, x1, y1 };
+  }
+  function composeBgErase(st) {
+    if (!st.dirty) return;
+    const { x0, y0, x1, y1 } = st.dirty, w = x1 - x0, hh = y1 - y0, W = st.target.width;
+    const img = O.cx(st.target).getImageData(x0, y0, w, hh), d = img.data, sd = st.snapData;
+    for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) {
+      const k = (y + y0) * W + (x + x0), i = (y * w + x) * 4, a = st.erase[k] / 255;
+      let s = 1; if (st.sel) s = st.selData[k * 4 + 3] / 255;
+      d[i + 3] = sd[k * 4 + 3] * (1 - a * s);
+    }
+    O.cx(st.target).putImageData(img, x0, y0); markDirty(st.l); requestRender();
+  }
+
   // ---------- liquify ----------
   // A displacement field over the layer: out(p) = original(p + D(p)). It persists between strokes on the same
   // layer so Reconstruct can relax earlier pushes; switching layer or tool, or any other edit, bakes it in.
@@ -2321,6 +2812,14 @@ const PhotoEditor = (() => {
     }
     return { kind: k, x0: p.x, y0: p.y, x1: q.x, y1: q.y };
   }
+  /** Vertices of a polygon / star / triangle inscribed in the drag box (PhotoCraft vector/src/shapes.rs). */
+  function polyPoints(d) {
+    const o = T.shape, x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1), w = Math.abs(d.x1 - d.x0), hh = Math.abs(d.y1 - d.y0);
+    if (d.kind === 'triangle') return [[x + w / 2, y], [x + w, y + hh], [x, y + hh]];
+    const n = Math.max(3, o.sides || 5), star = d.kind === 'star', cnt = star ? n * 2 : n, inner = (o.inner ?? 50) / 100, pts = [];
+    for (let i = 0; i < cnt; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / cnt, r = star && i % 2 ? inner : 1; pts.push([x + w / 2 + Math.cos(a) * w / 2 * r, y + hh / 2 + Math.sin(a) * hh / 2 * r]); }
+    return pts;
+  }
   function drawShape(ctx, d) {
     const o = T.shape;
     const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1), w = Math.abs(d.x1 - d.x0), hh = Math.abs(d.y1 - d.y0);
@@ -2342,6 +2841,7 @@ const PhotoEditor = (() => {
     }
     ctx.beginPath();
     if (d.kind === 'ellipse') ctx.ellipse(x + w / 2, y + hh / 2, w / 2, hh / 2, 0, 0, Math.PI * 2);
+    else if (['polygon', 'star', 'triangle'].includes(d.kind)) { polyPoints(d).forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); }
     else ctx.roundRect(x, y, w, hh, Math.min(o.radius, w / 2, hh / 2));
     if (o.fill) { ctx.fillStyle = fg; ctx.fill(); }
     if (o.stroke) { ctx.strokeStyle = bg; ctx.lineWidth = o.width; ctx.stroke(); }
@@ -2357,7 +2857,7 @@ const PhotoEditor = (() => {
       const x0 = Math.floor(Math.min(d.x0, d.x1) - pad), y0 = Math.floor(Math.min(d.y0, d.y1) - pad);
       const c = O.mk(Math.ceil(Math.max(d.x0, d.x1) + pad) - x0, Math.ceil(Math.max(d.y0, d.y1) + pad) - y0), cc = O.cx(c);
       cc.translate(-x0, -y0); drawShape(cc, d);
-      const names = { rect: 'Rectangle', ellipse: 'Ellipse', line: 'Line', arrow: 'Arrow' };
+      const names = { rect: 'Rectangle', ellipse: 'Ellipse', line: 'Line', arrow: 'Arrow', triangle: 'Triangle', polygon: 'Polygon', star: 'Star' };
       insertLayer(newLayer(c, names[d.kind], x0, y0));
       pushHistory('Add ' + names[d.kind].toLowerCase()); refreshAll();
     });
@@ -2773,6 +3273,7 @@ const PhotoEditor = (() => {
   function setTool(t) {
     if (tool === 'crop' && t !== 'crop') { crop = null; }
     if (t !== 'polylasso') poly = null;
+    if (t !== 'perspcrop') pcrop = null;
     if (tool === 'transform' && t !== 'transform' && tf) finishTransform(true);
     if (t === 'transform' && !tf && doc && !startTransform()) return;
     tool = t; markTool(); renderOptions(); updateCursor(); renderOverlay();
@@ -2895,6 +3396,41 @@ const PhotoEditor = (() => {
     if (tool === 'dodge' || tool === 'burn') o.append(optSlider('Size', T[tool], 'size', 2, 500), optSlider('Hardness', T[tool], 'hardness', 0, 1, 0.01, pct), optSlider('Exposure', T[tool], 'exposure', 1, 100, 1, v => v + '%'),
       h(`<span class="opt">${tool === 'dodge' ? 'Lightens' : 'Darkens'} where you paint. Each stroke builds on the last.</span>`));
     if (tool === 'sponge') o.append(seg([['desaturate', 'Desaturate'], ['saturate', 'Saturate']], T.sponge, 'mode'), optSlider('Size', T.sponge, 'size', 2, 500), optSlider('Hardness', T.sponge, 'hardness', 0, 1, 0.01, pct), optSlider('Flow', T.sponge, 'flow', 1, 100, 1, v => v + '%'));
+    if ((tool === 'brush' || tool === 'eraser') && navigator.maxTouchPoints >= 0) {
+      const ps = selectField('', [['off', 'Pen pressure: off'], ['size', 'Pressure → size'], ['opacity', 'Pressure → opacity'], ['both', 'Pressure → both']], T[tool].pressure || 'off');
+      ps.classList.add('opt'); ps.querySelector('span').remove(); ps.select.style.width = '170px'; ps.select.addEventListener('change', () => { T[tool].pressure = ps.get(); }); o.append(ps);
+    }
+    if (tool === 'pencil') o.append(optSlider('Size', T.pencil, 'size', 1, 200), optSlider('Opacity', T.pencil, 'opacity', 0.01, 1, 0.01, pct), h('<span class="opt">Hard-edged strokes, ideal for pixel art and crisp masks.</span>'));
+    if (tool === 'colorreplace') o.append(seg([['color', 'Color'], ['hue', 'Hue'], ['saturation', 'Saturation'], ['luminosity', 'Luminosity']], T.colorreplace, 'mode'), optSlider('Size', T.colorreplace, 'size', 2, 500), optSlider('Tolerance', T.colorreplace, 'tolerance', 1, 100, 1, v => v + '%'),
+      h('<span class="opt">Paints the foreground colour over the colour under the first click, keeping the shading.</span>'));
+    if (tool === 'bgeraser') o.append(optSlider('Size', T.bgeraser, 'size', 2, 500), optSlider('Tolerance', T.bgeraser, 'tolerance', 1, 100, 1, v => v + '%'),
+      seg([['continuous', 'Sample continuously'], ['once', 'Sample once']], T.bgeraser, 'sampling'), seg([['contiguous', 'Contiguous'], ['discontiguous', 'Discontiguous']], T.bgeraser, 'limits'), optCheck('Protect foreground color', T.bgeraser, 'protect'));
+    if (tool === 'magiceraser') o.append(optSlider('Tolerance', T.magiceraser, 'tolerance', 0, 255), optCheck('Contiguous', T.magiceraser, 'contiguous'), optSlider('Opacity', T.magiceraser, 'opacity', 0.01, 1, 0.01, pct), h('<span class="opt">Click a colour to erase it.</span>'));
+    if (tool === 'healbrush') o.append(optSlider('Size', T.healbrush, 'size', 2, 500), optSlider('Hardness', T.healbrush, 'hardness', 0, 1, 0.01, pct), h(`<span class="opt">${cloneSrc ? 'Paint over the flaw — texture comes from the marked spot and blends into the surroundings.' : 'Alt-click (Option on Mac) a clean area first.'}</span>`));
+    if (tool === 'patch') o.append(seg([['source', 'Source'], ['destination', 'Destination']], T.patch, 'mode'), h(`<span class="opt">${doc && doc.selection ? (T.patch.mode === 'source' ? 'Drag the selection onto clean texture — it heals the selected area.' : 'Drag the selection to where you want a seamless copy.') : 'Draw around the area first (this tool lassos when nothing is selected).'}</span>`));
+    if (tool === 'camove') o.append(seg([['move', 'Move'], ['extend', 'Extend']], T.camove, 'mode'), h(`<span class="opt">${doc && doc.selection ? 'Drag the selection. The gap it leaves is filled automatically.' : 'Draw around an object first (this tool lassos when nothing is selected).'}</span>`));
+    if (tool === 'redeye') o.append(optSlider('Pupil size', T.redeye, 'pupil', 1, 100, 1, v => v + '%'), optSlider('Darken', T.redeye, 'darken', 1, 100, 1, v => v + '%'), h('<span class="opt">Click each red pupil.</span>'));
+    if (tool === 'historybrush') {
+      const src = selectField('', history.stack.map((s, i) => [String(i), `${i + 1}. ${s.label}`]), String(clamp(T.historybrush.source, 0, history.stack.length - 1)));
+      src.classList.add('opt'); src.querySelector('span').remove(); src.select.style.width = '200px';
+      src.select.addEventListener('change', () => { T.historybrush.source = Number(src.get()); });
+      o.append(h('<span class="opt">Paint back from:</span>'), src, optSlider('Size', T.historybrush, 'size', 2, 500), optSlider('Opacity', T.historybrush, 'opacity', 0.01, 1, 0.01, pct));
+    }
+    if (tool === 'sharpenbrush') o.append(optSlider('Size', T.sharpenbrush, 'size', 2, 500), optSlider('Strength', T.sharpenbrush, 'strength', 1, 100, 1, v => v + '%'));
+    if (tool === 'sampler') {
+      const rs = samplerReadouts();
+      o.append(h(`<span class="opt">${rs.length ? rs.map(r => `<span class="samp"><b>#${r.i}</b> <i style="background:${r.hex}"></i>R${r.r} G${r.g} B${r.b}</span>`).join('') : 'Click to pin up to four colour readouts; click a pin to remove it.'}</span>`));
+      if (rs.length) o.append(h('<span class="grow"></span>'), sbtn('Clear', () => { doc.samplers = []; renderOverlay(); renderOptions(); }));
+    }
+    if (tool === 'ruler') {
+      const r = rulerInfo();
+      o.append(h(`<span class="opt">${r ? `Length ${r.len.toFixed(1)} px · Angle ${r.angle.toFixed(1)}° · W ${Math.abs(r.dx).toFixed(0)} · H ${Math.abs(r.dy).toFixed(0)}` : 'Drag to measure. Drag along a horizon, then Straighten.'}</span>`), h('<span class="grow"></span>'));
+      if (r) o.append(sbtn('Straighten', straighten, 'btn-primary'), sbtn('Clear', () => { ruler = null; renderOverlay(); renderOptions(); }));
+    }
+    if (tool === 'perspcrop') {
+      o.append(h(`<span class="opt">${pcrop ? 'Drag the corners onto the edges of something rectangular, then press Enter.' : 'Drag a box, then move its corners to match the perspective.'}</span>`), h('<span class="grow"></span>'));
+      if (pcrop) o.append(sbtn('Cancel', () => { pcrop = null; renderOverlay(); renderOptions(); }), sbtn(`${icon('check')}Crop`, applyPerspCrop, 'btn-primary'));
+    }
     if (tool === 'clone') {
       o.append(optSlider('Size', T.clone, 'size', 2, 500), optSlider('Hardness', T.clone, 'hardness', 0, 1, 0.01, pct), optSlider('Opacity', T.clone, 'opacity', 0.01, 1, 0.01, pct), optCheck('Aligned', T.clone, 'aligned'),
         h(`<span class="opt">${cloneSrc ? 'Paint to copy from the marked spot.' : 'Alt-click (Option on Mac) to set the source.'}</span>`));
@@ -2907,8 +3443,10 @@ const PhotoEditor = (() => {
         h(`<span class="opt">Drag to draw. On a mask it fades from shown to hidden.</span>`));
     }
     if (tool === 'shape') {
-      o.append(seg([['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ['line', 'Line'], ['arrow', 'Arrow']], T.shape, 'kind', () => renderOptions()));
-      if (T.shape.kind === 'rect' || T.shape.kind === 'ellipse') o.append(optCheck('Fill', T.shape, 'fill'), optCheck('Outline', T.shape, 'stroke'));
+      o.append(seg([['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ['triangle', 'Triangle'], ['polygon', 'Polygon'], ['star', 'Star'], ['line', 'Line'], ['arrow', 'Arrow']], T.shape, 'kind', () => renderOptions()));
+      if (!['line', 'arrow'].includes(T.shape.kind)) o.append(optCheck('Fill', T.shape, 'fill'), optCheck('Outline', T.shape, 'stroke'));
+      if (T.shape.kind === 'polygon' || T.shape.kind === 'star') o.append(optSlider(T.shape.kind === 'star' ? 'Points' : 'Sides', T.shape, 'sides', 3, 24));
+      if (T.shape.kind === 'star') o.append(optSlider('Inner radius', T.shape, 'inner', 10, 95, 1, v => v + '%'));
       o.append(optSlider(['line', 'arrow'].includes(T.shape.kind) ? 'Thickness' : 'Outline', T.shape, 'width', 1, 120));
       if (T.shape.kind === 'rect') o.append(optSlider('Corners', T.shape, 'radius', 0, 400));
       o.append(h(`<span class="opt">${['line', 'arrow'].includes(T.shape.kind) ? 'Uses the foreground color.' : 'Fill = foreground, outline = background.'} Each shape gets its own layer.</span>`));
@@ -2979,7 +3517,7 @@ const PhotoEditor = (() => {
   }
 
   function buildSide() {
-    const tabs = [['adjust', 'sliders', 'Adjust'], ['filters', 'blur', 'Filters'], ['color', 'drop', 'Color'], ['frames', 'frame', 'Frames'], ['history', 'undo', 'History']];
+    const tabs = [['adjust', 'sliders', 'Adjust'], ['filters', 'blur', 'Filters'], ['color', 'drop', 'Color'], ['info', 'levels', 'Info'], ['frames', 'frame', 'Frames'], ['history', 'undo', 'History']];
     el.secTabs.innerHTML = '';
     tabs.forEach(([id, ic, label]) => {
       const b = h(`<button role="tab" data-sec="${id}" class="${sideTab === id ? 'on' : ''}">${icon(ic)}${label}</button>`);
@@ -3026,7 +3564,16 @@ const PhotoEditor = (() => {
         f('Pixelate', () => runFilter('pixelate', 'Pixelate', [{ key: 'size', label: 'Block size', min: 2, max: 120, value: 14, unit: 'px' }])),
         f('Add noise', () => runFilter('noise', 'Add noise', [{ key: 'amount', label: 'Amount', min: 1, max: 100, value: 20 }])),
       );
-      wrap.append(h('<h4>Layer filters</h4>'), g1);
+      const search = h('<input class="filter-search" type="search" placeholder="Search filters…">');
+      wrap.append(search, h('<h4>Quick</h4>'), g1);
+      const groups = {};
+      for (const fl of Object.values(PhotoFilters.F)) (groups[fl.group] = groups[fl.group] || []).push(fl);
+      for (const [gname, list] of Object.entries(groups)) {
+        const gg = h('<div class="filter-grid"></div>');
+        list.forEach(fl => { const x = f(esc(fl.name.replace('…', '')), () => pixelFilter(fl.id)); x.dataset.name = fl.name.toLowerCase(); gg.appendChild(x); });
+        wrap.append(h(`<h4>${esc(gname)}</h4>`), gg);
+      }
+      search.addEventListener('input', () => { const q = search.value.trim().toLowerCase(); $$('.filter-grid .btn', wrap).forEach(x => { x.hidden = q && !(x.dataset.name || x.textContent.toLowerCase()).includes(q); }); $$('h4', wrap).forEach(hh => { const gr = hh.nextElementSibling; hh.hidden = gr && [...gr.children].every(c => c.hidden); }); });
       const g2 = h('<div class="filter-grid"></div>');
       g2.append(
         f('Rotate 90° ↻', () => transformDoc('cw')), f('Rotate 90° ↺', () => transformDoc('ccw')),
@@ -3036,6 +3583,7 @@ const PhotoEditor = (() => {
       wrap.append(h('<h4>Whole image</h4>'), g2);
       b.appendChild(wrap); b.style.maxHeight = '420px'; b.style.overflow = 'auto';
     }
+    if (sideTab === 'info') b.appendChild(infoPanel()), b.style.maxHeight = '460px', b.style.overflow = 'auto';
     if (sideTab === 'frames') {
       const wrap = h('<div class="ph-adjust"></div>');
       const grid = h('<div class="frame-grid"></div>');
@@ -3275,6 +3823,7 @@ const PhotoEditor = (() => {
       if (k === 'arrowleft') tf.cx -= n; if (k === 'arrowright') tf.cx += n; if (k === 'arrowup') tf.cy -= n; if (k === 'arrowdown') tf.cy += n;
       tfChanged(); return;
     }
+    if (pcrop && (k === 'enter' || k === 'escape')) { e.preventDefault(); if (k === 'enter') applyPerspCrop(); else { pcrop = null; renderOverlay(); renderOptions(); } return; }
     if (k === 'escape') { if (crop) { crop = null; renderOverlay(); renderOptions(); } else if (doc && doc.selection) deselect(); return; }
     if (k === 'enter' && crop) { applyCrop(); return; }
     if ((k === 'delete' || k === 'backspace') && doc) { e.preventDefault(); if (doc.selection) clearSelectionArea(); else if (active()) deleteLayer(); return; }
@@ -3342,10 +3891,11 @@ const PhotoEditor = (() => {
       rot: () => transformDoc(b), 'new-layer': addEmptyLayer, duplicate: duplicateLayer, 'delete-layer': deleteLayer,
       adjlayer: () => addAdjustmentLayer(b), 'layer-style': () => layerStyleDialog(), 'add-mask': addMask, clip: toggleClip, lock: toggleLock,
       'merge-down': mergeDown, 'merge-visible': mergeVisible, flatten: flattenImage,
-      group: groupLayers, ungroup: ungroupLayers, align: () => alignLayers(b), distribute: () => distributeLayers(b),
+      group: groupLayers, ungroup: ungroupLayers, 'copy-style': copyStyle, 'paste-style': pasteStyle, 'clear-style': clearStyle, align: () => alignLayers(b), distribute: () => distributeLayers(b),
       'select-all': selectAll, deselect, reselect, 'select-mask': selectAndMask, inverse: invertSelection, 'color-range': colorRangeDialog, 'layer-pixels': () => selectLayerPixels(),
       sel: () => modifySelection(b), 'sel-to-mask': selectionToMask,
-      filter: () => { const [label, params] = FILTER_PARAMS[b]; runFilter(b, label, params); },
+      filter: () => { if (PhotoFilters.F[b]) return pixelFilter(b); const [label, params] = FILTER_PARAMS[b]; runFilter(b, label, params); },
+      'last-filter': () => lastFilter ? pixelFilter(lastFilter.id, { params: lastFilter.params, repeat: true }) : toast('No filter has been used yet.', 'info'),
       panel: () => { sideTab = b; buildSide(); },
       rulers: toggleRulers, guides: toggleGuides, 'clear-guides': () => { doc.guides = []; renderOverlay(); }, 'new-guide': newGuideDialog,
       liquify: () => setTool('liquify'),
@@ -3355,5 +3905,7 @@ const PhotoEditor = (() => {
   }
   const unsaved = () => doc && doc.dirty ? ['The open image'] : [];
 
-  return { init, activate, deactivate, menu, openPath, recover, unsaved, _debug: () => ({ doc, history, view, setTool, groupLayers, ungroupLayers, alignLayers, distributeLayers, get selIds() { return selIds; }, set selIds(v) { selIds = v; }, renderLayers, startTransform, finishTransform, get tf() { return tf; }, get liq() { return liq; }, tfToQuad, renderText, selectAndMask, contentAwareFill, get pen() { return pen; }, get fg() { return fg; }, addAdjustmentLayer, toggleClip, layerStyleDialog, mergeDown, modifySelection, colorRangeDialog, selectLayerPixels }) };
+  /** Palette entries: every tool (menus are added by the app). */
+  const commands = () => TOOLS.filter(t => t !== 'sep').map(t => ({ label: t.name, path: 'Photo › Tools', accel: t.label || t.key.toUpperCase(), run: () => { RO3App.show('photo'); setTool(t.id); } }));
+  return { init, activate, deactivate, menu, openPath, recover, unsaved, commands, _debug: () => ({ doc, history, view, setTool, pixelFilter, get T() { return T; }, straighten, applyPerspCrop, get ruler() { return ruler; }, set ruler(v) { ruler = v; }, get pcrop() { return pcrop; }, set pcrop(v) { pcrop = v; }, buildSide, set sideTab(v) { sideTab = v; }, groupLayers, ungroupLayers, alignLayers, distributeLayers, get selIds() { return selIds; }, set selIds(v) { selIds = v; }, renderLayers, startTransform, finishTransform, get tf() { return tf; }, get liq() { return liq; }, tfToQuad, renderText, selectAndMask, contentAwareFill, get pen() { return pen; }, get fg() { return fg; }, addAdjustmentLayer, toggleClip, layerStyleDialog, mergeDown, modifySelection, colorRangeDialog, selectLayerPixels }) };
 })();

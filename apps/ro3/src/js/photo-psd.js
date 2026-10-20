@@ -4,7 +4,9 @@ const PhotoPSD = (() => {
   const TO_PS = {
     'source-over': 'normal', multiply: 'multiply', screen: 'screen', overlay: 'overlay', darken: 'darken', lighten: 'lighten',
     'color-dodge': 'color dodge', 'color-burn': 'color burn', 'hard-light': 'hard light', 'soft-light': 'soft light',
-    difference: 'difference', exclusion: 'exclusion', hue: 'hue', saturation: 'saturation', color: 'color', luminosity: 'luminosity', lighter: 'linear dodge',
+    difference: 'difference', exclusion: 'exclusion', hue: 'hue', saturation: 'saturation', color: 'color', luminosity: 'luminosity',
+    'linear-burn': 'linear burn', 'linear-dodge': 'linear dodge', 'vivid-light': 'vivid light', 'linear-light': 'linear light', 'pin-light': 'pin light',
+    'hard-mix': 'hard mix', subtract: 'subtract', divide: 'divide', 'darker-color': 'darker color', 'lighter-color': 'lighter color', dissolve: 'dissolve',
   };
   const FROM_PS = Object.fromEntries(Object.entries(TO_PS).map(([a, b]) => [b, a]));
   const blendFrom = b => FROM_PS[b] || 'source-over';
@@ -46,6 +48,16 @@ const PhotoPSD = (() => {
       case 'invert': return base('invert');
       case 'posterize': return { ...base('posterize'), levels: a.levels || 4 };
       case 'threshold': return { ...base('threshold'), level: a.level || 128 };
+      case 'channel mixer': {
+        const ch = c => c ? [c.red || 0, c.green || 0, c.blue || 0, c.constant || 0] : null, o = base('channelmixer');
+        if (a.monochrome) { o.mono = true; o.r = ch(a.gray) || o.r; } else { o.r = ch(a.red) || o.r; o.g = ch(a.green) || o.g; o.b = ch(a.blue) || o.b; }
+        return o;
+      }
+      case 'selective color': {
+        const o = base('selectivecolor'); o.relative = a.mode !== 'absolute';
+        for (const [k] of PhotoAdjust.SC_RANGES) if (a[k]) o.ranges[k] = [a[k].c || 0, a[k].m || 0, a[k].y || 0, a[k].k || 0];
+        return o;
+      }
       case 'gradient map': {
         const s = (a.colorStops || []).slice().sort((x, y) => x.location - y.location);
         return { ...base('gradientmap'), c1: s.length ? colorHex(s[0].color) : '#000000', c2: s.length ? colorHex(s[s.length - 1].color) : '#ffffff', reverse: !!a.reverse };
@@ -67,6 +79,8 @@ const PhotoPSD = (() => {
       case 'bw': return { type: 'black & white', reds: a.reds, yellows: a.yellows, greens: a.greens, cyans: a.cyans, blues: a.blues, magentas: a.magentas, useTint: !!a.tint, tintColor: rgbOf(a.tintColor) };
       case 'photofilter': return { type: 'photo filter', color: rgbOf(a.color), density: a.density, preserveLuminosity: !!a.preserve };
       case 'invert': return { type: 'invert' };
+      case 'channelmixer': { const ch = v => ({ red: v[0], green: v[1], blue: v[2], constant: v[3] }); return a.mono ? { type: 'channel mixer', monochrome: true, gray: ch(a.r) } : { type: 'channel mixer', monochrome: false, red: ch(a.r), green: ch(a.g), blue: ch(a.b) }; }
+      case 'selectivecolor': { const o = { type: 'selective color', mode: a.relative ? 'relative' : 'absolute' }; for (const [k] of PhotoAdjust.SC_RANGES) { const v = a.ranges[k] || [0, 0, 0, 0]; o[k] = { c: v[0], m: v[1], y: v[2], k: v[3] }; } return o; }
       case 'posterize': return { type: 'posterize', levels: a.levels };
       case 'threshold': return { type: 'threshold', level: a.level };
       case 'gradientmap': return { type: 'gradient map', name: 'RO3 gradient', gradientType: 'solid', reverse: !!a.reverse, smoothness: 1,
@@ -88,6 +102,19 @@ const PhotoPSD = (() => {
     if (st) fx.stroke = { on: true, color: colorHex(st.color), size: px(st.size), opacity: Math.round((st.opacity ?? 1) * 100) };
     const sf = e.solidFill && e.solidFill.find(x => x.enabled !== false);
     if (sf) fx.overlay = { on: true, color: colorHex(sf.color), opacity: Math.round((sf.opacity ?? 1) * 100) };
+    const is = e.innerShadow && e.innerShadow.find(x => x.enabled !== false);
+    if (is) fx.innerShadow = { on: true, color: colorHex(is.color), opacity: Math.round((is.opacity ?? 0.75) * 100), angle: is.angle ?? 120, distance: px(is.distance), size: px(is.size), choke: Math.round(px(is.choke)) };
+    const ig = e.innerGlow;
+    if (ig && ig.enabled !== false) fx.innerGlow = { on: true, color: colorHex(ig.color), opacity: Math.round((ig.opacity ?? 0.75) * 100), size: px(ig.size), choke: Math.round(px(ig.choke)) };
+    const sa = e.satin;
+    if (sa && sa.enabled !== false) fx.satin = { on: true, color: colorHex(sa.color), opacity: Math.round((sa.opacity ?? 0.5) * 100), angle: sa.angle ?? 19, distance: px(sa.distance), size: px(sa.size), invert: sa.invert !== false };
+    const go = e.gradientOverlay && e.gradientOverlay.find(x => x.enabled !== false);
+    if (go && go.gradient && go.gradient.colorStops && go.gradient.colorStops.length) {
+      const cs = go.gradient.colorStops.slice().sort((a, b) => a.location - b.location);
+      fx.gradient = { on: true, color: colorHex(cs[0].color), color2: colorHex(cs[cs.length - 1].color), opacity: Math.round((go.opacity ?? 1) * 100), angle: go.angle ?? 90, scale: Math.round((go.scale ?? 1) * 100), style: go.type === 'radial' ? 'radial' : 'linear', reverse: !!go.reverse };
+    }
+    const bv = e.bevel;
+    if (bv && bv.enabled !== false) fx.bevel = { on: true, color: colorHex(bv.highlightColor || { r: 255, g: 255, b: 255 }), shadowColor: colorHex(bv.shadowColor || { r: 0, g: 0, b: 0 }), hiOpacity: Math.round((bv.highlightOpacity ?? 0.75) * 100), loOpacity: Math.round((bv.shadowOpacity ?? 0.75) * 100), size: px(bv.size) || 5, depth: Math.round((bv.strength ?? 1) * 100), angle: bv.angle ?? 120, altitude: bv.altitude ?? 30, direction: bv.direction === 'down' ? 'down' : 'up' };
     return Object.keys(fx).length ? fx : null;
   }
   function fxTo(fx) {
@@ -97,6 +124,13 @@ const PhotoPSD = (() => {
     if (fx.shadow && fx.shadow.on) e.dropShadow = [{ enabled: true, present: true, showInDialog: true, color: rgbOf(fx.shadow.color), opacity: fx.shadow.opacity / 100, angle: fx.shadow.angle, distance: pxv(fx.shadow.distance), size: pxv(fx.shadow.size), blendMode: 'multiply', useGlobalLight: false, choke: pxv(0) }];
     if (fx.glow && fx.glow.on) e.outerGlow = { enabled: true, present: true, showInDialog: true, color: rgbOf(fx.glow.color), opacity: fx.glow.opacity / 100, size: pxv(fx.glow.size), blendMode: 'screen', choke: pxv(0), range: 0.5 };
     if (fx.stroke && fx.stroke.on) e.stroke = [{ enabled: true, present: true, showInDialog: true, color: rgbOf(fx.stroke.color), opacity: fx.stroke.opacity / 100, size: pxv(fx.stroke.size), position: 'outside', fillType: 'color', blendMode: 'normal' }];
+    if (fx.innerShadow && fx.innerShadow.on) { const s = fx.innerShadow; e.innerShadow = [{ enabled: true, present: true, showInDialog: true, color: rgbOf(s.color), opacity: s.opacity / 100, angle: s.angle, distance: pxv(s.distance), size: pxv(s.size), choke: pxv(s.choke || 0), blendMode: 'multiply', useGlobalLight: false }]; }
+    if (fx.innerGlow && fx.innerGlow.on) { const s = fx.innerGlow; e.innerGlow = { enabled: true, present: true, showInDialog: true, color: rgbOf(s.color), opacity: s.opacity / 100, size: pxv(s.size), choke: pxv(s.choke || 0), blendMode: 'screen', source: 'edge', range: 0.5 }; }
+    if (fx.satin && fx.satin.on) { const s = fx.satin; e.satin = { enabled: true, present: true, showInDialog: true, color: rgbOf(s.color), opacity: s.opacity / 100, angle: s.angle, distance: pxv(s.distance), size: pxv(s.size), invert: !!s.invert, blendMode: 'multiply' }; }
+    if (fx.gradient && fx.gradient.on) { const s = fx.gradient; e.gradientOverlay = [{ enabled: true, present: true, showInDialog: true, opacity: s.opacity / 100, angle: s.angle, scale: s.scale / 100, type: s.style === 'radial' ? 'radial' : 'linear', reverse: !!s.reverse, align: true, blendMode: 'normal',
+      gradient: { name: 'RO3', type: 'solid', smoothness: 1, colorStops: [{ color: rgbOf(s.color), location: 0, midpoint: 0.5 }, { color: rgbOf(s.color2), location: 1, midpoint: 0.5 }], opacityStops: [{ opacity: 1, location: 0, midpoint: 0.5 }, { opacity: 1, location: 1, midpoint: 0.5 }] } }]; }
+    if (fx.bevel && fx.bevel.on) { const s = fx.bevel; e.bevel = { enabled: true, present: true, showInDialog: true, style: 'inner bevel', technique: 'smooth', strength: s.depth / 100, direction: s.direction, size: pxv(s.size), soften: pxv(0), angle: s.angle, altitude: s.altitude, useGlobalLight: false,
+      highlightBlendMode: 'screen', highlightColor: rgbOf(s.color), highlightOpacity: s.hiOpacity / 100, shadowBlendMode: 'multiply', shadowColor: rgbOf(s.shadowColor), shadowOpacity: s.loOpacity / 100 }; }
     if (fx.overlay && fx.overlay.on) e.solidFill = [{ enabled: true, present: true, showInDialog: true, color: rgbOf(fx.overlay.color), opacity: fx.overlay.opacity / 100, blendMode: 'normal' }];
     return e;
   }
@@ -181,10 +215,14 @@ const PhotoPSD = (() => {
   }
 
   // ---------- save ----------
-  async function save(path, doc, composite) {
+  /** opts.bake(layer) → canvas: flattened look for adjustments Photoshop can't store (Color Lookup, Color Grade). */
+  async function save(path, doc, composite, opts = {}) {
+    const baked = [];
     const flat = doc.layers.map(l => {
       const o = { name: l.name, opacity: l.opacity, blendMode: TO_PS[l.blend] || 'normal', hidden: !l.visible, clipping: !!l.clip };
-      if (l.type === 'adjust') {
+      if (l.type === 'adjust' && !adjTo(l.adj) && opts.bake) {
+        o.name = l.name + ' (flattened)'; o.canvas = opts.bake(l); o.left = 0; o.top = 0; o.clipping = false; baked.push(l.name);
+      } else if (l.type === 'adjust') {
         o.adjustment = adjTo(l.adj);
         o.left = 0; o.top = 0;
         if (l.mask) o.mask = { canvas: maskTo(l.mask), left: l.x, top: l.y, defaultColor: 0, disabled: !l.maskOn };
@@ -205,6 +243,7 @@ const PhotoPSD = (() => {
       i--;
       children.push({ name: g.name, opacity: g.opacity, hidden: !g.visible, opened: !g.collapsed, blendMode: g.blend === 'pass' ? 'pass through' : (TO_PS[g.blend] || 'normal'), children: kids });
     }
+    if (baked.length) save.lastNotes = baked; else save.lastNotes = [];
     const buf = agPsd.writePsd({ width: doc.width, height: doc.height, children, canvas: composite }, { generateThumbnail: true, noBackground: true });
     await ro3.writeBytes(path, new Uint8Array(buf));
   }

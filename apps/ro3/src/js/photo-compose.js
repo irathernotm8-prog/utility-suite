@@ -45,6 +45,77 @@ const PhotoCompose = (() => {
     return { canvas: c, pad };
   }
 
+  // ----- inner styles (drawn on top of the layer's own pixels, clipped to them) -----
+  const on = e => e && e.on;
+  /** Alpha of `src` shifted by (dx,dy), inverted, blurred by `size`: the classic inner-shadow / inner-glow matte. */
+  function innerMatte(src, dx, dy, size, choke = 0) {
+    const w = src.width, h = src.height, m = O.mk(w, h), x = O.cx(m);
+    x.fillStyle = '#000'; x.fillRect(0, 0, w, h);
+    x.globalCompositeOperation = 'destination-out'; x.drawImage(src, dx, dy);
+    if (choke > 0) { x.globalCompositeOperation = 'source-over'; for (let k = 0; k < 2; k++) x.drawImage(m, 0, 0); }
+    if (size > 0) { const b = O.mk(w, h), bx = O.cx(b); bx.filter = `blur(${size / 2}px)`; bx.drawImage(m, 0, 0); return b; }
+    return m;
+  }
+  function tint(matte, color, alpha) { const c = O.clone(matte), x = O.cx(c); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height); c._alpha = alpha; return c; }
+  /** Bevel & Emboss: height map from blurred alpha, lit from angle/altitude (PhotoCraft compose/src/effects.rs). */
+  function bevelMaps(src, e) {
+    const w = src.width, h = src.height, size = Math.max(1, e.size), depth = (e.depth || 100) / 100 * (e.direction === 'down' ? -1 : 1);
+    const hm = O.mk(w, h), hx = O.cx(hm); hx.filter = `blur(${size / 2}px)`; hx.drawImage(src, 0, 0);
+    const H = hx.getImageData(0, 0, w, h).data, A = O.cx(src).getImageData(0, 0, w, h).data;
+    const a = (e.angle ?? 120) * Math.PI / 180, el = (e.altitude ?? 30) * Math.PI / 180;
+    const L = [Math.cos(a) * Math.cos(el), -Math.sin(a) * Math.cos(el), Math.sin(el)], se = Math.sin(el);
+    const hi = new ImageData(w, h), lo = new ImageData(w, h), hd = hi.data, ld = lo.data, k = depth * size * 0.5 / 255;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4; if (!A[i + 3]) continue;
+      const gx = (H[(y * w + Math.min(w - 1, x + 1)) * 4 + 3] - H[(y * w + Math.max(0, x - 1)) * 4 + 3]) * k;
+      const gy = (H[(Math.min(h - 1, y + 1) * w + x) * 4 + 3] - H[(Math.max(0, y - 1) * w + x) * 4 + 3]) * k;
+      const n = Math.hypot(gx, gy, 1), dot = (-gx * L[0] - gy * L[1] + L[2]) / n - se;
+      const al = A[i + 3] / 255;
+      if (dot > 0) { hd[i] = hd[i + 1] = hd[i + 2] = 255; hd[i + 3] = Math.min(1, dot / Math.max(0.05, 1 - se)) * 255 * al; }
+      else { ld[i + 3] = Math.min(1, -dot / Math.max(0.05, se)) * 255 * al; }
+    }
+    const hc = O.mk(w, h), lc = O.mk(w, h); O.cx(hc).putImageData(hi, 0, 0); O.cx(lc).putImageData(lo, 0, 0);
+    return { hi: hc, lo: lc };
+  }
+  /** Returns the layer's pixels with inner styles applied, or null if none are on. */
+  function innerEffects(src, fx) {
+    const isd = on(fx.innerShadow) && fx.innerShadow, ig = on(fx.innerGlow) && fx.innerGlow, sat = on(fx.satin) && fx.satin, gr = on(fx.gradient) && fx.gradient, bv = on(fx.bevel) && fx.bevel;
+    if (!isd && !ig && !sat && !gr && !bv) return null;
+    const w = src.width, h = src.height, out = O.clone(src), x = O.cx(out);
+    const clipDraw = (layer, mode, alpha) => {
+      const c = O.clone(layer), cx = O.cx(c); cx.globalCompositeOperation = 'destination-in'; cx.drawImage(src, 0, 0);
+      x.save(); x.globalCompositeOperation = mode; x.globalAlpha = alpha; x.drawImage(c, 0, 0); x.restore();
+      x.save(); x.globalCompositeOperation = 'destination-in'; x.drawImage(src, 0, 0); x.restore(); // keep original alpha
+    };
+    if (gr) {
+      const g = O.mk(w, h), gx = O.cx(g), a = (gr.angle ?? 90) * Math.PI / 180, r = Math.hypot(w, h) / 2 * (gr.scale ?? 100) / 100;
+      const grad = gr.style === 'radial' ? gx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, r)
+        : gx.createLinearGradient(w / 2 - Math.cos(a) * r, h / 2 + Math.sin(a) * r, w / 2 + Math.cos(a) * r, h / 2 - Math.sin(a) * r);
+      grad.addColorStop(0, gr.reverse ? gr.color2 : gr.color); grad.addColorStop(1, gr.reverse ? gr.color : gr.color2);
+      gx.fillStyle = grad; gx.fillRect(0, 0, w, h); clipDraw(g, 'source-atop', gr.opacity / 100);
+    }
+    if (sat) {
+      const a = (sat.angle ?? 19) * Math.PI / 180, dx = Math.cos(a) * sat.distance, dy = -Math.sin(a) * sat.distance;
+      const s1 = O.mk(w, h), c1 = O.cx(s1); c1.filter = `blur(${sat.size / 2}px)`; c1.drawImage(src, dx, dy);
+      const s2 = O.mk(w, h), c2 = O.cx(s2); c2.filter = `blur(${sat.size / 2}px)`; c2.drawImage(src, -dx, -dy);
+      c1.filter = 'none'; c1.globalCompositeOperation = 'xor'; c1.drawImage(s2, 0, 0);
+      let m = s1; if (sat.invert) { const iv = O.mk(w, h), ix = O.cx(iv); ix.fillStyle = '#000'; ix.fillRect(0, 0, w, h); ix.globalCompositeOperation = 'destination-out'; ix.drawImage(s1, 0, 0); m = iv; }
+      clipDraw(tint(m, sat.color), 'multiply', sat.opacity / 100);
+    }
+    if (ig) clipDraw(tint(innerMatte(src, 0, 0, ig.size, ig.choke), ig.color), 'screen', ig.opacity / 100);
+    if (isd) {
+      const a = (isd.angle ?? 120) * Math.PI / 180, dx = Math.cos(a) * isd.distance, dy = -Math.sin(a) * isd.distance;
+      // the matte comes from the shape shifted *against* the light so the shadow sits on the near edge
+      clipDraw(tint(innerMatte(src, -dx, -dy, isd.size, isd.choke), isd.color), 'multiply', isd.opacity / 100);
+    }
+    if (bv) {
+      const m = bevelMaps(src, bv);
+      clipDraw(tint(m.hi, bv.highlight || '#ffffff'), 'screen', (bv.hiOpacity ?? 75) / 100);
+      clipDraw(tint(m.lo, bv.shadowColor || '#000000'), 'multiply', (bv.loOpacity ?? 75) / 100);
+    }
+    return out;
+  }
+
   /** Bitmap of a pixel layer with its styles → {canvas, x, y}. */
   function styled(l, P) {
     const fx = l.fx;
@@ -74,11 +145,13 @@ const PhotoCompose = (() => {
       rx.globalCompositeOperation = 'destination-out'; rx.drawImage(src, D.pad, D.pad);
       f.save(); f.globalAlpha = st.opacity / 100; f.drawImage(ring, pad - D.pad, pad - D.pad); f.restore();
     }
+    const inner = innerEffects(src, fx);
     if (ov) {
       const c = O.clone(src), x = O.cx(c);
       x.globalCompositeOperation = 'source-atop'; x.globalAlpha = ov.opacity / 100; x.fillStyle = ov.color; x.fillRect(0, 0, c.width, c.height);
+      if (inner) { x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.drawImage(inner, 0, 0); }
       f.drawImage(c, pad, pad);
-    } else f.drawImage(src, pad, pad);
+    } else f.drawImage(inner || src, pad, pad);
     const v = { canvas: F, x: P.x - pad, y: P.y - pad };
     if (!P.live) l._fxCache = { k, v };
     return v;
@@ -110,8 +183,64 @@ const PhotoCompose = (() => {
     ctx.drawImage(out, 0, 0); ctx.restore();
   }
 
+  // Blend modes canvas can't do natively (formulas from PhotoCraft color/src/blend.rs).
+  const burn = (b, s) => b >= 1 ? 1 : s <= 0 ? 0 : 1 - Math.min((1 - b) / s, 1);
+  const dodge = (b, s) => b <= 0 ? 0 : s >= 1 ? 1 : Math.min(b / (1 - s), 1);
+  const vivid = (b, s) => s <= 0.5 ? burn(b, 2 * s) : dodge(b, 2 * (s - 0.5));
+  const SEP = {
+    'linear-burn': (b, s) => Math.max(b + s - 1, 0),
+    'linear-dodge': (b, s) => Math.min(b + s, 1),
+    'vivid-light': vivid,
+    'linear-light': (b, s) => Math.min(1, Math.max(0, b + 2 * s - 1)),
+    'pin-light': (b, s) => s <= 0.5 ? Math.min(b, 2 * s) : Math.max(b, 2 * s - 1),
+    'hard-mix': (b, s) => b >= 1 - 1e-4 ? 1 : b <= 1e-4 ? 0 : vivid(b, s) >= 0.5 ? 1 : 0,
+    'subtract': (b, s) => Math.max(b - s, 0),
+    'divide': (b, s) => s <= 0 ? (b <= 0 ? 0 : 1) : Math.min(b / s, 1),
+  };
+  const EXTRA_BLENDS = [...Object.keys(SEP), 'darker-color', 'lighter-color', 'dissolve'];
+  /** Composite source canvas S (already in device space, same size as ctx) onto ctx with an extra blend mode. */
+  function blendExtra(ctx, S, mode, alpha, box) {
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    const x0 = Math.max(0, Math.floor(box.x)), y0 = Math.max(0, Math.floor(box.y)), x1 = Math.min(W, Math.ceil(box.x + box.w)), y1 = Math.min(H, Math.ceil(box.y + box.h));
+    if (x1 <= x0 || y1 <= y0) return;
+    const w = x1 - x0, h = y1 - y0;
+    const dst = ctx.getImageData(x0, y0, w, h), d = dst.data, s = O.cx(S).getImageData(x0, y0, w, h).data;
+    const f = SEP[mode], lum = (r, g, b) => 0.3 * r + 0.59 * g + 0.11 * b;
+    for (let i = 0; i < d.length; i += 4) {
+      const as = s[i + 3] / 255 * alpha; if (as <= 0) continue;
+      const ab = d[i + 3] / 255;
+      if (mode === 'dissolve') {
+        const px = (i >> 2) % w + x0, py = ((i >> 2) / w | 0) + y0, hsh = ((Math.imul(px, 73856093) ^ Math.imul(py, 19349663)) >>> 0) / 4294967296;
+        if (hsh < as) { d[i] = s[i]; d[i + 1] = s[i + 1]; d[i + 2] = s[i + 2]; d[i + 3] = 255; }
+        continue;
+      }
+      let br, bg, bb;
+      const cb = [d[i] / 255, d[i + 1] / 255, d[i + 2] / 255], cs = [s[i] / 255, s[i + 1] / 255, s[i + 2] / 255];
+      if (f) { br = f(cb[0], cs[0]); bg = f(cb[1], cs[1]); bb = f(cb[2], cs[2]); }
+      else { const pickS = mode === 'darker-color' ? lum(...cs) < lum(...cb) : lum(...cs) > lum(...cb); [br, bg, bb] = pickS ? cs : cb; }
+      const ao = as + ab * (1 - as), mix = (c0, c1, B) => ((1 - as) * ab * c0 + as * ((1 - ab) * c1 + ab * B)) / ao;
+      d[i] = mix(cb[0], cs[0], br) * 255; d[i + 1] = mix(cb[1], cs[1], bg) * 255; d[i + 2] = mix(cb[2], cs[2], bb) * 255; d[i + 3] = ao * 255;
+    }
+    ctx.putImageData(dst, x0, y0);
+  }
+  /** Draw bitmap B ({canvas,x,y}) with layer opacity/blend, supporting the extra modes. */
+  function drawBlended(ctx, B, opacity, blend) {
+    if (EXTRA_BLENDS.includes(blend)) {
+      const T = ctx.getTransform(), W = ctx.canvas.width, H = ctx.canvas.height;
+      const S = O.mk(W, H), sx = O.cx(S); sx.setTransform(T); sx.drawImage(B.canvas, B.x, B.y);
+      const pts = [[B.x, B.y], [B.x + B.canvas.width, B.y], [B.x, B.y + B.canvas.height], [B.x + B.canvas.width, B.y + B.canvas.height]].map(([x, y]) => [T.a * x + T.c * y + T.e, T.b * x + T.d * y + T.f]);
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      blendExtra(ctx, S, blend, opacity, { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
+      return;
+    }
+    ctx.globalAlpha = opacity; ctx.globalCompositeOperation = blend;
+    ctx.drawImage(B.canvas, B.x, B.y);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+
   function drawPixel(ctx, l, tf) {
     const B = styled(l, pixels(l, tf));
+    if (EXTRA_BLENDS.includes(l.blend)) return drawBlended(ctx, B, l.opacity, l.blend);
     ctx.globalAlpha = l.opacity; ctx.globalCompositeOperation = l.blend;
     ctx.drawImage(B.canvas, B.x, B.y);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
@@ -142,6 +271,7 @@ const PhotoCompose = (() => {
       cc.setTransform(1, 0, 0, 1, 0, 0); cc.globalCompositeOperation = 'destination-in'; cc.drawImage(baseAlpha, 0, 0);
       g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = c.opacity; g.globalCompositeOperation = c.blend; g.drawImage(C, 0, 0); g.restore();
     }
+    if (EXTRA_BLENDS.includes(base.blend)) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); drawBlended(ctx, { canvas: G, x: 0, y: 0 }, base.opacity, base.blend); ctx.restore(); return; }
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = base.opacity; ctx.globalCompositeOperation = base.blend; ctx.drawImage(G, 0, 0); ctx.restore();
   }
@@ -170,8 +300,7 @@ const PhotoCompose = (() => {
             const C = O.mk(W, H), cc = O.cx(C); cc.setTransform(ctx.getTransform());
             renderStack(cc, run, { ...opts, groups: null, noCache: true });
             ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.globalAlpha = G.opacity; ctx.globalCompositeOperation = G.blend === 'pass' ? 'source-over' : G.blend;
-            ctx.drawImage(C, 0, 0); ctx.restore();
+            drawBlended(ctx, { canvas: C, x: 0, y: 0 }, G.opacity, G.blend === 'pass' ? 'source-over' : G.blend); ctx.restore();
           }
         }
         if (belowKey != null) belowKey += gKey + run.map(key).join('');
@@ -200,5 +329,5 @@ const PhotoCompose = (() => {
     return { x: S.x, y: S.y, w: S.canvas.width, h: S.canvas.height };
   }
 
-  return { renderStack, bounds, key, fxOn, styled, pixels };
+  return { renderStack, bounds, key, fxOn, styled, pixels, EXTRA_BLENDS };
 })();
