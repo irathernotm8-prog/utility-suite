@@ -288,8 +288,12 @@ async function launch(id) {
   const args = [c?.launch || 'launch.py', ...buildArgs(p)];
   // Apple Silicon: A1111-style UIs assume CUDA. These are the flags their own webui-macos-env.sh uses.
   if (process.platform === 'darwin' && c?.backend === 'a1111' && c.id !== 'sdnext') {
-    for (const f of ['--skip-torch-cuda-test', '--upcast-sampling', '--no-half-vae']) if (!args.includes(f)) args.push(f);
-    if (!args.includes('--use-cpu')) args.push('--use-cpu', 'interrogate');
+    if (!args.includes('--skip-torch-cuda-test')) args.push('--skip-torch-cuda-test');
+    // Older A1111-style UIs need these on Apple Silicon; Forge Neo handles the Mac GPU itself and rejects them
+    if (isLegacy(p)) {
+      for (const f of ['--upcast-sampling', '--no-half-vae']) if (!args.includes(f)) args.push(f);
+      if (!args.includes('--use-cpu')) args.push('--use-cpu', 'interrogate');
+    }
     for (const f of ['--pin-shared-memory', '--cuda-malloc', '--cuda-stream', '--xformers', '--sage']) { const i = args.indexOf(f); if (i >= 0) args.splice(i, 1); }
   }
   if (isLegacy(p)) await fixNumpy(p);

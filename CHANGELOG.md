@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-20 19:22 — **Kiln 0.1.6** — Forge Neo starts on Mac again (it was being given options only older packages understand)
 - 2026-10-20 18:32 — **RO3 1.4.0** — Replaces Illustrator, Premiere's captions and its timeline: new Vector workspace (pen, shapes, pathfinder, type and outlines, artboards, gradients, image trace; opens .ai/.pdf/.svg, exports PDF/SVG/PNG), auto-captions that run on your computer (Whisper, 20+ languages), real V2/V3 and A2/A3 tracks with hide/mute/solo/lock, motion and volume keyframes on clips, speed ramps and Q/W ripple trim
 - 2026-10-20 16:42 — **RO3 1.3.0** — Big upgrade: 40+ new photo filters, Channel Mixer, Selective Color, LUTs and a Color Grade panel, 11 new blend modes, inner shadow/glow, satin, gradient and bevel styles, healing brush, patch, content-aware move, red eye, background/magic eraser, perspective crop, command palette (Ctrl/Cmd+K) and OpenRaster. Video gets colour grading with LUTs, scopes, keyframes, green screen, effects, audio effects and ducking, 58 transitions, captions (SRT/VTT), chapters, slip/roll edits, export presets and FCPXML/EDL/OTIO hand-off.
 - 2026-10-20 09:05 — **Lumen 0.1.0** — First release
