@@ -9,5 +9,8 @@ contextBridge.exposeInMainWorld('lumen', {
   setProvider: call('settings:provider'), setCliModel: call('settings:cliModel'), detectAi: call('ai:detect'), testAi: call('ai:test'),
   setGoogleClient: call('google:setClient'), googleSignIn: call('google:signIn'), googleSignOut: call('google:signOut'),
   analytics: call('analytics'),
+  posts: call('posts'), savePost: call('post:save'), schedulePost: call('post:schedule'), publishPostNow: call('post:publishNow'), unschedulePost: call('post:unschedule'), deletePost: call('post:delete'),
+  pickMedia: call('media:pick'), mediaThumb: call('media:thumb'), draftCaptions: call('ai:draft'),
+  onPostsChanged: (fn) => ipcRenderer.on('lumen:posts-changed', () => fn()),
   ask: call('ask'), open: call('open')
 });

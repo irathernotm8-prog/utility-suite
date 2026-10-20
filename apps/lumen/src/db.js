@@ -27,6 +27,11 @@ function open(file) {
       workspace_id TEXT NOT NULL, connection_id TEXT NOT NULL, key TEXT NOT NULL, source TEXT NOT NULL,
       name TEXT NOT NULL, fetched_at TEXT NOT NULL, payload TEXT NOT NULL,
       PRIMARY KEY (connection_id, key));
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '',
+      media_path TEXT NOT NULL DEFAULT '', media_url TEXT NOT NULL DEFAULT '', platforms TEXT NOT NULL DEFAULT '[]',
+      scheduled_at TEXT, status TEXT NOT NULL DEFAULT 'draft', results TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS posts_ws ON posts (workspace_id, scheduled_at);
     CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT);
   `);
   return db;
@@ -38,6 +43,8 @@ const uid = (p) => p + '_' + Math.random().toString(36).slice(2, 10);
 const iso = (d) => d.toISOString().slice(0, 10);
 const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
 const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5);
+
+const fromRow = (r) => ({ ...r, platforms: JSON.parse(r.platforms), results: JSON.parse(r.results) });
 
 function store(db) {
   const q = (sql, ...a) => db.prepare(sql).all(...a);
@@ -54,7 +61,7 @@ function store(db) {
     renameWorkspace(id, name) { run('UPDATE workspaces SET name=? WHERE id=?', name, id); },
     removeWorkspace(id) {
       db.exec('BEGIN');
-      try { run('DELETE FROM series WHERE workspace_id=?', id); run('DELETE FROM snapshots WHERE workspace_id=?', id); run('DELETE FROM facts WHERE workspace_id=?', id); run('DELETE FROM connections WHERE workspace_id=?', id); run('DELETE FROM workspaces WHERE id=?', id); db.exec('COMMIT'); }
+      try { run('DELETE FROM posts WHERE workspace_id=?', id); run('DELETE FROM series WHERE workspace_id=?', id); run('DELETE FROM snapshots WHERE workspace_id=?', id); run('DELETE FROM facts WHERE workspace_id=?', id); run('DELETE FROM connections WHERE workspace_id=?', id); run('DELETE FROM workspaces WHERE id=?', id); db.exec('COMMIT'); }
       catch (e) { db.exec('ROLLBACK'); throw e; }
     },
 
@@ -116,6 +123,21 @@ function store(db) {
     },
     snapshots: (ws, source) => q('SELECT * FROM snapshots WHERE workspace_id=?' + (source ? ' AND source=?' : '') + ' ORDER BY name', ...(source ? [ws, source] : [ws])).map((r) => ({ ...r, payload: JSON.parse(r.payload) })),
     clearSnapshots(connectionId) { run('DELETE FROM snapshots WHERE connection_id=?', connectionId); },
+
+    // ---- social posts / calendar ----
+    posts: (ws) => q('SELECT * FROM posts WHERE workspace_id=? ORDER BY COALESCE(scheduled_at, created_at)', ws).map(fromRow),
+    post: (id) => { const r = one('SELECT * FROM posts WHERE id=?', id); return r && fromRow(r); },
+    allDuePosts: () => q("SELECT * FROM posts WHERE status='scheduled'").map(fromRow),
+    savePost(ws, p) {
+      const now = new Date().toISOString(), id = p.id || uid('po'), cur = p.id ? one('SELECT * FROM posts WHERE id=?', p.id) : null;
+      const m = { body: '', link: '', media_path: '', media_url: '', platforms: [], scheduled_at: null, status: 'draft', results: {}, ...(cur ? fromRow(cur) : {}), ...p };
+      run(`INSERT INTO posts (id,workspace_id,body,link,media_path,media_url,platforms,scheduled_at,status,results,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET body=excluded.body, link=excluded.link, media_path=excluded.media_path, media_url=excluded.media_url, platforms=excluded.platforms,
+          scheduled_at=excluded.scheduled_at, status=excluded.status, results=excluded.results, updated_at=excluded.updated_at`,
+        id, ws, m.body, m.link, m.media_path, m.media_url, JSON.stringify(m.platforms), m.scheduled_at, m.status, JSON.stringify(m.results), cur ? cur.created_at : now, now);
+      return this.post(id);
+    },
+    deletePost(id) { run('DELETE FROM posts WHERE id=?', id); },
 
     // Everything the dashboard needs for one window, plus the window just before it for deltas.
     summary(ws, from, to, sources = AD_SOURCES) {

@@ -1,5 +1,6 @@
 const demo = require('./demo');
 const meta = require('./meta');
+const metaPages = require('./meta-pages');
 const ga4 = require('./ga4');
 const googleAds = require('./google-ads');
 const youtube = require('./youtube');
@@ -10,5 +11,5 @@ const planned = [
   { kind: 'sfmc', name: 'Salesforce Marketing Cloud', status: 'planned', note: 'Email sends, opens and clicks (a separate API from Salesforce reports).' }
 ];
 
-const ready = { demo, meta, 'google-ads': googleAds, ga4, youtube, salesforce };
+const ready = { demo, meta, 'meta-pages': metaPages, 'google-ads': googleAds, ga4, youtube, salesforce };
 module.exports = { ready, planned, get: (k) => ready[k] };

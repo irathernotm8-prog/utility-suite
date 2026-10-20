@@ -1,8 +1,8 @@
 {
   "name": "lumen",
   "productName": "Lumen",
-  "version": "0.2.0",
-  "description": "Ads and analytics in one calm place: Meta and Google Ads, GA4, YouTube and Salesforce, plus an AI you can ask with or without an API key.",
+  "version": "0.3.0",
+  "description": "Ads, analytics and a posting calendar in one calm place: Meta first (reporting, Facebook and Instagram posting), with optional Google and Salesforce, plus an AI you can ask with or without an API key.",
   "main": "src/main.js",
   "author": "Bilal",
   "license": "UNLICENSED",

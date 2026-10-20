@@ -18,6 +18,19 @@ window.GUIDE = [
       ['Find the ad account ID', 'In Ads Manager the URL contains act=1234567890. The number is the ID. Paste just the number.'],
       ['Later, for posting and ad changes', 'Also tick ads_management, pages_manage_posts, pages_read_engagement, instagram_basic, instagram_content_publish and business_management, and assign your Pages and Instagram account to the system user. Reporting works without them.']
     ] },
+  { id: 'posting', title: 'Posting to Facebook & Instagram', intro: 'The Calendar tab writes, schedules and publishes posts. It needs a token that is allowed to post, which is a bigger permission than the reporting token.',
+    steps: [
+      ['What you need', 'A Facebook Page you manage, and for Instagram a professional (Business or Creator) account linked to that Page.'],
+      ['Reuse your system user', 'Meta Business Settings → System users → your Lumen user → Add assets: add the Page (Create content / Full control) and the Instagram account.', 'https://business.facebook.com/settings/system-users'],
+      ['Generate a posting token', 'Generate new token → your app → tick pages_manage_posts, pages_read_engagement, pages_show_list, instagram_basic and instagram_content_publish (add business_management if asked). In Development mode this works for assets you own without app review.'],
+      ['Find the Page ID', 'Open the Page → About → Page transparency, or look in the Page URL. Numbers only.'],
+      ['Connect it', 'Sources → Posting → Facebook & Instagram posting → paste the Page ID and token → Connect. Lumen checks the Page and tells you which Instagram account it found.'],
+      ['Facebook scheduling', 'If a post is 10 minutes to 30 days away, Lumen hands it to Meta, which publishes it even if Lumen is closed. Anything else is published by Lumen at the time.'],
+      ['Instagram scheduling', 'Instagram does not accept scheduled posts through the API, so Lumen publishes them at the time and must be open then. If Lumen was closed for over an hour past the time, it marks the post Missed instead of posting late; open it and choose Post now.'],
+      ['Photos', 'Instagram needs a JPEG photo. Lumen converts PNGs for you. For a local photo it stores a hidden copy on your Page so Instagram can fetch it. If that fails, use the public image URL box instead.'],
+      ['Safety', 'Nothing posts without you pressing Schedule or Post now (Post now asks to confirm). The AI only drafts captions for you to edit; it never posts. Scheduled posts can be unscheduled any time, which cancels them with Meta.'],
+      ['Not included yet', 'Videos, Stories, Reels, carousels and editing posts after they are published.']
+    ] },
   { id: 'google', title: 'Google sign-in (Analytics, Ads, YouTube)', intro: 'One Google sign-in powers all three. You create a small private “OAuth client” once; it takes about ten minutes and never costs anything.',
     steps: [
       ['Make a Cloud project', 'console.cloud.google.com → New project (name it Lumen).', 'https://console.cloud.google.com/projectcreate'],

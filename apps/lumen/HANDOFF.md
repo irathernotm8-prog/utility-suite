@@ -1,6 +1,6 @@
 # Lumen — handoff
 
-**What it is:** Electron (Mac + Windows) personal ads and analytics dashboard, part of the Utility Package. v0.2.0.
+**What it is:** Electron (Mac + Windows) personal ads and analytics dashboard, part of the Utility Package. v0.3.0.
 
 ## State at first commit
 - Built and unit-tested in a Linux VM on Node 22 (6 tests, `npm test`). The Electron window has NOT been launched yet.
@@ -42,3 +42,21 @@ Bump `version` in package.json, then `./utility publish` per PORTING docs.
 
 ## Next
 Post and ad management (approval queue, paused drafts), social calendar, SFMC.
+
+
+## 0.3.0 (posting + calendar)
+- Calendar tab: month view, composer, drafts / scheduled / posted / needs-attention lists, AI caption drafts (3 options, never auto-posted).
+- `src/publisher.js`: Facebook Page posts (text, link, photo), Instagram single-photo posts (container → status poll → publish), Page-token discovery, native scheduling, cancel, verify.
+- `src/posts.js`: lifecycle + minute scheduler. Facebook posts 10 min to 30 days ahead are handed to Meta (published even if Lumen is closed). Everything else is held by Lumen; more than an hour overdue is marked Missed rather than posting late.
+- New source: "Facebook & Instagram posting" (`meta-pages`): Page ID + a token with pages_manage_posts, pages_read_engagement, pages_show_list, instagram_basic, instagram_content_publish.
+- Google and Salesforce sources are tucked under "More sources" in Sources (advanced setup). Code unchanged.
+- Local photos are converted to JPEG and stored in the app's media folder; for Instagram a hidden unpublished copy is uploaded to the Page to get a public URL (best-effort; a public image URL field is the fallback).
+
+## Unverified in 0.3.0
+- Every live posting call. Test with a throwaway post (Facebook first, then Instagram) before relying on it.
+- Instagram image URL via the Page-hosted copy (`images[0].source`).
+- Whether Meta's photo-node `is_published` check works for scheduled photo posts; if not the post shows "due, check Facebook" after 30 minutes.
+- Instagram scheduling is Lumen-side only (the API has no scheduling parameter). Lumen must be open at post time.
+
+## Next
+Ad management (approval queue, paused drafts, budget/pause), videos/Reels/Stories, carousels, post insights, SFMC.

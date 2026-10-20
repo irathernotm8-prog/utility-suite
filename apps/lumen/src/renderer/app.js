@@ -1,7 +1,7 @@
 (() => {
   const $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const st = { boot: null, ws: null, view: 'overview', range: 30, sort: { k: 'spend', dir: -1 }, sum: null, chat: [], busy: false, guide: 'start' };
+  const st = { boot: null, ws: null, view: 'overview', range: 30, sort: { k: 'spend', dir: -1 }, sum: null, chat: [], busy: false, guide: 'start', cal: null, posts: [], canPost: false };
 
   const fmt = {
     money: (n) => '$' + (Math.abs(n) >= 1000 ? Math.round(n).toLocaleString() : (+n).toFixed(2)),
@@ -31,7 +31,7 @@
   async function show(view) {
     st.view = view;
     document.querySelectorAll('#rail [data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
-    try { await ({ overview, analytics, connections, guide, settings })[view](); } catch (e) { $('#main').innerHTML = `<div class="wrap"><div class="note">${esc(e.message)}</div></div>`; }
+    try { await ({ overview, calendar, analytics, connections, guide, settings })[view](); } catch (e) { $('#main').innerHTML = `<div class="wrap"><div class="note">${esc(e.message)}</div></div>`; }
   }
 
   // ---------- Overview ----------
@@ -163,11 +163,12 @@
 
   // ---------- Sources ----------
   const BLURB = {
-    meta: 'Needs the ad account ID and a token with ads_read.', 'google-ads': 'Needs a developer token and your customer ID. Sign in to Google first.',
+    meta: 'Needs the ad account ID and a token with ads_read.', 'meta-pages': 'Needs your Page ID and a token that can post to the Page and its Instagram account.', 'google-ads': 'Needs a developer token and your customer ID. Sign in to Google first.',
     ga4: 'Needs the numeric property ID. Sign in to Google first.', youtube: 'Nothing to type. Sign in with the account that owns the channel.',
     salesforce: 'Runs the reports you list. Needs an app with the client-credentials flow.'
   };
-  const GROUPS = [['ads', 'Advertising'], ['analytics', 'Analytics'], ['crm', 'CRM']];
+  const GROUPS = [['ads', 'Advertising'], ['publishing', 'Posting']];
+  const isAdv = (m) => m.google || m.category === 'crm';
 
   async function connections() {
     const list = await lumen.connections(st.ws);
@@ -178,9 +179,9 @@
       ${g.signedIn ? '<div class="row"><button class="soft" data-g="out">Sign out</button><button class="ghost" data-g="guide">Setup guide</button></div>' : `<form id="gClient">${fieldHtml({ key: 'clientId', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com' }, { clientId: st.googleClientId || '' })}${fieldHtml({ key: 'clientSecret', label: 'OAuth client secret', secret: true }, {}, { clientSecret: g.hasClient })}
         <div class="row" style="margin-top:16px"><button class="soft" data-g="save">Save</button><button class="primary" type="button" data-g="in" ${g.hasClient ? '' : 'disabled'}>Sign in with Google</button><button class="ghost" type="button" data-g="guide">Setup guide</button></div></form>`}</div>`;
     const connCard = (c) => { const m = meta.find((x) => x.kind === c.kind) || { fields: [] };
-      return `<div class="conn-wrap"><div class="conn"><div><b>${esc(c.label)}</b> <span class="pill ${esc(c.status)}">${esc(c.status === 'ok' ? 'synced' : c.status)}</span>
-        <div class="sub" style="margin:2px 0 0">${c.last_sync ? 'Last sync ' + esc(new Date(c.last_sync).toLocaleString()) : 'Not synced yet'}</div>${c.last_error ? `<div class="err">${esc(c.last_error)}</div>` : ''}</div>
-        <div class="row">${c.kind !== 'demo' ? `<button class="soft" data-a="test" data-id="${esc(c.id)}">Test</button>` : ''}${m.fields.length ? `<button class="soft" data-a="edit" data-id="${esc(c.id)}">Edit</button>` : ''}<button class="soft" data-a="sync" data-id="${esc(c.id)}">Sync 90d</button><button class="ghost danger" data-a="remove" data-id="${esc(c.id)}">Remove</button></div></div>
+      return `<div class="conn-wrap"><div class="conn"><div><b>${esc(c.label)}</b> <span class="pill ${esc(c.status)}">${esc(c.status === 'ok' ? (c.kind === 'meta-pages' ? 'connected' : 'synced') : c.status)}</span>
+        <div class="sub" style="margin:2px 0 0">${c.kind === 'meta-pages' ? (c.status === 'ok' ? 'Ready to post from the Calendar' : 'Not checked yet') : c.last_sync ? 'Last sync ' + esc(new Date(c.last_sync).toLocaleString()) : 'Not synced yet'}</div>${c.last_error ? `<div class="err">${esc(c.last_error)}</div>` : ''}</div>
+        <div class="row">${c.kind !== 'demo' ? `<button class="soft" data-a="test" data-id="${esc(c.id)}">Test</button>` : ''}${m.fields.length ? `<button class="soft" data-a="edit" data-id="${esc(c.id)}">Edit</button>` : ''}${c.kind === 'meta-pages' ? '' : `<button class="soft" data-a="sync" data-id="${esc(c.id)}">Sync 90d</button>`}<button class="ghost danger" data-a="remove" data-id="${esc(c.id)}">Remove</button></div></div>
         ${m.fields.length ? `<form class="editform" data-edit="${esc(c.id)}" hidden>${m.fields.map((f) => fieldHtml(f, c.config, c.hasSecret)).join('')}<div style="margin:14px 0 4px"><button class="primary">Save changes</button></div></form>` : ''}</div>`; };
     const addCard = (m) => { const need = m.google && !g.signedIn;
       return `<div class="card"><h2>Add ${esc(m.name)}</h2><p class="sub" style="font-size:12px;margin-bottom:0">${esc(BLURB[m.kind] || '')}</p><form data-kind="${esc(m.kind)}">${m.fields.map((f) => fieldHtml(f)).join('')}
@@ -188,8 +189,9 @@
 
     $('#main').innerHTML = `<div class="wrap"><div class="row between"><div><h1>Sources</h1><p class="sub">Where Lumen pulls numbers from. Secrets are encrypted with your computer's keychain and never shown again.</p></div><button class="soft" id="syncAll">Sync all</button></div>
       <div class="card"><h2>Connected</h2>${list.map(connCard).join('') || '<div class="sub">Nothing connected in this workspace.</div>'}</div>
-      <div style="margin:14px 0">${googleCard}</div>
-      ${GROUPS.map(([cat, label]) => { const ms = meta.filter((m) => m.category === cat); return ms.length ? `<h2 class="sec">${label}</h2><div class="cols">${ms.map(addCard).join('')}</div>` : ''; }).join('')}
+      ${GROUPS.map(([cat, label]) => { const ms = meta.filter((m) => m.category === cat && !isAdv(m)); return ms.length ? `<h2 class="sec">${label}</h2><div class="cols">${ms.map(addCard).join('')}</div>` : ''; }).join('')}
+      <details class="adv" ${list.some((c) => meta.some((m) => m.kind === c.kind && isAdv(m))) || g.hasClient ? 'open' : ''}><summary>More sources: Google and Salesforce (advanced setup)</summary>
+        <div style="margin:14px 0">${googleCard}</div><div class="cols">${meta.filter(isAdv).map(addCard).join('')}</div></details>
       <h2 class="sec">Coming next</h2><div class="card">${st.boot.connectors.planned.map((p) => `<div class="conn"><div><b>${esc(p.name)}</b><div class="sub" style="margin:2px 0 0">${esc(p.note)}</div></div><span class="pill planned">planned</span></div>`).join('')}</div></div>`;
 
     $('#main').onclick = async (e) => {
@@ -231,6 +233,106 @@
       } catch (err) { toast(err.message.slice(0, 140)); }
       connections();
     });
+  }
+
+  // ---------- Calendar ----------
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const pad = (n) => String(n).padStart(2, '0');
+  const dkey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const localInput = (iso) => { if (!iso) return ''; const d = new Date(iso); return `${dkey(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const clockShort = (iso) => { const d = new Date(iso), h = d.getHours() % 12 || 12; return h + (d.getMinutes() ? ':' + pad(d.getMinutes()) : '') + (d.getHours() < 12 ? 'a' : 'p'); };
+  const whenFull = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const PLAT = { facebook: 'Facebook', instagram: 'Instagram' };
+  const STATUS = { draft: 'Draft', scheduled: 'Scheduled', published: 'Posted', partial: 'Partly posted', failed: 'Needs attention' };
+  const needsAttention = (p) => ['failed', 'partial'].includes(p.status) || (p.results.facebook && p.results.facebook.overdue && p.status === 'scheduled');
+  const dots = (p) => p.platforms.map((x) => `<i class="pd ${x}" title="${PLAT[x]}"></i>`).join('');
+
+  async function calendar() {
+    if (!st.ws) { $('#main').innerHTML = '<div class="wrap empty">Create a workspace to begin.</div>'; return; }
+    const [posts, conns] = await Promise.all([lumen.posts(st.ws), lumen.connections(st.ws)]);
+    st.posts = posts; st.canPost = conns.some((c) => c.kind === 'meta-pages');
+    const now = new Date(), cal = st.cal || (st.cal = { y: now.getFullYear(), m: now.getMonth() });
+    const first = new Date(cal.y, cal.m, 1), start = new Date(cal.y, cal.m, 1 - first.getDay()), todayKey = dkey(now);
+    const byDay = {};
+    for (const p of posts) if (p.scheduled_at) (byDay[dkey(new Date(p.scheduled_at))] = byDay[dkey(new Date(p.scheduled_at))] || []).push(p);
+    let cells = '';
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), k = dkey(d), list = byDay[k] || [];
+      cells += `<div class="day ${d.getMonth() === cal.m ? '' : 'other'} ${k === todayKey ? 'today' : ''}" data-day="${k}"><span class="dn">${d.getDate()}</span>
+        ${list.slice(0, 3).map((p) => `<button class="chip-post s-${p.status}" data-post="${esc(p.id)}">${dots(p)}<span title="${esc(clock(p.scheduled_at) + ' · ' + (p.body || p.link || 'Photo post').slice(0, 80))}">${esc(clockShort(p.scheduled_at))} ${esc((p.body || p.link || 'Photo post').slice(0, 24))}</span></button>`).join('')}${list.length > 3 ? `<span class="more">+${list.length - 3} more</span>` : ''}</div>`;
+    }
+    const upcoming = posts.filter((p) => p.status === 'scheduled' && p.scheduled_at).sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)).slice(0, 5);
+    const attention = posts.filter(needsAttention), drafts = posts.filter((p) => p.status === 'draft');
+    const row = (p) => `<button class="prow" data-post="${esc(p.id)}"><span>${dots(p)}</span><span class="pt">${esc((p.body || p.link || 'Photo post').slice(0, 60))}</span><span class="pw">${p.scheduled_at ? esc(whenFull(p.scheduled_at)) : 'No date yet'}</span></button>`;
+    $('#main').innerHTML = `<div class="wrap"><div class="row between"><div><h1>Calendar</h1><p class="sub">Plan, schedule and publish to Facebook and Instagram.</p></div><button class="primary" id="newPost">New post</button></div>
+      ${st.canPost ? '' : '<div class="note">You can plan drafts now. To publish, connect <b>Facebook &amp; Instagram posting</b> in Sources (the Guide shows how).</div>'}
+      <div class="calwrap"><div class="card cal"><div class="row between calhead"><h2>${MONTHS[cal.m]} ${cal.y}</h2><div class="row"><button class="soft" id="calPrev" aria-label="Previous month">‹</button><button class="soft" id="calToday">Today</button><button class="soft" id="calNext" aria-label="Next month">›</button></div></div>
+        <div class="dow">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((x) => `<span>${x}</span>`).join('')}</div><div class="days">${cells}</div></div>
+      <div class="side">
+        ${attention.length ? `<div class="card attn"><h2>Needs attention</h2>${attention.map(row).join('')}</div>` : ''}
+        <div class="card"><h2>Up next</h2>${upcoming.map(row).join('') || '<div class="sub" style="margin:0">Nothing scheduled.</div>'}</div>
+        <div class="card"><h2>Drafts</h2>${drafts.map(row).join('') || '<div class="sub" style="margin:0">No drafts.</div>'}</div></div></div></div>`;
+    const go = (dm) => { cal.m += dm; if (cal.m < 0) { cal.m = 11; cal.y--; } if (cal.m > 11) { cal.m = 0; cal.y++; } calendar(); };
+    $('#calPrev').onclick = () => go(-1); $('#calNext').onclick = () => go(1); $('#calToday').onclick = () => { st.cal = null; calendar(); };
+    $('#newPost').onclick = () => composer(null);
+    $('#main').onclick = (e) => {
+      const pb = e.target.closest('[data-post]'); if (pb) return composer(posts.find((p) => p.id === pb.dataset.post));
+      const dd = e.target.closest('[data-day]'); if (dd) { const [y, m, d] = dd.dataset.day.split('-').map(Number); const t = new Date(y, m - 1, d, 10, 0); if (t < Date.now()) t.setTime(Date.now() + 3600e3 - (Date.now() % 3600e3)); composer(null, t.toISOString()); }
+    };
+  }
+
+  function composer(post, presetIso) {
+    const p = post || { id: null, body: '', link: '', media_path: '', media_url: '', platforms: ['facebook'], scheduled_at: presetIso || new Date(Date.now() + 3600e3 - (Date.now() % 3600e3) + 3600e3).toISOString(), status: 'draft', results: {} };
+    const locked = p.status === 'scheduled', done = p.status === 'published';
+    const m = $('#modal'); m.hidden = false;
+    const res = p.platforms.map((x) => { const r = p.results[x]; if (!r) return ''; return `<div class="res ${esc(r.status)}"><b>${PLAT[x]}</b> ${esc(({ published: 'posted', scheduled: r.native ? 'scheduled with Meta' : 'scheduled', queued: 'waiting for its time (Lumen must be open)', failed: 'failed', missed: 'missed' })[r.status] || r.status)}${r.url ? ` · <a href="#" data-open="${esc(r.url)}">View ↗</a>` : ''}${r.error ? `<div class="err">${esc(r.error)}</div>` : ''}${r.overdue ? '<div class="err">This was due a while ago. Check Facebook to confirm it went out.</div>' : ''}</div>`; }).join('');
+    m.innerHTML = `<div class="sheet" role="dialog" aria-label="Post"><div class="row between"><h2>${post ? 'Post' : 'New post'} <span class="pill ${p.status === 'published' ? 'ok' : p.status === 'failed' || p.status === 'partial' ? 'error' : 'new'}">${esc(STATUS[p.status] || p.status)}</span></h2><button class="ghost" id="mClose" aria-label="Close">✕</button></div>
+      <fieldset ${locked || done ? 'disabled' : ''}><label>Post to</label><div class="row" id="plats">${Object.entries(PLAT).map(([k, v]) => `<label class="tog"><input type="checkbox" value="${k}" ${p.platforms.includes(k) ? 'checked' : ''}> ${v}</label>`).join('')}</div>
+        <label>Text</label><textarea id="pBody" rows="5" placeholder="What do you want to say?">${esc(p.body)}</textarea><div class="sub cnt" id="cnt"></div>
+        <details id="aiBox"><summary>Draft captions with AI</summary><div class="aibox"><input id="brief" placeholder="What is the post about? (facts only; the AI won’t invent offers)"><div class="row" style="margin-top:8px"><button class="soft" type="button" id="draftBtn">Draft 3 options</button><span class="sub" id="draftMsg" style="margin:0"></span></div><div id="opts"></div></div></details>
+        <label>Link (Facebook)</label><input id="pLink" value="${esc(p.link)}" placeholder="https://…">
+        <label>Photo ${'<span class="sub" style="font-size:11px">JPEG; Instagram requires one</span>'}</label><div class="row"><button class="soft" type="button" id="pick">Choose photo…</button><button class="ghost" type="button" id="unpick" ${p.media_path ? '' : 'hidden'}>Remove</button><span class="sub" id="mname" style="margin:0"></span></div><img id="thumb" class="thumb" alt="" hidden>
+        <details><summary>Or use a public image URL</summary><input id="pUrl" value="${esc(p.media_url)}" placeholder="https://… .jpg"></details>
+        <label>Date &amp; time</label><input type="datetime-local" id="pWhen" value="${localInput(p.scheduled_at)}"><div class="sub" id="whenHint"></div></fieldset>
+      ${res ? `<div class="results">${res}</div>` : ''}
+      <div class="row end">${post && !done ? '<button class="ghost danger" id="del">Delete</button>' : ''}<span class="grow"></span>
+        ${locked ? '<button class="soft" id="unsched">Unschedule to edit</button><button class="primary" id="now">Post now</button>' : done ? '<button class="soft" id="mClose2">Close</button>' : '<button class="soft" id="saveDraft">Save draft</button><button class="soft" id="sched">Schedule</button><button class="primary" id="now">Post now</button>'}</div></div>`;
+    const close = () => { m.hidden = true; m.innerHTML = ''; if (st.view === 'calendar') calendar(); };
+    const pb = $('#pBody', m); let media = p.media_path;
+    const hint = () => {
+      const t = $('#pWhen', m).value ? new Date($('#pWhen', m).value).getTime() : NaN, lead = t - Date.now(), plats = [...m.querySelectorAll('#plats input:checked')].map((x) => x.value), out = [];
+      if (plats.includes('facebook')) out.push(lead >= 11 * 60e3 && lead <= 29 * 864e5 ? 'Facebook: Meta will publish this, even if Lumen is closed.' : 'Facebook: Lumen publishes this at the time, so keep Lumen open.');
+      if (plats.includes('instagram')) out.push('Instagram: Lumen publishes this at the time, so keep Lumen open.');
+      $('#whenHint', m).textContent = out.join(' ');
+      $('#cnt', m).textContent = `${pb.value.length} characters${plats.includes('instagram') ? ' · Instagram allows up to 2,200' : ''}`;
+    };
+    const showThumb = async () => { const im = $('#thumb', m); $('#unpick', m).hidden = !media; if (!media) { im.hidden = true; $('#mname', m).textContent = ''; return; } try { im.src = await lumen.mediaThumb(media); im.hidden = false; $('#mname', m).textContent = 'Photo added'; } catch (_) { im.hidden = true; } };
+    const gather = () => ({ id: p.id, body: pb.value, link: $('#pLink', m).value, media_path: media, media_url: $('#pUrl', m).value, platforms: [...m.querySelectorAll('#plats input:checked')].map((x) => x.value), scheduled_at: $('#pWhen', m).value ? new Date($('#pWhen', m).value).toISOString() : null });
+    const act = async (btn, fn, okMsg) => { btn.disabled = true; try { const r = await fn(); toast(okMsg(r)); close(); } catch (err) { toast(err.message.slice(0, 160)); btn.disabled = false; } };
+    hint(); showThumb();
+    m.oninput = hint;
+    $('#mClose', m).onclick = close; if ($('#mClose2', m)) $('#mClose2', m).onclick = close;
+    m.onclick = (e) => { if (e.target === m) close(); const o = e.target.closest('[data-open]'); if (o) { e.preventDefault(); lumen.open(o.dataset.open); } };
+    $('#pick', m).onclick = async () => { try { const r = await lumen.pickMedia(); if (r) { media = r.path; await showThumb(); } } catch (err) { toast(err.message); } };
+    $('#unpick', m).onclick = () => { media = ''; showThumb(); };
+    $('#draftBtn', m).onclick = async () => {
+      const b = $('#draftBtn', m); b.disabled = true; $('#draftMsg', m).textContent = 'Drafting…';
+      try {
+        const opts = await lumen.draftCaptions({ ws: st.ws, brief: $('#brief', m).value, platforms: gather().platforms.length ? gather().platforms : ['facebook'] });
+        $('#draftMsg', m).textContent = ''; const box = $('#opts', m); box.innerHTML = opts.map((o, i) => `<div class="opt"><div>${esc(o)}</div><button class="soft" type="button" data-use="${i}">Use this</button></div>`).join('');
+        box.onclick = (e) => { const u = e.target.closest('[data-use]'); if (u) { pb.value = opts[+u.dataset.use]; hint(); } };
+      } catch (err) { $('#draftMsg', m).textContent = err.message.slice(0, 140); }
+      b.disabled = false;
+    };
+    if ($('#saveDraft', m)) $('#saveDraft', m).onclick = (e) => act(e.target, () => lumen.savePost(st.ws, gather()), () => 'Draft saved');
+    if ($('#sched', m)) $('#sched', m).onclick = (e) => act(e.target, async () => { const s = await lumen.savePost(st.ws, gather()); return lumen.schedulePost(s.id); }, () => 'Scheduled');
+    if ($('#unsched', m)) $('#unsched', m).onclick = (e) => act(e.target, () => lumen.unschedulePost(p.id), () => 'Unscheduled');
+    if ($('#now', m)) $('#now', m).onclick = (e) => {
+      const g = locked ? p : gather(); if (!confirm(`Post to ${g.platforms.map((x) => PLAT[x]).join(' and ') || 'nothing selected'} right now?`)) return;
+      act(e.target, async () => { const s = locked ? p : await lumen.savePost(st.ws, g); return lumen.publishPostNow(s.id); }, (r) => (r.status === 'published' ? 'Posted' : r.status === 'partial' ? 'Posted to some platforms; see details' : 'Not posted; see details'));
+    };
+    if ($('#del', m)) $('#del', m).onclick = (e) => { if (confirm('Delete this post?')) act(e.target, () => lumen.deletePost(p.id), () => 'Deleted'); };
   }
 
   // ---------- Guide ----------
@@ -301,5 +403,6 @@
   $('#ws').onchange = async (e) => { st.ws = e.target.value; await lumen.setActive(st.ws); st.chat = []; $('#askLog').innerHTML = ''; show(st.view); };
   document.querySelectorAll('#rail [data-view]').forEach((b) => b.onclick = () => show(b.dataset.view));
   let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (st.view === 'overview' && st.sum) Charts.daily($('#chart'), st.sum.series, fmt); }, 120); });
+  if (window.lumen.onPostsChanged) lumen.onPostsChanged(() => { if (st.view === 'calendar' && $('#modal').hidden) calendar(); });
   init().catch((e) => { $('#main').textContent = e.message; });
 })();

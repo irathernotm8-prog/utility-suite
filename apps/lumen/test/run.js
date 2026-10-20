@@ -170,5 +170,81 @@ let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok -', 
     const withAnalytics = ai.compact({ ...summary, analytics: { ga4: { totals: { sessions: { now: 1, previous: 2 } } } } }); assert.ok(withAnalytics.analytics.ga4);
   });
 
+  await t('publisher: Facebook text/link post, scheduled post, photo upload, and per-platform failure isolation', async () => {
+    const pub = require('../src/publisher'); const calls = [];
+    const f = async (u, o = {}) => { calls.push({ u, o });
+      if (/\/111\?/.test(u)) return j({ name: 'Lyte Fiber', access_token: 'PT', instagram_business_account: { id: '999', username: 'lytefiber' } });
+      if (u.endsWith('/111/feed')) return j({ id: '111_1' });
+      if (u.endsWith('/111/photos')) return j({ id: 'ph1', post_id: '111_2' });
+      return j({ error: { message: 'nope', code: 100 } }, false, 400); };
+    const cfg = { pageId: '111', token: 'T' };
+    const r = await pub.publishNow({ body: 'Hello', link: 'https://x.com' }, cfg, ['facebook'], f, {});
+    assert.strictEqual(r.facebook.status, 'published'); assert.strictEqual(r.facebook.url, 'https://www.facebook.com/111_1');
+    const feed = calls.find((c) => c.u.endsWith('/feed')); assert.ok(String(feed.o.body).includes('message=Hello') && String(feed.o.body).includes('access_token=PT'));
+    assert.ok(feed.u.includes('/' + require('../src/connectors/meta').API_VERSION + '/'));
+    const at = new Date(Date.now() + 3 * 3600e3).toISOString();
+    const sch = await pub.scheduleFacebook({ body: 'Later', scheduled_at: at }, cfg, f, {});
+    assert.strictEqual(sch.status, 'scheduled'); assert.ok(String(calls.filter((c) => c.u.endsWith('/feed')).pop().o.body).includes('published=false') && String(calls.filter((c) => c.u.endsWith('/feed')).pop().o.body).includes('scheduled_publish_time='));
+    await assert.rejects(pub.scheduleFacebook({ body: 'x', scheduled_at: new Date(Date.now() + 5 * 60e3).toISOString() }, cfg, f, {}), /10 minutes and 30 days/);
+    const ph = await pub.publishNow({ body: 'Pic', media_path: '/m/a.jpg' }, cfg, ['facebook'], f, { readMedia: async () => ({ data: Buffer.from('jpg'), type: 'image/jpeg', name: 'a.jpg' }) });
+    assert.strictEqual(ph.facebook.url, 'https://www.facebook.com/111_2');
+    const bad = await pub.publishNow({ body: 'x' }, cfg, ['facebook', 'instagram'], f, {});
+    assert.strictEqual(bad.facebook.status, 'published'); assert.strictEqual(bad.instagram.status, 'failed'); assert.match(bad.instagram.error, /photo/);
+  });
+
+  await t('publisher: Instagram container → status poll → publish, via a Facebook-hosted copy of a local photo', async () => {
+    const pub = require('../src/publisher'); const order = []; let polls = 0;
+    const f = async (u, o = {}) => { order.push(u.replace(/^.*v[\d.]+\//, '').split('?')[0]);
+      if (/\/111\?fields=name/.test(u)) return j({ name: 'P', access_token: 'PT', instagram_business_account: { id: '999', username: 'ig' } });
+      if (u.endsWith('/111/photos')) return j({ id: 'tmp1' });
+      if (/\/tmp1\?/.test(u)) return j({ images: [{ source: 'https://cdn.example/x.jpg' }] });
+      if (u.endsWith('/999/media')) { assert.ok(String(o.body).includes('image_url=https%3A%2F%2Fcdn.example%2Fx.jpg')); return j({ id: 'cont1' }); }
+      if (/\/cont1\?/.test(u)) return j({ status_code: ++polls < 2 ? 'IN_PROGRESS' : 'FINISHED' });
+      if (u.endsWith('/999/media_publish')) return j({ id: 'media1' });
+      if (/\/media1\?/.test(u)) return j({ permalink: 'https://www.instagram.com/p/abc/' });
+      return j({ error: { message: 'unexpected ' + u } }, false, 400); };
+    const r = await pub.publishNow({ body: 'Cap', media_path: '/m/a.jpg' }, { pageId: '111', token: 'T' }, ['instagram'], f, { readMedia: async () => ({ data: Buffer.from('x'), type: 'image/jpeg', name: 'a.jpg' }), sleep: async () => {} });
+    assert.deepStrictEqual([r.instagram.status, r.instagram.id, r.instagram.url], ['published', 'media1', 'https://www.instagram.com/p/abc/']); assert.strictEqual(polls, 2);
+    const err = await pub.publishNow({ body: 'c', media_url: 'https://x/y.jpg' }, { pageId: '111', token: 'T' }, ['instagram'], async (u) => (/\/111\?/.test(u) ? j({ name: 'P', access_token: 'PT' }) : j({})), {});
+    assert.match(err.instagram.error, /no Instagram/);
+    const expired = await pub.publishNow({ body: 'c' }, { pageId: '111', token: 'T' }, ['facebook'], async () => j({ error: { message: 'bad', code: 190 } }, false, 401), {});
+    assert.match(expired.facebook.error, /Sources → Edit/);
+  });
+
+  await t('posts lifecycle: schedule (native + queued), edit lock, unschedule, publish-now, missed, partial, scheduler tick', async () => {
+    const { makePosts } = require('../src/posts');
+    const S = store(open(':memory:')); const ws = S.addWorkspace('x'); let T = Date.parse('2026-11-01T12:00:00Z'); const log = [];
+    const pub = { canNativeSchedule: (iso, n) => { const d = Date.parse(iso) - n; return d >= 11 * 60e3 && d <= 29 * 864e5; },
+      scheduleFacebook: async (p) => { log.push('sched'); return { status: 'scheduled', native: true, id: 'fb1', due: p.scheduled_at }; }, cancelFacebook: async (id) => { log.push('cancel:' + id); },
+      checkFacebook: async () => ({ state: 'published', url: 'https://fb/1' }),
+      publishNow: async (p, c, plats) => { log.push('now:' + plats.join('+')); return Object.fromEntries(plats.map((x) => [x, x === 'instagram' && p.body === 'boom' ? { status: 'failed', error: 'x' } : { status: 'published', id: x + '1' }])); } };
+    const P = makePosts({ S, cfgFor: () => ({}), pub, now: () => T });
+    const d = P.save(ws, { body: 'Hi', media_path: '/m/a.jpg', platforms: ['facebook', 'instagram'], scheduled_at: new Date(T + 3 * 3600e3).toISOString() });
+    assert.strictEqual(d.status, 'draft');
+    await assert.rejects(P.save(ws, { id: d.id, platforms: [], body: '' }) && P.schedule(P.save(ws, { id: d.id, body: 'Hi', platforms: [], scheduled_at: d.scheduled_at }).id), /Pick Facebook/);
+    P.save(ws, { id: d.id, body: 'Hi', media_path: '/m/a.jpg', platforms: ['facebook', 'instagram'], scheduled_at: d.scheduled_at });
+    let s = await P.schedule(d.id); assert.strictEqual(s.status, 'scheduled'); assert.strictEqual(s.results.facebook.native, true); assert.strictEqual(s.results.instagram.status, 'queued');
+    assert.throws(() => P.save(ws, { id: d.id, body: 'edit', platforms: ['facebook'] }), /Unschedule/);
+    s = await P.unschedule(d.id); assert.strictEqual(s.status, 'draft'); assert.ok(log.includes('cancel:fb1'));
+    await P.schedule(d.id); T += 3 * 3600e3 + 10 * 60e3;
+    const ch = await P.tick(); assert.strictEqual(ch.length, 1); s = S.post(d.id); assert.strictEqual(s.results.instagram.status, 'published'); assert.strictEqual(s.results.facebook.status, 'published'); assert.strictEqual(s.status, 'published');
+    // stale queued post → missed, never posted late
+    const m = P.save(ws, { body: 'Old', media_path: '/m/a.jpg', platforms: ['instagram'], scheduled_at: new Date(T + 5 * 60e3).toISOString() }); await P.schedule(m.id); T += 3 * 3600e3;
+    log.length = 0; await P.tick(); s = S.post(m.id); assert.strictEqual(s.results.instagram.status, 'missed'); assert.strictEqual(s.status, 'failed'); assert.ok(!log.some((x) => x.startsWith('now')));
+    // partial: IG fails after FB succeeds; retrying only re-sends what failed
+    const q = P.save(ws, { body: 'boom', media_path: '/m/a.jpg', platforms: ['facebook', 'instagram'] }); s = await P.publishNow(q.id); assert.strictEqual(s.status, 'partial');
+    log.length = 0; await P.publishNow(q.id); assert.deepStrictEqual(log, ['now:instagram']);
+    await P.remove(q.id); assert.ok(!S.post(q.id));
+  });
+
+  await t('AI caption drafts return three options, tolerate chatter, and refuse an empty brief', async () => {
+    const ok = async (text) => ({ ok: true, json: async () => ({ content: [{ type: 'text', text }] }) });
+    const r = await ai.draft({ key: 'k', brief: 'Referral credit', platforms: ['facebook', 'instagram'], workspace: 'Lyte' }, async () => ok('Sure!\n["A","B","C","D"]'));
+    assert.deepStrictEqual(r, ['A', 'B', 'C']);
+    assert.deepStrictEqual(await ai.draft({ key: 'k', brief: 'x' }, async () => ok('just one caption')), ['just one caption']);
+    await assert.rejects(ai.draft({ key: 'k', brief: ' ' }), /Describe/);
+    let sys; await ai.draft({ provider: 'claude-cli', brief: 'b' }, null, { run: async (c, a, input) => { sys = input; return { code: 0, stdout: '["x"]', stderr: '' }; } }); assert.ok(/Never invent prices/.test(sys));
+  });
+
   console.log(`\n${n} passed`);
 })().catch((e) => { console.error(e); process.exit(1); });

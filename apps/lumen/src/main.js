@@ -1,15 +1,18 @@
 // Lumen — main process. Owns the database, secrets and network calls; the window only sees what preload exposes.
-const { app, BrowserWindow, ipcMain, nativeTheme, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme, nativeImage, dialog, safeStorage, shell } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { open, store, iso, addDays } = require('./db');
 const connectors = require('./connectors');
 const ai = require('./ai');
 const gauth = require('./google-auth');
+const publisher = require('./publisher');
+const { makePosts } = require('./posts');
 
 if (process.env.LUMEN_USER_DATA) app.setPath('userData', process.env.LUMEN_USER_DATA);
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let win, S;
+let win, S, P, ticking = false;
 const isMac = process.platform === 'darwin';
 
 // ---- secrets: encrypted with the OS keychain via safeStorage; the renderer only ever learns "set / not set" ----
@@ -40,6 +43,32 @@ async function resolveConfig(c) {
   return cfg;
 }
 const getKey = (name) => unseal(S.getSetting('secret.' + name, ''));
+
+// ---- posting: media lives in the app's own folder; Facebook/Instagram calls happen here, never in the window ----
+const mediaDir = () => path.join(app.getPath('userData'), 'media');
+function safeMedia(p) {
+  const full = path.resolve(String(p || ''));
+  if (!full.startsWith(mediaDir() + path.sep)) throw new Error('That file is not in Lumen’s media folder.');
+  return full;
+}
+const readMedia = async (p) => { const full = safeMedia(p); return { data: fs.readFileSync(full), type: 'image/jpeg', name: path.basename(full) }; };
+function cfgFor(ws) {
+  const c = S.connections(ws).find((x) => x.kind === 'meta-pages');
+  if (!c) throw new Error('Connect “Facebook & Instagram posting” in Sources first.');
+  return plainConfig(c);
+}
+const pub = {
+  canNativeSchedule: publisher.canNativeSchedule,
+  scheduleFacebook: (p, c) => publisher.scheduleFacebook(p, c, fetch, { readMedia }),
+  cancelFacebook: (id, c) => publisher.cancelFacebook(id, c, fetch),
+  checkFacebook: (id, c) => publisher.checkFacebook(id, c, fetch),
+  publishNow: (p, c, pl) => publisher.publishNow(p, c, pl, fetch, { readMedia })
+};
+async function runTick() {
+  if (ticking || !P) return; ticking = true;
+  try { const changed = await P.tick(); if (changed.length && win && !win.isDestroyed()) win.webContents.send('lumen:posts-changed'); }
+  catch (e) { console.error('scheduler:', e.message); } finally { ticking = false; }
+}
 
 // ---- sync ----
 async function syncConnection(id, days = 90) {
@@ -161,6 +190,29 @@ function registerIpc() {
   });
   h('google:signOut', () => { S.setSetting('secret.google.refresh', ''); });
 
+  // Posts + calendar
+  h('posts', (ws) => S.posts(ws));
+  h('post:save', (ws, d) => P.save(ws, d));
+  h('post:schedule', (id) => P.schedule(id));
+  h('post:publishNow', (id) => P.publishNow(id));
+  h('post:unschedule', (id) => P.unschedule(id));
+  h('post:delete', (id) => P.remove(id));
+  h('media:pick', async () => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Photos', extensions: ['jpg', 'jpeg', 'png'] }] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const src = r.filePaths[0], ext = path.extname(src).toLowerCase();
+    fs.mkdirSync(mediaDir(), { recursive: true });
+    const out = path.join(mediaDir(), Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + '.jpg');
+    if (ext === '.jpg' || ext === '.jpeg') fs.copyFileSync(src, out);
+    else { const img = nativeImage.createFromPath(src); if (img.isEmpty()) throw new Error('Could not read that image.'); fs.writeFileSync(out, img.toJPEG(92)); }
+    return { path: out, name: path.basename(src) };
+  });
+  h('media:thumb', (p) => { const img = nativeImage.createFromPath(safeMedia(p)); return img.isEmpty() ? '' : img.resize({ width: 360 }).toDataURL(); });
+  h('ai:draft', (d) => ai.draft({
+    provider: S.getSetting('aiProvider', 'anthropic'), key: getKey('anthropic'), model: S.getSetting('model', ai.DEFAULT_MODEL), cliModel: S.getSetting('cliModel', ''),
+    brief: d.brief, platforms: d.platforms, tone: d.tone, workspace: (S.workspaces().find((w) => w.id === d.ws) || {}).name
+  }));
+
   h('analytics', (ws, from, to) => ({
     ga4: S.seriesSummary(ws, 'ga4', from, to), youtube: S.seriesSummary(ws, 'youtube', from, to),
     snapshots: S.snapshots(ws).map((x) => ({ source: x.source, key: x.key, name: x.name, fetched_at: x.fetched_at, ...x.payload }))
@@ -198,8 +250,10 @@ app.whenReady().then(() => {
   S = store(open(path.join(app.getPath('userData'), 'lumen.db')));
   applyTheme(S.getSetting('theme', 'system'));
   seedDemo();
+  P = makePosts({ S, cfgFor, pub });
   registerIpc();
   createWindow();
+  setTimeout(runTick, 4000); setInterval(runTick, 60 * 1000);
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
 });
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });

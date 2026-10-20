@@ -100,22 +100,42 @@ async function detect(provider, deps = {}) {
   return r.code === 0 ? { installed: true, version: r.stdout.trim().split('\n')[0] } : { installed: false };
 }
 
-async function ask({ provider = 'anthropic', key, model, cliModel, question, history = [], summary, workspace }, fetchImpl = fetch, deps = {}) {
-  const hist = history.slice(-10).map((m) => ({ role: m.role, content: String(m.text || '') }));
-  const system = systemPrompt(summary, workspace);
+// One entry point for all three providers: a system prompt plus a message list in, text out.
+async function complete({ provider = 'anthropic', key, model, cliModel, system, messages, maxTokens = 1200 }, fetchImpl = fetch, deps = {}) {
   if (provider === 'claude-cli' || provider === 'codex-cli') {
-    const convo = [...hist, { role: 'user', content: question }].map((m) => `${m.role === 'user' ? 'User' : 'Lumen'}: ${m.content}`).join('\n\n');
+    const convo = messages.map((m) => `${m.role === 'user' ? 'User' : 'Lumen'}: ${m.content}`).join('\n\n');
     return askCli(provider, `${system}\n\n---\nConversation so far:\n\n${convo}\n\nLumen:`, cliModel, deps);
   }
   if (!key) throw new Error('Add an Anthropic API key in Settings, or switch to a signed-in Claude or ChatGPT CLI.');
   const res = await fetchImpl(API, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: model || DEFAULT_MODEL, max_tokens: 1200, system, messages: [...hist, { role: 'user', content: question }] })
+    body: JSON.stringify({ model: model || DEFAULT_MODEL, max_tokens: maxTokens, system, messages })
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error?.message || `Anthropic returned HTTP ${res.status}`);
   return (body.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
 }
 
-module.exports = { ask, compact, detect, runCli, PROVIDERS, DEFAULT_MODEL };
+async function ask({ question, history = [], summary, workspace, ...cfg }, fetchImpl = fetch, deps = {}) {
+  const hist = history.slice(-10).map((m) => ({ role: m.role, content: String(m.text || '') }));
+  return complete({ ...cfg, system: systemPrompt(summary, workspace), messages: [...hist, { role: 'user', content: question }] }, fetchImpl, deps);
+}
+
+// Three caption options for a social post. Nothing is posted; the person picks, edits and publishes.
+async function draft({ brief, platforms = ['facebook'], tone = 'friendly and clear', workspace, ...cfg }, fetchImpl = fetch, deps = {}) {
+  if (!String(brief || '').trim()) throw new Error('Describe what the post is about first.');
+  const system = [
+    `You write social media captions for ${workspace || 'a local business'}.`,
+    `Platforms: ${platforms.join(' and ')}. Tone: ${tone}.`,
+    'Use only facts in the brief. Never invent prices, dates, discounts, speeds or guarantees. Keep each option under 600 characters, with a clear hook first and at most two hashtags.',
+    'Do not use tools, read files or run commands.',
+    'Reply with ONLY a JSON array of exactly 3 different caption strings, nothing else.'
+  ].join('\n');
+  const text = await complete({ ...cfg, system, messages: [{ role: 'user', content: String(brief) }], maxTokens: 1500 }, fetchImpl, deps);
+  const m = text.match(/\[[\s\S]*\]/);
+  try { const a = JSON.parse(m ? m[0] : text); if (Array.isArray(a) && a.length) return a.map(String).slice(0, 3); } catch (_) {}
+  return [text.trim()];
+}
+
+module.exports = { ask, draft, complete, compact, detect, runCli, PROVIDERS, DEFAULT_MODEL };

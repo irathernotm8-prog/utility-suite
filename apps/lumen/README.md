@@ -27,3 +27,6 @@ Meta Ads, Google Ads, GA4, YouTube and Salesforce reports. The in-app Guide has 
 
 ## AI
 Settings → AI: Anthropic API key, or the Claude / Codex CLI you are already signed in to (no API key needed).
+
+## Calendar
+Plan, schedule and publish Facebook and Instagram posts. See Guide → Posting to Facebook & Instagram for the token and permissions.
