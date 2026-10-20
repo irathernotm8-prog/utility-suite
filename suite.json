@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -114,6 +114,15 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "lumen",
+      "name": "Lumen",
+      "description": "Ads and analytics in one calm place: Meta first, with Google, YouTube and Salesforce next, plus an AI you can ask.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/Utility Package/.build/lumen-source"
     }
   ],
   "updates": {

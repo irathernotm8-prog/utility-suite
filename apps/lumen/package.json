@@ -1,0 +1,29 @@
+{
+  "name": "lumen",
+  "productName": "Lumen",
+  "version": "0.1.0",
+  "description": "Ads and analytics in one calm place: Meta first, with Google, YouTube and Salesforce next, plus an AI you can ask.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.lumen",
+    "productName": "Lumen",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "asarUnpack": [],
+    "mac": { "target": ["dmg", "zip"], "icon": "build/icon.png", "category": "public.app-category.business" },
+    "win": { "target": ["zip"], "icon": "build/icon.png", "signAndEditExecutable": false }
+  }
+}
