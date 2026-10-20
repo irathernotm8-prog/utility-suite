@@ -39,7 +39,10 @@ npm start
 
 ## Specific to Fresh Desk
 
-- **One step left:** Fresh Desk is still developed in the Codex project folder. On the Mac, Bilal runs `cd ~/Downloads/Utility\ Package && ./utility adopt fresh-desk` once. That copies the latest work into `apps/fresh-desk` and makes it the home. After that, point this chat at `apps/fresh-desk` and stop editing the Codex copy.
+- **Fresh Desk 1.0 is a file explorer first**, with Tidy (the old organizer) built in. Read `apps/fresh-desk/README.md` for the layout: `lib/fsops.js` (file operations), `lib/history.js` (the one undo history), `lib/launch.js` (Terminal / editor / zip), `lib/organizer.js` + `rules.js` + `ai.js` (Tidy), `renderer/app.js` (explorer UI), `renderer/tidy.js` (Tidy UI).
+- **Nothing deletes permanently.** Removal goes through the OS Trash; every move, rename, copy and Tidy run is recorded in `history.json` so Undo works after a restart. Keep it that way.
+- `npm test` runs 37 tests, including a jsdom smoke test of the renderer.
+- The Codex copy is retired; `apps/fresh-desk` is the only home.
 
 ## If you changed files in the old folder after the move
 

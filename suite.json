@@ -53,7 +53,7 @@
     {
       "id": "fresh-desk",
       "name": "Fresh Desk",
-      "description": "Private folder organization with preview and undo",
+      "description": "A fast file explorer with tabs, preview, Terminal and Tidy",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],

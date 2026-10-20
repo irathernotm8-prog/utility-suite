@@ -1,8 +1,8 @@
 {
   "name": "fresh-desk",
   "productName": "Fresh Desk",
-  "version": "0.3.1",
-  "description": "Private folder organization with preview and undo",
+  "version": "1.0.0",
+  "description": "A fast, keyboard-first file explorer with Tidy, preview and undo",
   "author": "Bilal",
   "license": "UNLICENSED",
   "main": "main.js",

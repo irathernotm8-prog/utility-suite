@@ -1,4 +1,16 @@
-const {contextBridge, ipcRenderer} = require('electron');
-contextBridge.exposeInMainWorld('desk', Object.fromEntries(['choose','scan','apply','undo','trash','profiles','saveProfiles','revise','assistStatus','aiPreview','aiRun','acceptAI'].map(name => [name, arg => ipcRenderer.invoke(name,arg)])));
-
-contextBridge.exposeInMainWorld('scanEvents',{cancel:()=>ipcRenderer.send('cancel-scan'),onProgress:fn=>{ipcRenderer.on('scan-progress',(_,value)=>fn(value));}});
+const {contextBridge, ipcRenderer, webUtils} = require('electron');
+const invoke = names => Object.fromEntries(names.map(n => [n, (...a) => ipcRenderer.invoke(n, ...a)]));
+contextBridge.exposeInMainWorld('desk', {
+  ...invoke(['init', 'places', 'list', 'info', 'readText', 'diskSpace', 'savePrefs', 'launchers', 'folderSize', 'search',
+    'newFolder', 'newFile', 'rename', 'transfer', 'duplicate', 'trash', 'undo', 'history', 'open', 'reveal', 'terminal', 'editor',
+    'openWith', 'editCmd', 'copyText', 'compress', 'extract', 'chooseFolder', 'confirm', 'thumb', 'icon', 'watch', 'menu',
+    'tidyScan', 'tidyApply', 'tidyTrash', 'profiles', 'saveProfiles', 'revise', 'assistStatus', 'aiPreview', 'aiRun', 'acceptAI']),
+  cancel: id => ipcRenderer.send('cancel', id),
+  cancelScan: () => ipcRenderer.send('cancel-scan'),
+  startDrag: paths => ipcRenderer.send('startDrag', paths),
+  pathForFile: file => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
+  on: (channel, fn) => {
+    if (!['search-batch', 'scan-progress', 'dir-changed', 'command', 'theme', 'open-path'].includes(channel)) return;
+    ipcRenderer.on(channel, (_e, ...a) => fn(...a));
+  },
+});

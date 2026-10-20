@@ -7,7 +7,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Assist** | Private, on-device AI chat and reply assistant | `apps/assist` |
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
-| **Fresh Desk** | Private folder organization with preview and undo | `apps/fresh-desk` (still developed in its Codex folder until `./utility adopt fresh-desk`) |
+| **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
 | **RO3** | Photo editing, video editing and file conversion | `apps/ro3` |
