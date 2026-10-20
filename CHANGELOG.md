@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-20 09:05 — **Lumen 0.1.0** — First release
 - 2026-10-20 09:04 — **Lumen 0.1.0** (23 new) — Added to the Utility Package
 - 2026-10-20 03:29 — **Fresh Desk 1.0.1** — Fixes the crash when opening Applications or Pictures on Mac (app icons are now read safely), and adds a setting to hide recent folders in the sidebar
 - 2026-10-20 03:17 — **Fresh Desk 1.0.0** — Rebuilt as a full file explorer: tabs, list/grid/column views, preview and Quick Look, search across subfolders, command palette, drag and drop, Open in Terminal, and undo for everything. Tidy now sorts by kind or date and cleans up duplicates, old installers, unfinished downloads and empty folders. New look.
