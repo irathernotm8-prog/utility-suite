@@ -59,6 +59,12 @@ function makeAds({ S, cfgFor, api, readMedia, getCap, now = Date.now }) {
     const image = c.imageUrl ? await api.imageData(c.imageUrl).catch(() => '') : '';
     const { _spec, imageUrl, ...rest } = c; return { ...rest, image };
   }
+  const icache = new Map();
+  async function insights(ws, range, force) {
+    const key = range.since + '|' + range.until, hit = icache.get(ws);
+    if (!force && hit && hit.key === key && now() - hit.at < TTL_MS) return hit.data;
+    const data = await api.fetchInsights(cfgFor(ws), range); icache.set(ws, { key, at: now(), data }); return data;
+  }
   const preview = (ws, id) => { adNode(ws, id); return api.previewLinks(cfgFor(ws), id); };
   const CTA_OK = new Set(['LEARN_MORE', 'SIGN_UP', 'GET_QUOTE', 'CONTACT_US', 'APPLY_NOW', 'CALL_NOW', 'BOOK_TRAVEL', 'SHOP_NOW', 'NO_BUTTON']);
   async function editCreative(ws, id, patch, opts = {}) {
@@ -119,7 +125,7 @@ function makeAds({ S, cfgFor, api, readMedia, getCap, now = Date.now }) {
     S.markReverted(auditId); return r;
   }
 
-  return { tree, change, creative, preview, editCreative, copy, create, revert, geo: (ws, q) => api.geoSearch(cfgFor(ws), q), audit: (ws) => S.audit(ws), cap, _cache: cache };
+  return { tree, insights, change, creative, preview, editCreative, copy, create, revert, geo: (ws, q) => api.geoSearch(cfgFor(ws), q), audit: (ws) => S.audit(ws), cap, _cache: cache };
 }
 
 module.exports = { makeAds, STATUSES };

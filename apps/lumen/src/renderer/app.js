@@ -75,6 +75,107 @@
   }
 
   // ---------- Overview ----------
+
+  // ---------- Meta in depth (Overview) ----------
+  const D = { tab: 'age', metric: 'spend', bar: 'spend', line: 'results', sort: { k: 'spend', dir: -1 }, showAll: false };
+  const rt = (a, b, k = 1) => (b ? (a / b) * k : null);
+  const MET = {
+    spend: { l: 'Spend', t: 'm', v: (m) => m.spend }, impressions: { l: 'Impressions', t: 'n', v: (m) => m.impressions }, reach: { l: 'Reach', t: 'n', v: (m) => m.reach },
+    frequency: { l: 'Frequency', t: 'x', v: (m) => rt(m.impressions, m.reach), note: 'Avg times each person saw your ads' },
+    clicks: { l: 'Clicks (all)', t: 'n', v: (m) => m.clicks }, linkClicks: { l: 'Link clicks', t: 'n', v: (m) => m.linkClicks },
+    ctr: { l: 'CTR (link)', t: 'p', v: (m) => rt(m.linkClicks, m.impressions, 100) }, ctrAll: { l: 'CTR (all)', t: 'p', v: (m) => rt(m.clicks, m.impressions, 100) },
+    cpc: { l: 'CPC (link)', t: 'm', low: 1, v: (m) => rt(m.spend, m.linkClicks) }, cpcAll: { l: 'CPC (all)', t: 'm', low: 1, v: (m) => rt(m.spend, m.clicks) },
+    cpm: { l: 'CPM', t: 'm', low: 1, v: (m) => rt(m.spend, m.impressions, 1000), note: 'Cost per 1,000 impressions' },
+    results: { l: 'Results', t: 'n', v: (m) => m.results }, cpr: { l: 'Cost / result', t: 'm', low: 1, v: (m) => rt(m.spend, m.results) },
+    convRate: { l: 'Result rate', t: 'p', v: (m) => rt(m.results, m.linkClicks, 100), note: 'Results per link click' },
+    landingViews: { l: 'Landing page views', t: 'n', v: (m) => m.landingViews }, cpl: { l: 'Cost / landing view', t: 'm', low: 1, v: (m) => rt(m.spend, m.landingViews) },
+    engagement: { l: 'Post engagements', t: 'n', v: (m) => m.engagement }, cpe: { l: 'Cost / engagement', t: 'm', low: 1, v: (m) => rt(m.spend, m.engagement) },
+    reactions: { l: 'Reactions', t: 'n', v: (m) => m.reactions }, comments: { l: 'Comments', t: 'n', v: (m) => m.comments }, shares: { l: 'Shares', t: 'n', v: (m) => m.shares }, saves: { l: 'Saves', t: 'n', v: (m) => m.saves },
+    videoViews: { l: 'Video views', t: 'n', v: (m) => m.videoViews }
+  };
+  const TILES = ['spend', 'impressions', 'reach', 'frequency', 'linkClicks', 'ctr', 'cpc', 'cpm', 'results', 'cpr', 'convRate', 'landingViews', 'cpl', 'engagement', 'cpe', 'clicks', 'cpcAll', 'reactions', 'comments', 'shares', 'saves', 'videoViews'];
+  const CORE = new Set(['spend', 'impressions', 'reach', 'frequency', 'linkClicks', 'ctr', 'cpc', 'cpm', 'results', 'cpr']);
+  const PICK = ['spend', 'impressions', 'reach', 'linkClicks', 'ctr', 'cpc', 'cpm', 'results', 'cpr', 'engagement', 'landingViews'];
+  const mval = (k, m) => MET[k].v(m);
+  const mfmt = (k, v) => v === null || v === undefined || !isFinite(v) ? '—' : MET[k].t === 'm' ? dm(v) : MET[k].t === 'p' ? v.toFixed(2) + '%' : MET[k].t === 'x' ? v.toFixed(2) : Math.round(v).toLocaleString();
+  let dcur = 'USD';
+  const dm = (v) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: dcur, maximumFractionDigits: v >= 100 ? 0 : 2 }).format(v); } catch (_) { return '$' + v.toFixed(2); } };
+  const sumM = (rows) => rows.reduce((a, r) => { for (const k in r) if (typeof r[k] === 'number') a[k] = (a[k] || 0) + r[k]; return a; }, {});
+  const GEN = { female: 'Women', male: 'Men', unknown: 'Unknown' };
+  const prettyPlace = (k) => k.split('|').map((x) => x.replace(/_/g, ' ')).map((x) => x.replace(/^./, (c) => c.toUpperCase())).join(' · ');
+  const REGION_CAP = 15;
+
+  async function deepDive(force) {
+    const host = $('#deep'); if (!host) return;
+    const { from, to } = getRange();
+    host.innerHTML = '<div class="card"><h2>Meta ads in depth</h2><p class="sub">Loading from Meta…</p></div>';
+    let d; try { d = st.deep = await lumen.adsInsights(st.ws, from, to, !!force); } catch (e) { if ($('#deep')) $('#deep').innerHTML = `<div class="card"><h2>Meta ads in depth</h2><div class="note">${esc(e.message)}</div><button class="soft" id="deepRetry">Try again</button></div>`; const r = $('#deepRetry'); if (r) r.onclick = () => deepDive(true); return; }
+    if (!$('#deep') || st.view !== 'overview') return;
+    dcur = d.account.currency || 'USD'; drawDeep();
+  }
+
+  function drawDeep() {
+    const host = $('#deep'), d = st.deep; if (!host || !d) return;
+    const T = d.totals, P = d.prevTotals, hasPrev = P.spend > 0 || P.impressions > 0;
+    const delta = (k) => { const a = mval(k, T), b = mval(k, P); if (!hasPrev || !b || a === null) return '<span class="d flat">—</span>'; const pc = ((a - b) / b) * 100; if (Math.abs(pc) < 0.5) return '<span class="d flat">flat</span>'; const up = pc > 0, good = k === 'spend' || k === 'frequency' ? null : (MET[k].low ? !up : up); return `<span class="d ${good === null ? 'flat' : good ? 'good' : 'bad'}">${up ? '▲' : '▼'} ${Math.abs(pc).toFixed(1)}%</span>`; };
+    const tiles = TILES.filter((k) => CORE.has(k) || mval(k, T) > 0);
+    const opts = (sel) => PICK.map((k) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${MET[k].l}</option>`).join('');
+    host.innerHTML = `<div class="card deep"><div class="row between"><div><h2 style="margin:0">Meta ads in depth</h2><p class="sub" style="margin:2px 0 0">${esc(d.account.name)} · ${esc(dcur)} · compared with ${esc(shortDate(d.previous.since))} – ${esc(shortDate(d.previous.until))}</p></div><button class="soft" id="deepRefresh">Refresh</button></div>
+      ${d.warnings.length ? `<div class="note" style="margin-top:10px">Some parts could not load: ${esc(d.warnings.join(' · ').slice(0, 300))}</div>` : ''}
+      <div class="mtiles">${tiles.map((k) => `<div class="mt" title="${esc(MET[k].note || '')}"><div class="l">${MET[k].l}</div><div class="v">${mfmt(k, mval(k, T))}</div>${delta(k)}<div class="sp" data-k="${k}"></div></div>`).join('')}</div>
+      <div class="row between" style="margin-top:18px"><h3 style="margin:0">Trend</h3><div class="row"><label class="inl">Bars <select id="dBar">${opts(D.bar)}</select></label><label class="inl">Line <select id="dLine">${opts(D.line)}</select></label></div></div><div id="dChart" class="chartbox"></div>
+      <div class="row between" style="margin-top:18px"><h3 style="margin:0">Breakdowns</h3><div class="seg" id="dTabs">${[['age', 'Age & gender'], ['placement', 'Placement'], ['device', 'Device'], ['region', 'Region'], ['hour', 'Time of day'], ['campaigns', 'Campaigns'], ['ads', 'Ads']].map(([k, l]) => `<button data-t="${k}" class="${D.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div id="dBody"></div></div>`;
+    for (const sp of host.querySelectorAll('.sp')) sp.append(Charts.spark(d.daily.map((x) => mval(sp.dataset.k, x) || 0), 'var(--c1)'));
+    const chart = () => { const A = D.bar, B = D.line, ser = d.daily.map((x) => ({ date: x.date, a: mval(A, x) || 0, b: mval(B, x) || 0 })); Charts.daily($('#dChart'), ser, fmt, { a: { key: 'a', label: MET[A].l, fmt: (v) => mfmt(A, v) }, b: { key: 'b', label: MET[B].l, fmt: (v) => mfmt(B, v) } }); };
+    if (d.daily.length) chart(); else $('#dChart').innerHTML = '<div class="empty">No daily data in this window.</div>';
+    $('#dBar').onchange = (e) => { D.bar = e.target.value; chart(); }; $('#dLine').onchange = (e) => { D.line = e.target.value; chart(); };
+    $('#deepRefresh').onclick = () => deepDive(true);
+    $('#dTabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (!b) return; D.tab = b.dataset.t; D.showAll = false; $('#dTabs').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); drawBody(); };
+    drawBody();
+  }
+
+  function drawBody() {
+    const d = st.deep, box = $('#dBody'); if (!box) return; const tab = D.tab;
+    const picker = (id) => `<label class="inl">Show <select id="${id}">${PICK.map((k) => `<option value="${k}" ${k === D.metric ? 'selected' : ''}>${MET[k].l}</option>`).join('')}</select></label>`;
+    if (tab === 'age') {
+      const rows = d.age; if (!rows.length) { box.innerHTML = '<div class="empty">No demographic data for this window.</div>'; return; }
+      const ages = [...new Set(rows.map((r) => r.key.age))].sort((a, b) => parseInt(a) - parseInt(b)), gens = ['female', 'male', 'unknown'].filter((g) => rows.some((r) => r.key.gender === g));
+      const cell = (age, g) => { const sel = rows.filter((r) => (age === null || r.key.age === age) && (g === null || r.key.gender === g)); return sel.length ? sel.reduce((a, r) => { for (const k in r) if (typeof r[k] === 'number') a[k] = (a[k] || 0) + r[k]; return a; }, {}) : null; };
+      const vals = ages.flatMap((a) => gens.map((g) => { const c = cell(a, g); return c ? mval(D.metric, c) : null; })).filter((v) => v !== null && isFinite(v)), max = Math.max(...vals, 1e-9);
+      const tot = sumM(rows), share = (g) => { const c = cell(null, g); return c && tot.spend ? Math.round((c.spend / tot.spend) * 100) : 0; };
+      box.innerHTML = `<div class="row between" style="margin:10px 0">${picker('dMetric')}<span class="sub" style="margin:0">${gens.map((g) => `${GEN[g]} ${share(g)}% of spend`).join(' · ')}</span></div>
+        <table class="adtable heat"><thead><tr><th>Age</th>${gens.map((g) => `<th>${GEN[g]}</th>`).join('')}<th>All</th></tr></thead><tbody>${ages.map((a) => `<tr><td class="nm">${esc(a)}</td>${gens.map((g) => { const c = cell(a, g), v = c ? mval(D.metric, c) : null; const w = v !== null && isFinite(v) ? Math.max(0, v / max) : 0; return `<td><span class="hc" style="--w:${(w * 100).toFixed(0)}%">${mfmt(D.metric, v)}</span></td>`; }).join('')}<td><b>${mfmt(D.metric, mval(D.metric, cell(a, null) || {}))}</b></td></tr>`).join('')}
+        <tr class="tot"><td class="nm">All ages</td>${gens.map((g) => `<td><b>${mfmt(D.metric, mval(D.metric, cell(null, g) || {}))}</b></td>`).join('')}<td><b>${mfmt(D.metric, mval(D.metric, tot))}</b></td></tr></tbody></table>
+        <p class="sub" style="font-size:12px">Darker cells are higher values. Meta only reports age and gender for people who are signed in, so “Unknown” can be a large group.</p>`;
+      $('#dMetric').onchange = (e) => { D.metric = e.target.value; drawBody(); }; return;
+    }
+    if (tab === 'hour') {
+      const rows = d.hour.map((r) => ({ ...r, h: parseInt(r.key, 10) })).filter((r) => !isNaN(r.h)).sort((a, b) => a.h - b.h);
+      if (!rows.length) { box.innerHTML = '<div class="empty">No time-of-day data for this window.</div>'; return; }
+      const vs = rows.map((r) => mval(D.metric, r) || 0), max = Math.max(...vs, 1e-9), best = vs.indexOf(max);
+      const hl = (h) => (h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : h - 12 + 'p');
+      box.innerHTML = `<div class="row between" style="margin:10px 0">${picker('dMetric')}<span class="sub" style="margin:0">Peak: ${hl(rows[best].h)} (${mfmt(D.metric, vs[best])}) · hours are in the ad account’s time zone (${esc(d.account.timezone || '')})</span></div>
+        <div class="hours">${rows.map((r, i) => `<div class="hr" title="${hl(r.h)}: ${mfmt(D.metric, vs[i])}"><i style="height:${Math.max(2, (vs[i] / max) * 100)}%"></i><span>${r.h % 3 === 0 ? hl(r.h) : ''}</span></div>`).join('')}</div>`;
+      $('#dMetric').onchange = (e) => { D.metric = e.target.value; drawBody(); }; return;
+    }
+    const src = tab === 'placement' ? d.placement.map((r) => ({ ...r, name: prettyPlace(r.key) })) : tab === 'device' ? d.device.map((r) => ({ ...r, name: String(r.key).replace(/^./, (c) => c.toUpperCase()) }))
+      : tab === 'region' ? d.region.map((r) => ({ ...r, name: r.key })) : tab === 'campaigns' ? d.campaigns : d.ads;
+    const cols = ['spend', 'impressions', 'reach', 'linkClicks', 'ctr', 'cpc', 'cpm', 'results', 'cpr'];
+    if (!src.length) { box.innerHTML = '<div class="empty">No data for this window.</div>'; return; }
+    const num = (r) => { const v = mval(D.sort.k, r); return v === null || !isFinite(v) ? -1 : v; };
+    let rows = [...src].sort((a, b) => (D.sort.k === 'name' ? String(a.name || '').localeCompare(String(b.name || '')) * -D.sort.dir : (num(a) - num(b)) * D.sort.dir));
+    const total = rows.length, capped = tab === 'region' && !D.showAll && total > REGION_CAP; if (capped) rows = rows.slice(0, REGION_CAP);
+    const maxS = Math.max(...rows.map((r) => r.spend), 1), tot = sumM(src), th = (k, l) => `<th data-s="${k}" class="srt ${D.sort.k === k ? 'on' : ''}">${l}${D.sort.k === k ? (D.sort.dir < 0 ? ' ↓' : ' ↑') : ''}</th>`;
+    box.innerHTML = `<div class="row between" style="margin:10px 0"><span class="sub" style="margin:0">Click a column to sort.</span><button class="soft" id="dCopy">Copy table</button></div><table class="adtable"><thead><tr>${th('name', 'Name')}${cols.map((k) => th(k, MET[k].l)).join('')}</tr></thead><tbody>
+      <tr class="tot"><td class="nm">All</td>${cols.map((k) => `<td>${mfmt(k, mval(k, tot))}</td>`).join('')}</tr>
+      ${rows.map((r) => `<tr><td class="nm"><span class="nt" title="${esc(r.name)}">${esc(r.name || '(none)')}</span>${r.campaign ? `<span class="tag">${esc(r.campaign)}</span>` : ''}<div class="bar slim"><i style="width:${(r.spend / maxS) * 100}%"></i></div></td>${cols.map((k) => `<td>${mfmt(k, mval(k, r))}</td>`).join('')}</tr>`).join('')}</tbody></table>
+      ${capped ? `<button class="ghost" id="dAll">Show all ${total} regions</button>` : ''}`;
+    box.querySelector('thead').onclick = (e) => { const t = e.target.closest('[data-s]'); if (!t) return; D.sort = { k: t.dataset.s, dir: D.sort.k === t.dataset.s ? -D.sort.dir : -1 }; drawBody(); };
+    const all = $('#dAll'); if (all) all.onclick = () => { D.showAll = true; drawBody(); };
+    $('#dCopy').onclick = async () => { const tsv = [['Name', ...cols.map((k) => MET[k].l)], ...rows.map((r) => [r.name, ...cols.map((k) => { const v = mval(k, r); return v === null || !isFinite(v) ? '' : +v.toFixed(4); })])].map((x) => x.join('\t')).join('\n'); try { await navigator.clipboard.writeText(tsv); toast('Copied. Paste into a sheet.'); } catch (_) { toast('Copy was blocked.'); } };
+  }
+
   async function overview() {
     const main = $('#main');
     if (!st.ws) { main.innerHTML = '<div class="wrap empty">Create a workspace to begin.</div>'; return; }
@@ -110,6 +211,7 @@
         <div class="card"><div class="row between"><h2>Daily spend &amp; conversions</h2><div class="legend"><span><i style="background:var(--c1)"></i>Spend</span><span><i style="background:var(--c2)"></i>Conversions</span></div></div><div class="chartbox" id="chart"></div></div>
         <div class="card"><h2>By source</h2>${sources}</div>
       </div>
+      <div id="deep"></div>
       <div class="card"><h2>Campaigns</h2><div id="tbl"></div></div></div>`;
 
     kp.forEach((k, i) => {
@@ -119,6 +221,7 @@
     Charts.daily($('#chart'), s.series, fmt);
     drawTable();
     wireRange(overview);
+    if ((await lumen.connections(st.ws)).some((x) => x.kind === 'meta')) deepDive();
   }
 
   function drawTable() {

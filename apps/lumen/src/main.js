@@ -76,6 +76,7 @@ const adsBound = {
   update: (c, id, k, p, cur) => adsApi.update(c, id, k, p, cur, fetch),
   copyCampaign: (c, id) => adsApi.copyCampaign(c, id, fetch),
   geoSearch: (c, q) => adsApi.geoSearch(c, q, fetch),
+  fetchInsights: (c, r) => require('./insights').fetchInsights(c, r, fetch),
   fetchAdCreative: (c, id) => adsApi.fetchAdCreative(c, id, fetch),
   previewLinks: (c, id) => adsApi.previewLinks(c, id, fetch),
   editAdCreative: (c, id, p, rm) => adsApi.editAdCreative(c, id, p, fetch, rm),
@@ -212,6 +213,7 @@ function registerIpc() {
   // Ads manager: every change goes through adsmgr.js (confirmations, budget ceiling, audit log)
   h('ads:tree', async (ws, from, to, force) => ({ ...(await A.tree(ws, { since: from, until: to }, force)), cap: A.cap(), options: { objectives: Object.entries(adsApi.OBJECTIVES).map(([id, o]) => ({ id, label: o.label, needsPixel: !!o.needsPixel })), ctas: adsApi.CTAS, special: adsApi.SPECIAL } }));
   h('ads:change', (ws, id, patch, opts) => A.change(ws, id, patch, { confirmedActivate: !!(opts && opts.confirmedActivate) }));
+  h('ads:insights', (ws, from, to, force) => A.insights(ws, { since: from, until: to }, !!force));
   h('ads:creative', (ws, id) => A.creative(ws, id));
   h('ads:preview', (ws, id) => A.preview(ws, id));
   h('ads:editCreative', (ws, id, patch, opts) => A.editCreative(ws, id, patch, { confirmedLive: !!(opts && opts.confirmedLive) }));

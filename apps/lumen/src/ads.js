@@ -216,4 +216,4 @@ async function imageData(url, f) {
 }
 
 
-module.exports = { fetchAdCreative, previewLinks, editAdCreative, setAdCreative, imageData, fetchTree, update, copyCampaign, geoSearch, createCampaign, targetingFor, toMinor, offsetFor, OBJECTIVES, CTAS, SPECIAL, API_VERSION };
+module.exports = { _net: { call, all, base, offsetFor }, fetchAdCreative, previewLinks, editAdCreative, setAdCreative, imageData, fetchTree, update, copyCampaign, geoSearch, createCampaign, targetingFor, toMinor, offsetFor, OBJECTIVES, CTAS, SPECIAL, API_VERSION };

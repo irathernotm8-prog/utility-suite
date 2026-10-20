@@ -79,3 +79,8 @@ Ad management (approval queue, paused drafts, budget/pause), videos/Reels/Storie
 - "Meta's exact preview" uses `/{ad}/previews` and opens the returned URL in the browser (the app CSP blocks iframes).
 - Read-only (with explanation): boosted-post ads, flexible/dynamic creative, carousels, video.
 - Unverified live: creative edit payload (object_story_spec round-trip), `/previews` response shape, image CDN fetch for the mockup.
+
+## 0.5.0 (Overview: Meta ads in depth)
+- New section on Overview (shown when a Meta source exists): up to 22 metric tiles with previous-period deltas and sparklines (spend, impressions, reach, frequency, link clicks, CTR, CPC, CPM, results, cost/result, result rate, landing page views, engagement, reactions/comments/shares/saves, video views), a trend chart with pickable bars/line metrics, and breakdown tabs: age×gender heat grid, placement, device, region, time of day, campaigns, ads (sortable, "Copy table" as TSV).
+- Live from Meta Insights (`src/insights.js`, read-only, 60s cache, Refresh button). Needs only ads_read. A failing breakdown degrades to a warning, not an error.
+- Unverified live: breakdown combinations (`publisher_platform,platform_position`, hourly breakdown), action-type names for engagement/landing views, "Results" follows the Meta source's result-actions setting.

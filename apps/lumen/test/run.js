@@ -366,6 +366,27 @@ let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok -', 
     await assert.rejects(A.revert(ws, log.id), /live/); await A.revert(ws, log.id, { confirmedLive: true }); assert.strictEqual(cur, 'cr1'); assert.strictEqual(S.auditEntry(log.id).reverted, true);
   });
 
+  await t('insights: totals, previous period, breakdowns, and a failing breakdown degrades to a warning', async () => {
+    const ins = require('../src/insights'); const urls = [];
+    const row = (o) => ({ spend: '10.5', impressions: '1000', reach: '800', clicks: '40', inline_link_clicks: '25', actions: [{ action_type: 'lead', value: '3' }, { action_type: 'landing_page_view', value: '20' }, { action_type: 'post_reaction', value: '7' }], ...o });
+    const f = async (url) => { const u = decodeURIComponent(String(url)); urls.push(u); const ok = (data) => ({ ok: true, status: 200, json: async () => ({ data }) });
+      if (/\?fields=name,currency/.test(u)) return { ok: true, status: 200, json: async () => ({ name: 'Acct', currency: 'USD', timezone_name: 'America/Chicago' }) };
+      if (/breakdowns=device_platform/.test(u)) return { ok: false, status: 400, json: async () => ({ error: { message: 'bad breakdown' } }) };
+      if (/breakdowns=age,gender/.test(u)) return ok([row({ age: '25-34', gender: 'female' }), row({ age: '25-34', gender: 'male', spend: '5' })]);
+      if (/time_increment=1/.test(u)) return ok([row({ date_start: '2026-10-02' }), row({ date_start: '2026-10-01' })]);
+      if (/level=campaign/.test(u)) return ok([row({ campaign_id: 'c1', campaign_name: 'Camp' })]);
+      if (/"since":"2026-09-24"/.test(u)) return ok([row({ spend: '8' })]);
+      return ok([row({})]); };
+    const r = await ins.fetchInsights({ accountId: '123', token: 't' }, { since: '2026-10-01', until: '2026-10-07' }, f);
+    assert.deepStrictEqual(r.previous, { since: '2026-09-24', until: '2026-09-30' });
+    assert.deepStrictEqual([r.totals.spend, r.totals.reach, r.totals.linkClicks, r.totals.results, r.totals.landingViews, r.totals.reactions, r.prevTotals.spend], [10.5, 800, 25, 3, 20, 7, 8]);
+    assert.deepStrictEqual(r.daily.map((d) => d.date), ['2026-10-01', '2026-10-02']); assert.strictEqual(r.age.length, 2); assert.deepStrictEqual(r.age[0].key, { age: '25-34', gender: 'female' });
+    assert.deepStrictEqual(r.device, []); assert.ok(r.warnings.some((w) => /Device.*bad breakdown/.test(w))); assert.strictEqual(r.campaigns[0].name, 'Camp');
+    const { makeAds } = require('../src/adsmgr'); const S = store(open(':memory:')); const ws = S.addWorkspace('x'); let calls = 0;
+    const A = makeAds({ S, cfgFor: () => adsCfg, api: { fetchInsights: async () => { calls++; return r; } }, readMedia: rm, getCap: () => 100 });
+    await A.insights(ws, { since: 'a', until: 'b' }); await A.insights(ws, { since: 'a', until: 'b' }); assert.strictEqual(calls, 1); await A.insights(ws, { since: 'a', until: 'b' }, true); assert.strictEqual(calls, 2);
+  });
+
   await t('AI campaign draft: parses, clamps to the budget ceiling, drops unknown values', async () => {
     const reply = '{"name":"Kingsville Referral","objective":"OUTCOME_WEIRD","dailyBudget":9999,"locations":["Kingsville, TX"],"radiusMiles":12,"ageMin":15,"ageMax":70,"headline":"' + 'x'.repeat(60) + '","message":"Hi","description":"d","cta":"BOGUS","special":"NONE","notes":"n"}';
     const r = await ai.campaignDraft({ key: 'k', brief: 'Referral promo in Kingsville', cap: 100, ctas: ['LEARN_MORE', 'SIGN_UP'] }, async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Here you go: ' + reply }] }) }));
