@@ -246,5 +246,106 @@ let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok -', 
     let sys; await ai.draft({ provider: 'claude-cli', brief: 'b' }, null, { run: async (c, a, input) => { sys = input; return { code: 0, stdout: '["x"]', stderr: '' }; } }); assert.ok(/Never invent prices/.test(sys));
   });
 
+  const adsApi = require('../src/ads');
+  const mockMeta = () => {
+    const calls = [];
+    const f = async (u, o = {}) => {
+      const path = u.replace(/^https:\/\/graph\.facebook\.com\/v[\d.]+/, '').split('?')[0]; const body = o.body && o.body.get ? Object.fromEntries(o.body.entries()) : o.body && typeof o.body === 'string' ? Object.fromEntries(new URLSearchParams(o.body)) : null;
+      calls.push({ path, method: o.method || 'GET', body, u });
+      if (path === '/act_1') return j({ name: 'Lyte', currency: 'USD', timezone_name: 'America/Chicago' });
+      if (path === '/act_1/campaigns' && !o.method) return j({ data: [{ id: 'c1', name: 'Referral', objective: 'OUTCOME_LEADS', status: 'ACTIVE', effective_status: 'ACTIVE', daily_budget: '5000' }, { id: 'c2', name: 'Old', status: 'PAUSED', effective_status: 'PAUSED', lifetime_budget: '100000' }] });
+      if (path === '/act_1/adsets' && !o.method) return j({ data: [{ id: 's1', name: 'Set 1', campaign_id: 'c1', status: 'ACTIVE', effective_status: 'ACTIVE', daily_budget: '2500', end_time: '0', optimization_goal: 'LANDING_PAGE_VIEWS' }] });
+      if (path === '/act_1/ads' && !o.method) return j({ data: [{ id: 'a1', name: 'Ad 1', adset_id: 's1', campaign_id: 'c1', status: 'ACTIVE', effective_status: 'ACTIVE', creative: { id: 'k1', title: 'Hi', body: 'Body' } }] });
+      if (path === '/act_1/insights') { const lvl = /level=(\w+)/.exec(u)[1]; return j({ data: [lvl === 'campaign' ? { campaign_id: 'c1', spend: '120.5', impressions: '9000', clicks: '300', inline_link_clicks: '200', actions: [{ action_type: 'lead', value: '10' }] } : lvl === 'adset' ? { adset_id: 's1', spend: '60', impressions: '4000', clicks: '100' } : { ad_id: 'a1', spend: '60', impressions: '4000', clicks: '100' }] }); }
+      if (/^\/(c|s|a)\d$/.test(path) && o.method === 'POST') return j({ success: true });
+      if (/^\/(c|s|a)\d$/.test(path)) return j({ name: 'Referral', status: body && body.status || 'PAUSED', effective_status: 'PAUSED', daily_budget: '7500' });
+      if (path === '/c1/copies') return j({ copied_campaign_id: 'c9' });
+      if (path === '/search') return j({ data: [{ key: '2420379', name: 'Kingsville', type: 'city', region: 'Texas', country_code: 'US' }] });
+      if (path === '/act_1/campaigns') return j({ id: 'nc1' });
+      if (path === '/act_1/adsets') return j({ id: 'ns1' });
+      if (path === '/act_1/adimages') return j({ images: { 'a.jpg': { hash: 'HASH1' } } });
+      if (path === '/act_1/adcreatives') return j({ id: 'nk1' });
+      if (path === '/act_1/ads') return j({ id: 'na1' });
+      return j({ error: { message: 'unexpected ' + path } }, false, 400);
+    };
+    return { f, calls };
+  };
+  const adsCfg = { accountId: '1', token: 'T' };
+
+  await t('ads: tree merges structure with results; budgets come back in dollars; lifetime budgets stay null for daily', async () => {
+    const { f } = mockMeta(); const tr = await adsApi.fetchTree(adsCfg, { since: '2026-10-01', until: '2026-10-07' }, f);
+    assert.strictEqual(tr.account.currency, 'USD'); const c = tr.campaigns[0];
+    assert.deepStrictEqual([c.id, c.dailyBudget, c.metrics.spend, c.metrics.conversions, c.metrics.clicks], ['c1', 50, 120.5, 10, 200]);
+    assert.strictEqual(tr.campaigns[1].dailyBudget, null); assert.strictEqual(tr.campaigns[1].lifetimeBudget, 1000);
+    assert.strictEqual(tr.adsets[0].dailyBudget, 25); assert.strictEqual(tr.adsets[0].endTime, null); assert.strictEqual(tr.ads[0].headline, 'Hi');
+  });
+
+  await t('ads: update sends minor units, status and names; copy is always paused; zero-decimal currencies; geo search', async () => {
+    const m = mockMeta();
+    const r = await adsApi.update(adsCfg, 'c1', 'campaign', { dailyBudget: 75, status: 'PAUSED', name: 'New name' }, 'USD', m.f);
+    const post = m.calls.find((c) => c.method === 'POST'); assert.strictEqual(post.body.daily_budget, '7500'); assert.strictEqual(post.body.status, 'PAUSED'); assert.strictEqual(post.body.name, 'New name'); assert.strictEqual(r.dailyBudget, 75);
+    assert.strictEqual(adsApi.toMinor(5000, 'JPY'), 5000); assert.strictEqual(adsApi.toMinor(19.99, 'USD'), 1999);
+    await adsApi.update(adsCfg, 's1', 'adset', { endTime: null }, 'USD', m.f); assert.strictEqual(m.calls.filter((c) => c.method === 'POST').pop().body.end_time, '0');
+    await assert.rejects(adsApi.update(adsCfg, 'c1', 'campaign', {}, 'USD', m.f), /Nothing to change/);
+    const cp = await adsApi.copyCampaign(adsCfg, 'c1', m.f); assert.strictEqual(cp.id, 'c9'); assert.strictEqual(m.calls.find((c) => c.path === '/c1/copies').body.status_option, 'PAUSED');
+    assert.strictEqual((await adsApi.geoSearch(adsCfg, 'Kingsville', m.f))[0].key, '2420379');
+    await assert.rejects(adsApi.update(adsCfg, 'c1', 'campaign', { status: 'PAUSED' }, 'USD', async () => j({ error: { message: 'perm', code: 200 } }, false, 403)), /ads_management/);
+  });
+
+  const campSpec = (o = {}) => ({ name: 'Kingsville Referral', objective: 'OUTCOME_TRAFFIC', dailyBudget: 20, special: 'NONE', audience: { cities: [{ key: '2420379', radius: 10 }], ageMin: 21, ageMax: 60 },
+    creative: { pageId: '111', message: 'Hello', headline: 'Fiber', link: 'https://lytefiber.com', cta: 'LEARN_MORE', mediaPath: '/m/a.jpg' }, ...o });
+  const rm = async () => ({ data: Buffer.from('x'), type: 'image/jpeg', name: 'a.jpg' });
+
+  await t('ads: campaign builder creates campaign + ad set + creative + ad, all PAUSED, with correct payloads', async () => {
+    const m = mockMeta(); const made = await adsApi.createCampaign(adsCfg, campSpec(), 'USD', m.f, rm);
+    assert.deepStrictEqual(made, { campaignId: 'nc1', adsetId: 'ns1', creativeId: 'nk1', adId: 'na1' });
+    const by = (p) => m.calls.find((c) => c.path === p && c.method === 'POST').body;
+    assert.strictEqual(by('/act_1/campaigns').status, 'PAUSED'); assert.strictEqual(by('/act_1/campaigns').special_ad_categories, '[]'); assert.strictEqual(by('/act_1/campaigns').is_adset_budget_sharing_enabled, 'false');
+    const as = by('/act_1/adsets'); assert.strictEqual(as.status, 'PAUSED'); assert.strictEqual(as.daily_budget, '2000'); assert.strictEqual(as.optimization_goal, 'LANDING_PAGE_VIEWS');
+    const tg = JSON.parse(as.targeting); assert.deepStrictEqual(tg.geo_locations.cities, [{ key: '2420379', radius: 10, distance_unit: 'mile' }]); assert.strictEqual(tg.age_min, 21);
+    const sp = JSON.parse(by('/act_1/adcreatives').object_story_spec); assert.strictEqual(sp.page_id, '111'); assert.strictEqual(sp.link_data.image_hash, 'HASH1'); assert.strictEqual(sp.link_data.call_to_action.type, 'LEARN_MORE');
+    assert.strictEqual(by('/act_1/ads').status, 'PAUSED'); assert.strictEqual(JSON.parse(by('/act_1/ads').creative).creative_id, 'nk1');
+  });
+
+  await t('ads: builder validates before touching Meta, and reports what exists if a later step fails', async () => {
+    const m = mockMeta();
+    await assert.rejects(adsApi.createCampaign(adsCfg, campSpec({ objective: 'OUTCOME_LEADS' }), 'USD', m.f, rm), /Pixel/);
+    await assert.rejects(adsApi.createCampaign(adsCfg, campSpec({ audience: {} }), 'USD', m.f, rm), /location/);
+    await assert.rejects(adsApi.createCampaign(adsCfg, campSpec({ dailyBudget: 0 }), 'USD', m.f, rm), /daily budget/);
+    assert.strictEqual(m.calls.length, 0);
+    const failing = async (u, o = {}) => (u.includes('/adcreatives') ? j({ error: { message: 'Bad image', code: 100 } }, false, 400) : m.f(u, o));
+    try { await adsApi.createCampaign(adsCfg, campSpec(), 'USD', failing, rm); assert.fail('should throw'); } catch (e) { assert.match(e.message, /Bad image/); assert.deepStrictEqual(e.created, { campaignId: 'nc1', adsetId: 'ns1' }); }
+    const hp = adsApi.targetingFor({ countries: ['US'], ageMin: 25, genders: [1] }, 'HOUSING'); assert.strictEqual(hp.age_min, 18); assert.strictEqual(hp.genders, undefined); assert.strictEqual(hp.targeting_automation.advantage_audience, 0);
+  });
+
+  await t('ads manager: activation needs confirmation, budget cap, audit trail and undo', async () => {
+    const { makeAds } = require('../src/adsmgr'); const S = store(open(':memory:')); const ws = S.addWorkspace('x'); const m = mockMeta(); let T = Date.parse('2026-10-20T12:00:00Z');
+    const api = { fetchTree: (c, r) => adsApi.fetchTree(c, r, m.f), update: (c, id, k, p, cur) => adsApi.update(c, id, k, p, cur, m.f), copyCampaign: (c, id) => adsApi.copyCampaign(c, id, m.f), geoSearch: (c, q) => adsApi.geoSearch(c, q, m.f), createCampaign: (c, s, cur, r) => adsApi.createCampaign(c, s, cur, m.f, r) };
+    const A = makeAds({ S, cfgFor: () => adsCfg, api, readMedia: rm, getCap: () => 100, now: () => T });
+    await assert.rejects(A.change(ws, 'c1', { status: 'PAUSED' }), /Refresh/);
+    await A.tree(ws, { since: '2026-10-01', until: '2026-10-07' });
+    await assert.rejects(A.change(ws, 'c2', { status: 'ACTIVE' }), /confirmation/);
+    await assert.rejects(A.change(ws, 'c1', { dailyBudget: 150 }), /limit of 100/);
+    await assert.rejects(A.change(ws, 'c2', { dailyBudget: 10 }), /no daily budget/);
+    await assert.rejects(A.change(ws, 'c1', { name: '  ' }), /name/);
+    const r = await A.change(ws, 'c1', { dailyBudget: 75, status: 'PAUSED' }); assert.strictEqual(r.dailyBudget, 75);
+    const log = A.audit(ws); assert.strictEqual(log[0].action, 'update'); assert.deepStrictEqual(log[0].before, { dailyBudget: 50, status: 'ACTIVE' }); assert.deepStrictEqual(log[0].after, { dailyBudget: 75, status: 'PAUSED' });
+    await assert.rejects(A.revert(ws, log[0].id), /confirmation/);
+    await A.revert(ws, log[0].id, { confirmedActivate: true }); assert.strictEqual(S.auditEntry(log[0].id).reverted, true);
+    assert.strictEqual(A.audit(ws)[0].action, 'revert'); await assert.rejects(A.revert(ws, log[0].id, { confirmedActivate: true }), /already/);
+    await assert.rejects(A.create(ws, campSpec({ dailyBudget: 500 })), /limit of 100/);
+    const made = await A.create(ws, campSpec({ dailyBudget: 30 })); assert.strictEqual(made.campaignId, 'nc1'); assert.strictEqual(A.audit(ws)[0].action, 'create');
+    await A.tree(ws, { since: '2026-10-01', until: '2026-10-07' }, true); const cp = await A.copy(ws, 'c1'); assert.strictEqual(cp.id, 'c9');
+    await A.tree(ws, { since: '2026-10-01', until: '2026-10-07' }, true); await assert.rejects(A.copy(ws, 's1'), /Only campaigns/);
+  });
+
+  await t('AI campaign draft: parses, clamps to the budget ceiling, drops unknown values', async () => {
+    const reply = '{"name":"Kingsville Referral","objective":"OUTCOME_WEIRD","dailyBudget":9999,"locations":["Kingsville, TX"],"radiusMiles":12,"ageMin":15,"ageMax":70,"headline":"' + 'x'.repeat(60) + '","message":"Hi","description":"d","cta":"BOGUS","special":"NONE","notes":"n"}';
+    const r = await ai.campaignDraft({ key: 'k', brief: 'Referral promo in Kingsville', cap: 100, ctas: ['LEARN_MORE', 'SIGN_UP'] }, async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Here you go: ' + reply }] }) }));
+    assert.deepStrictEqual([r.objective, r.dailyBudget, r.ageMin, r.ageMax, r.headline.length, r.cta, r.radiusMiles], ['OUTCOME_TRAFFIC', 100, 18, 65, 40, 'LEARN_MORE', 12]);
+    await assert.rejects(ai.campaignDraft({ key: 'k', brief: 'x' }, async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'no json' }] }) })), /usable draft/);
+    await assert.rejects(ai.campaignDraft({ key: 'k', brief: '' }), /Describe/);
+  });
+
   console.log(`\n${n} passed`);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -77,6 +77,6 @@ module.exports = {
     }
     return rows;
   },
-  API_VERSION,
+  API_VERSION, DEFAULT_RESULTS,
   _test: { toRow, sumActions, actAccount, ver }
 };

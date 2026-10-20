@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('lumen', {
   setGoogleClient: call('google:setClient'), googleSignIn: call('google:signIn'), googleSignOut: call('google:signOut'),
   analytics: call('analytics'),
   posts: call('posts'), savePost: call('post:save'), schedulePost: call('post:schedule'), publishPostNow: call('post:publishNow'), unschedulePost: call('post:unschedule'), deletePost: call('post:delete'),
+  adsTree: call('ads:tree'), adsChange: call('ads:change'), adsCopy: call('ads:copy'), adsCreate: call('ads:create'), adsGeo: call('ads:geo'), adsAudit: call('ads:audit'), adsRevert: call('ads:revert'), adsDefaults: call('ads:defaults'), adsAiDraft: call('ads:aiDraft'), setBudgetCap: call('settings:budgetCap'),
   pickMedia: call('media:pick'), mediaThumb: call('media:thumb'), draftCaptions: call('ai:draft'),
   onPostsChanged: (fn) => ipcRenderer.on('lumen:posts-changed', () => fn()),
   ask: call('ask'), open: call('open')

@@ -60,3 +60,16 @@ Post and ad management (approval queue, paused drafts), social calendar, SFMC.
 
 ## Next
 Ad management (approval queue, paused drafts, budget/pause), videos/Reels/Stories, carousels, post insights, SFMC.
+
+## 0.4.0 (date range, rename fix, ads manager)
+- Date range: shared picker (presets + custom) on Overview, Analytics and Ads; `localToday()` is the local calendar day; `summary()` returns `earliestData`.
+- Workspace rename: Electron has no `window.prompt()`, so rename is now inline in Settings.
+- Ads manager (`src/ads.js` API calls, `src/adsmgr.js` rules): campaign/ad set/ad tree with insights, on/off, rename, daily budget, end date, duplicate (paused), archive, Activity log with Undo, New campaign wizard (Traffic, Leads with Pixel, Awareness) with AI draft.
+- Safety: nothing is created active; turning on needs confirmation; daily budget ceiling (Settings, default 500); typed confirm for large budget jumps; every change logged with before/after.
+- Needs the Meta token to have `ads_management`, and the system user to have "Manage campaigns" on the ad account.
+- Not supported: lifetime budgets, bid caps, saved audiences, lead forms, video/carousel creatives, other objectives.
+
+## Unverified in 0.4.0
+- All live Meta write calls (campaign/ad set/creative/ad creation payloads, `/copies`, adimages, status/budget updates) are tested only against mocks. Try a throwaway paused campaign first.
+- Zero-decimal currency list (JPY, KRW, VND, CLP, PYG, ISK, UGX) is from memory.
+- UI verified in a mocked browser only, not in Electron on Windows.

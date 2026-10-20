@@ -18,6 +18,18 @@ window.GUIDE = [
       ['Find the ad account ID', 'In Ads Manager the URL contains act=1234567890. The number is the ID. Paste just the number.'],
       ['Later, for posting and ad changes', 'Also tick ads_management, pages_manage_posts, pages_read_engagement, instagram_basic, instagram_content_publish and business_management, and assign your Pages and Instagram account to the system user. Reporting works without them.']
     ] },
+  { id: 'ads', title: 'Managing ads', intro: 'The Ads tab lists your campaigns, ad sets and ads with results, and lets you change them without opening Meta’s Ads Manager.',
+    steps: [
+      ['Permission', 'Reporting only needs ads_read. Changing things needs ads_management on the token, and the system user must have Manage campaigns (full control) on the ad account. Business Settings → System users → Add assets → Ad accounts → turn on Manage campaigns, then generate a new token with ads_management ticked. Then Sources → Edit on Meta Ads and paste it.', 'https://business.facebook.com/settings/system-users'],
+      ['Reading the table', 'Click the arrow beside a campaign to see its ad sets and ads. The numbers follow the date range at the top. Results counts leads and purchases the way Overview does.'],
+      ['Turn on / pause', 'Use the switch. Turning something on shows you how much it can spend per day and asks you to confirm.'],
+      ['Budgets', 'Use the ⋯ menu → Edit daily budget. Large jumps ask you to type the new amount. Lumen refuses anything above your daily limit in Settings → Ad safety. Campaigns with a lifetime budget are edited in Ads Manager.'],
+      ['New campaign', 'New campaign builds a campaign, one ad set and one ad, all paused. Describe it to the AI to fill the form, then check every field. Pick locations with the search box (cities use the radius). Lead campaigns need your Meta Pixel ID; otherwise use Traffic.'],
+      ['Review, then turn on', 'Open the new campaign in Ads Manager if you want to see Meta’s preview, then switch it on in Lumen. Meta may hold it in review for a while before it delivers.'],
+      ['Undo and history', 'Every change is logged on the Activity tab with what it was before. Status, name, budget and end-date changes can be undone with one click.'],
+      ['Duplicate and archive', 'Duplicate makes a paused copy of a campaign. Archive stops delivery and hides it; restoring is done in Ads Manager.'],
+      ['Not included yet', 'Lifetime budgets, bid caps, custom audiences, lead forms, video and carousel ads, catalog sales, and editing targeting on existing ad sets. Use Ads Manager for those.']
+    ] },
   { id: 'posting', title: 'Posting to Facebook & Instagram', intro: 'The Calendar tab writes, schedules and publishes posts. It needs a token that is allowed to post, which is a bigger permission than the reporting token.',
     steps: [
       ['What you need', 'A Facebook Page you manage, and for Instagram a professional (Business or Creator) account linked to that Page.'],

@@ -138,4 +138,30 @@ async function draft({ brief, platforms = ['facebook'], tone = 'friendly and cle
   return [text.trim()];
 }
 
-module.exports = { ask, draft, complete, compact, detect, runCli, PROVIDERS, DEFAULT_MODEL };
+
+// A starting point for a campaign, from a plain-English brief. Nothing is created; the person reviews every field first.
+async function campaignDraft({ brief, cap = 500, workspace, ctas = [], ...cfg }, fetchImpl = fetch, deps = {}) {
+  if (!String(brief || '').trim()) throw new Error('Describe the campaign first.');
+  const system = [
+    `You help plan a Meta (Facebook/Instagram) ad campaign for ${workspace || 'a local business'}.`,
+    'Use only facts in the brief. Never invent prices, offers, speeds, dates or guarantees. If something is missing, leave it empty rather than guessing.',
+    'Reply with ONLY one JSON object, no other text, with these keys:',
+    '"name" (short campaign name), "objective" (one of OUTCOME_TRAFFIC, OUTCOME_LEADS, OUTCOME_AWARENESS), "dailyBudget" (number, in dollars; never above ' + cap + '),',
+    '"locations" (array of place names such as "Kingsville, TX"), "radiusMiles" (number, default 10), "ageMin" (18-65), "ageMax" (18-65),',
+    '"headline" (max 40 characters), "message" (primary text, max 125 characters), "description" (max 30 characters),',
+    `"cta" (one of ${ctas.join(', ') || 'LEARN_MORE, SIGN_UP, GET_QUOTE, CONTACT_US'}), "special" (NONE unless the ad is about housing, credit, employment or politics), "notes" (one or two sentences on why).`,
+    'Do not use tools, read files or run commands.'
+  ].join('\n');
+  const text = await complete({ ...cfg, system, messages: [{ role: 'user', content: String(brief) }], maxTokens: 1500 }, fetchImpl, deps);
+  const m = text.match(/\{[\s\S]*\}/); let o;
+  try { o = JSON.parse(m ? m[0] : text); } catch (_) { throw new Error('The AI did not return a usable draft. Try again with a bit more detail.'); }
+  const str = (v, n) => String(v || '').slice(0, n), numIn = (v, lo, hi, d) => { const x = +v; return x >= lo && x <= hi ? x : d; };
+  return {
+    name: str(o.name, 80), objective: ['OUTCOME_TRAFFIC', 'OUTCOME_LEADS', 'OUTCOME_AWARENESS'].includes(o.objective) ? o.objective : 'OUTCOME_TRAFFIC',
+    dailyBudget: Math.min(numIn(o.dailyBudget, 1, 1e6, 10), cap), locations: (Array.isArray(o.locations) ? o.locations : []).map((x) => str(x, 80)).filter(Boolean).slice(0, 5), radiusMiles: numIn(o.radiusMiles, 1, 50, 10),
+    ageMin: numIn(o.ageMin, 18, 65, 18), ageMax: numIn(o.ageMax, 18, 65, 65), headline: str(o.headline, 40), message: str(o.message, 125), description: str(o.description, 30),
+    cta: ctas.includes(o.cta) ? o.cta : 'LEARN_MORE', special: ['NONE', 'HOUSING', 'CREDIT', 'EMPLOYMENT', 'ISSUES_ELECTIONS_POLITICS'].includes(o.special) ? o.special : 'NONE', notes: str(o.notes, 300)
+  };
+}
+
+module.exports = { ask, draft, campaignDraft, complete, compact, detect, runCli, PROVIDERS, DEFAULT_MODEL };

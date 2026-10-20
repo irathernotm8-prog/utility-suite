@@ -32,6 +32,10 @@ function open(file) {
       media_path TEXT NOT NULL DEFAULT '', media_url TEXT NOT NULL DEFAULT '', platforms TEXT NOT NULL DEFAULT '[]',
       scheduled_at TEXT, status TEXT NOT NULL DEFAULT 'draft', results TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS posts_ws ON posts (workspace_id, scheduled_at);
+    CREATE TABLE IF NOT EXISTS audit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, workspace_id TEXT NOT NULL, action TEXT NOT NULL, kind TEXT, target_id TEXT, target_name TEXT,
+      before TEXT, after TEXT, ok INTEGER NOT NULL DEFAULT 1, error TEXT, reverted INTEGER NOT NULL DEFAULT 0);
+    CREATE INDEX IF NOT EXISTS audit_ws ON audit (workspace_id, id);
     CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT);
   `);
   return db;
@@ -41,9 +45,12 @@ function open(file) {
 const AD_SOURCES = ['demo', 'meta', 'google-ads'];
 const uid = (p) => p + '_' + Math.random().toString(36).slice(2, 10);
 const iso = (d) => d.toISOString().slice(0, 10);
+// The person's own calendar day (iso() is UTC, which is already "tomorrow" on a US evening).
+const localToday = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
 const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5);
 
+const auditRow = (r) => ({ ...r, ok: !!r.ok, reverted: !!r.reverted, before: r.before ? JSON.parse(r.before) : null, after: r.after ? JSON.parse(r.after) : null });
 const fromRow = (r) => ({ ...r, platforms: JSON.parse(r.platforms), results: JSON.parse(r.results) });
 
 function store(db) {
@@ -61,7 +68,7 @@ function store(db) {
     renameWorkspace(id, name) { run('UPDATE workspaces SET name=? WHERE id=?', name, id); },
     removeWorkspace(id) {
       db.exec('BEGIN');
-      try { run('DELETE FROM posts WHERE workspace_id=?', id); run('DELETE FROM series WHERE workspace_id=?', id); run('DELETE FROM snapshots WHERE workspace_id=?', id); run('DELETE FROM facts WHERE workspace_id=?', id); run('DELETE FROM connections WHERE workspace_id=?', id); run('DELETE FROM workspaces WHERE id=?', id); db.exec('COMMIT'); }
+      try { run('DELETE FROM audit WHERE workspace_id=?', id); run('DELETE FROM posts WHERE workspace_id=?', id); run('DELETE FROM series WHERE workspace_id=?', id); run('DELETE FROM snapshots WHERE workspace_id=?', id); run('DELETE FROM facts WHERE workspace_id=?', id); run('DELETE FROM connections WHERE workspace_id=?', id); run('DELETE FROM workspaces WHERE id=?', id); db.exec('COMMIT'); }
       catch (e) { db.exec('ROLLBACK'); throw e; }
     },
 
@@ -124,6 +131,16 @@ function store(db) {
     snapshots: (ws, source) => q('SELECT * FROM snapshots WHERE workspace_id=?' + (source ? ' AND source=?' : '') + ' ORDER BY name', ...(source ? [ws, source] : [ws])).map((r) => ({ ...r, payload: JSON.parse(r.payload) })),
     clearSnapshots(connectionId) { run('DELETE FROM snapshots WHERE connection_id=?', connectionId); },
 
+    // ---- ad-account changes made through Lumen (every write is logged here) ----
+    addAudit(ws, e) {
+      const r = run('INSERT INTO audit (ts,workspace_id,action,kind,target_id,target_name,before,after,ok,error) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        new Date().toISOString(), ws, e.action, e.kind || null, e.target_id || null, e.target_name || null, e.before ? JSON.stringify(e.before) : null, e.after ? JSON.stringify(e.after) : null, e.ok === false ? 0 : 1, e.error || null);
+      return Number(r.lastInsertRowid);
+    },
+    audit: (ws, limit = 200) => q('SELECT * FROM audit WHERE workspace_id=? ORDER BY id DESC LIMIT ?', ws, limit).map(auditRow),
+    auditEntry: (id) => { const r = one('SELECT * FROM audit WHERE id=?', id); return r && auditRow(r); },
+    markReverted(id) { run('UPDATE audit SET reverted=1 WHERE id=?', id); },
+
     // ---- social posts / calendar ----
     posts: (ws) => q('SELECT * FROM posts WHERE workspace_id=? ORDER BY COALESCE(scheduled_at, created_at)', ws).map(fromRow),
     post: (id) => { const r = one('SELECT * FROM posts WHERE id=?', id); return r && fromRow(r); },
@@ -155,9 +172,10 @@ function store(db) {
         FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ?${inS} GROUP BY source, campaign_id ORDER BY spend DESC`, ws, from, to, ...sources);
       const bySource = q(`SELECT source, SUM(spend) spend, SUM(conversions) conversions FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ?${inS} GROUP BY source`, ws, from, to, ...sources);
       const last = one('SELECT MAX(date) d FROM facts WHERE workspace_id=?' + inS.replace('AND source','AND source'), ws, ...sources);
-      return { from, to, span, current: tot(from, to), previous: tot(prevFrom, prevTo), series, campaigns, bySource, latestData: last && last.d };
+      const firstRow = one('SELECT MIN(date) d FROM facts WHERE workspace_id=?' + inS, ws, ...sources);
+      return { from, to, span, current: tot(from, to), previous: tot(prevFrom, prevTo), series, campaigns, bySource, latestData: last && last.d, earliestData: firstRow && firstRow.d };
     }
   };
 }
 
-module.exports = { open, store, iso, addDays, daysBetween, AD_SOURCES };
+module.exports = { open, store, iso, localToday, addDays, daysBetween, AD_SOURCES };

@@ -2,17 +2,19 @@
 const { app, BrowserWindow, ipcMain, nativeTheme, nativeImage, dialog, safeStorage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { open, store, iso, addDays } = require('./db');
+const { open, store, iso, localToday, addDays } = require('./db');
 const connectors = require('./connectors');
 const ai = require('./ai');
 const gauth = require('./google-auth');
 const publisher = require('./publisher');
 const { makePosts } = require('./posts');
+const adsApi = require('./ads');
+const { makeAds } = require('./adsmgr');
 
 if (process.env.LUMEN_USER_DATA) app.setPath('userData', process.env.LUMEN_USER_DATA);
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let win, S, P, ticking = false;
+let win, S, P, A, ticking = false;
 const isMac = process.platform === 'darwin';
 
 // ---- secrets: encrypted with the OS keychain via safeStorage; the renderer only ever learns "set / not set" ----
@@ -64,6 +66,18 @@ const pub = {
   checkFacebook: (id, c) => publisher.checkFacebook(id, c, fetch),
   publishNow: (p, c, pl) => publisher.publishNow(p, c, pl, fetch, { readMedia })
 };
+function adsCfgFor(ws) {
+  const c = S.connections(ws).find((x) => x.kind === 'meta');
+  if (!c) throw new Error('Connect Meta Ads in Sources first.');
+  return plainConfig(c);
+}
+const adsBound = {
+  fetchTree: (c, r) => adsApi.fetchTree(c, r, fetch),
+  update: (c, id, k, p, cur) => adsApi.update(c, id, k, p, cur, fetch),
+  copyCampaign: (c, id) => adsApi.copyCampaign(c, id, fetch),
+  geoSearch: (c, q) => adsApi.geoSearch(c, q, fetch),
+  createCampaign: (c, spec, cur, rm) => adsApi.createCampaign(c, spec, cur, fetch, rm)
+};
 async function runTick() {
   if (ticking || !P) return; ticking = true;
   try { const changed = await P.tick(); if (changed.length && win && !win.isDestroyed()) win.webContents.send('lumen:posts-changed'); }
@@ -75,7 +89,7 @@ async function syncConnection(id, days = 90) {
   const c = S.connection(id);
   if (!c) throw new Error('Connection not found.');
   const impl = connectors.get(c.kind);
-  const until = iso(new Date()), since = addDays(until, -(days - 1));
+  const until = localToday(), since = addDays(until, -(days - 1));
   try {
     let res;
     if (c.kind === 'demo') res = impl.generate({ days, end: until });
@@ -135,7 +149,7 @@ function registerIpc() {
         ready: Object.values(connectors.ready).filter((c) => c.kind !== 'demo').map((c) => ({ kind: c.kind, name: c.name, fields: c.fields, category: c.category || 'ads', google: !!c.google })),
         planned: connectors.planned
       },
-      today: iso(new Date())
+      today: localToday(), budgetCap: S.getSetting('budgetCap', 500)
     };
   });
   h('setActive', (id) => S.setSetting('activeWorkspace', id));
@@ -189,6 +203,26 @@ function registerIpc() {
     if (win) { win.show(); win.focus(); }
   });
   h('google:signOut', () => { S.setSetting('secret.google.refresh', ''); });
+
+  // Ads manager: every change goes through adsmgr.js (confirmations, budget ceiling, audit log)
+  h('ads:tree', async (ws, from, to, force) => ({ ...(await A.tree(ws, { since: from, until: to }, force)), cap: A.cap(), options: { objectives: Object.entries(adsApi.OBJECTIVES).map(([id, o]) => ({ id, label: o.label, needsPixel: !!o.needsPixel })), ctas: adsApi.CTAS, special: adsApi.SPECIAL } }));
+  h('ads:change', (ws, id, patch, opts) => A.change(ws, id, patch, { confirmedActivate: !!(opts && opts.confirmedActivate) }));
+  h('ads:copy', (ws, id) => A.copy(ws, id));
+  h('ads:create', (ws, spec) => A.create(ws, spec));
+  h('ads:geo', (ws, q) => A.geo(ws, String(q || '').trim()));
+  h('ads:audit', (ws) => A.audit(ws));
+  h('ads:revert', (ws, id, opts) => A.revert(ws, id, { confirmedActivate: !!(opts && opts.confirmedActivate) }));
+  h('ads:defaults', async (ws) => {
+    const c = S.connections(ws).find((x) => x.kind === 'meta-pages'); if (!c) return {};
+    const out = { pageId: c.config.pageId };
+    try { const ctx = await publisher.pageContext(plainConfig(c), fetch); out.instagramUserId = ctx.igId; out.pageName = ctx.name; } catch (_) {}
+    return out;
+  });
+  h('ads:aiDraft', (ws, brief) => ai.campaignDraft({
+    provider: S.getSetting('aiProvider', 'anthropic'), key: getKey('anthropic'), model: S.getSetting('model', ai.DEFAULT_MODEL), cliModel: S.getSetting('cliModel', ''),
+    brief, cap: A.cap(), ctas: adsApi.CTAS, workspace: (S.workspaces().find((w) => w.id === ws) || {}).name
+  }));
+  h('settings:budgetCap', (v) => { const n = +v; if (!(n > 0 && n <= 100000)) throw new Error('Enter a daily limit above zero.'); S.setSetting('budgetCap', n); });
 
   // Posts + calendar
   h('posts', (ws) => S.posts(ws));
@@ -251,6 +285,7 @@ app.whenReady().then(() => {
   applyTheme(S.getSetting('theme', 'system'));
   seedDemo();
   P = makePosts({ S, cfgFor, pub });
+  A = makeAds({ S, cfgFor: adsCfgFor, api: adsBound, readMedia, getCap: () => S.getSetting('budgetCap', 500) });
   registerIpc();
   createWindow();
   setTimeout(runTick, 4000); setInterval(runTick, 60 * 1000);
