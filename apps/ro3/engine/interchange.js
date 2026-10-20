@@ -54,7 +54,12 @@ function timecode(frames, R, df) {
 
 // ---------- project helpers (same rules as timeline.js) ----------
 
-const speedOf = c => (c.kind === 'image' ? 1 : Math.min(8, Math.max(0.1, Number(c.speed) || 1)));
+const speedOf = c => {
+  if (c.kind === 'image') return 1;
+  // speed ramps hand off as their average speed (the receiving app gets the right length)
+  if (Array.isArray(c.ramp) && c.ramp.length) { const out = c.ramp.reduce((a, [l, sp]) => a + l / sp, 0); return out > 0 ? Math.min(8, Math.max(0.1, ((Number(c.out) || 0) - (Number(c.in) || 0)) / out)) : 1; }
+  return Math.min(8, Math.max(0.1, Number(c.speed) || 1));
+};
 const clipLen = c => Math.max(0, (Number(c.out) || 0) - (Number(c.in) || 0)) / speedOf(c);
 const hasTransition = c => !!(c.transition && c.transition.type && c.transition.type !== 'none');
 /** Transition length between prev and next, clamped exactly like timeline.js. */
@@ -107,6 +112,11 @@ const srcAt = (e, t) => e.srcF + (t - e.startF) * e.speed;
 
 /** Greedy lane assignment so overlapping connected clips don't collide. Returns lane index per item (0-based). */
 function assignLanes(spans) {
+  // keep the editor's own tracks when every item has one and nothing overlaps on a track
+  if (spans.length && spans.every(sp => Number.isInteger(sp[2]))) {
+    const ok = spans.every((a, i) => spans.every((b, j) => i === j || a[2] !== b[2] || a[1] <= b[0] || b[1] <= a[0]));
+    if (ok) { const ids = [...new Set(spans.map(sp => sp[2]))].sort((a, b) => a - b); return spans.map(sp => ids.indexOf(sp[2])); }
+  }
   const ends = [];
   return spans.map(([s, e]) => {
     let lane = ends.findIndex(end => end <= s);
@@ -282,7 +292,7 @@ function toFCPXML(project, opts = {}) {
   const indent = (s, pad) => s.split('\n').map(l => pad + l).join('\n');
   const element = (open, kids, tag) => (kids.length ? `${open}>\n${kids.map(k => indent(k, '  ')).join('\n')}\n</${tag}>` : `${open}/>`);
 
-  const ovLanes = assignLanes(overlays.map(x => [x.startF, x.startF + x.lenF]));
+  const ovLanes = assignLanes(overlays.map(x => [x.startF, x.startF + x.lenF, x.o.track]));
   overlays.forEach((x, k) => {
     const o = x.o, lane = ovLanes[k] + 1;
     const parent = parentAt(x.startF);
@@ -314,7 +324,7 @@ function toFCPXML(project, opts = {}) {
     parent.anchors.push(element(`<asset-clip ref="${ref}" lane="${lane}" name="${xmlEsc(nameOf(o))}" offset="${offset}" start="${T(x.srcF)}" duration="${T(x.lenF)}"${srcEnable}`, kids, 'asset-clip'));
   });
 
-  const muLanes = assignLanes(music.map(x => [x.startF, x.startF + x.lenF]));
+  const muLanes = assignLanes(music.map(x => [x.startF, x.startF + x.lenF, x.o.track]));
   music.forEach((x, k) => {
     const a = x.o;
     if (!a.path) return;
@@ -416,7 +426,7 @@ function toOTIO(project, opts = {}) {
 
   // Connected lanes: one track per lane, gaps fill the space between items.
   const laneTracks = (list, kind, prefix, makeItem) => {
-    const lanes = assignLanes(list.map(x => [x.startF, x.startF + x.lenF]));
+    const lanes = assignLanes(list.map(x => [x.startF, x.startF + x.lenF, x.o && x.o.track]));
     const out = [];
     list.forEach((x, k) => {
       const item = makeItem(x);

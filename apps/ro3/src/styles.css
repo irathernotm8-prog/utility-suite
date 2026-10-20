@@ -62,8 +62,8 @@ h2, h3, h4, p { margin: 0; }
 .bm-dot { fill: var(--green); }
 .brand-name { font-weight: 800; font-size: 15px; letter-spacing: .06em; }
 .tabs {
-  display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel);
-  border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; width: 456px;
+  display: grid; grid-template-columns: repeat(4, 1fr); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; width: 580px;
 }
 .tab {
   display: flex; align-items: center; justify-content: center; gap: 8px; height: 32px; border: 0; border-radius: 7px;
@@ -572,3 +572,29 @@ canvas.meter { width: 150px; height: 14px; border-radius: 3px; background: #0508
 .tr-groups h4 { margin: 10px 0 6px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .ws-video { grid-template-rows: minmax(0, 1fr) 360px; }
 @media (max-height: 820px) { .ws-video { grid-template-rows: minmax(0, 1fr) 320px; } .tl-head.captions, .tl-track.captions { height: 28px; } }
+
+/* ---------- 1.4: multi-track timeline ---------- */
+.tl-body { overflow-y: auto; align-items: start; }
+.tl-scroll { overflow-y: hidden; }
+.tl-head.overlay, .tl-head.audio, .tl-head.video { flex-direction: column; align-items: stretch; padding: 0; gap: 0; }
+.tl-head .trk { display: flex; align-items: center; gap: 2px; padding: 0 4px 0 8px; border-bottom: 1px solid rgba(255,255,255,.04); box-sizing: border-box; }
+.tl-head .trk:last-child { border-bottom: 0; }
+.trk-name { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: var(--muted); font: 700 11.5px/1 inherit; font-family: inherit; padding: 4px 2px; border-radius: 4px; cursor: pointer; display: flex; align-items: baseline; gap: 3px; }
+.trk-name small { font-size: 9.5px; color: var(--faint); font-weight: 600; }
+.trk-name:hover { color: var(--text, #e4ece7); background: rgba(255,255,255,.05); }
+.trk-b { width: 20px; height: 20px; border-radius: 4px; border: 0; background: none; color: var(--faint); display: grid; place-items: center; cursor: pointer; padding: 0; font: 700 10px/1 inherit; font-family: inherit; }
+.trk-b .ico { width: 13px; height: 13px; }
+.trk-b:hover { background: rgba(255,255,255,.07); color: var(--muted); }
+.trk-b.on { color: #0b0f0d; background: #f2c14e; }
+.trk-b.on[data-k="solo"] { background: #2fd67f; }
+.trk-b.on[data-k="lock"] { background: rgba(255,255,255,.18); color: #e4ece7; }
+.tl-track.overlay, .tl-track.audio { overflow: visible; }
+.tl-row { position: absolute; left: 0; right: 0; border-bottom: 1px solid rgba(255,255,255,.04); box-sizing: border-box; }
+.tl-row.off { background: repeating-linear-gradient(135deg, rgba(255,255,255,.025) 0 6px, transparent 6px 12px); }
+.tl-row.locked { background: rgba(255,255,255,.03); }
+.tl-track .drop-hint { pointer-events: none; }
+.clip.hidden-track { opacity: .38; }
+.clip.locked { cursor: not-allowed; }
+.clip.locked .trim { display: none; }
+.kf-badge { margin-left: 6px; color: #f2c14e; font-size: 9px; }
+.ramp-graph { display: block; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 6px; cursor: crosshair; touch-action: none; }

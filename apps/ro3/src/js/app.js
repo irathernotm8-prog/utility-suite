@@ -1,7 +1,7 @@
 // App shell: tabs, menu routing, file opening, crash recovery, startup.
 (async () => {
   FORMATS = await ro3.formats();
-  const modules = { photo: PhotoEditor, video: VideoEditor, convert: QuickConvert };
+  const modules = { photo: PhotoEditor, video: VideoEditor, vector: VectorEditor, convert: QuickConvert };
   let active = 'photo';
 
   // Surface unexpected errors instead of failing silently.
@@ -14,6 +14,7 @@
   modules.convert.init($('#view-convert'));
   modules.photo.init($('#view-photo'));
   modules.video.init($('#view-video'));
+  modules.vector.init($('#view-vector'));
 
   function show(tab) {
     if (!modules[tab]) return;
@@ -31,6 +32,7 @@
   function openPath(p) {
     const ext = (p.split('.').pop() || '').toLowerCase();
     if (ext === 'ro3v') { show('video'); return VideoEditor.openProjectPath(p); }
+    if (['ro3d', 'svg', 'ai', 'pdf', 'eps'].includes(ext)) { show('vector'); return VectorEditor.openPath(p); }
     if (ext === 'ro3' || ext === 'ora' || FORMATS.IMAGE_IN.includes(ext)) { show('photo'); return PhotoEditor.openPath(p, false); }
     if (FORMATS.VIDEO_IN.includes(ext) || FORMATS.AUDIO_IN.includes(ext)) { show('video'); return VideoEditor.importPaths([p]); }
     toast(`RO3 can't open .${ext} files.`, 'error');
@@ -39,7 +41,7 @@
   window.RO3App = {
     show, openPath,
     get active() { return active; },
-    unsaved: () => [...PhotoEditor.unsaved(), ...VideoEditor.unsaved()],
+    unsaved: () => [...PhotoEditor.unsaved(), ...VideoEditor.unsaved(), ...VectorEditor.unsaved()],
   };
 
   /** Command palette (Ctrl/Cmd+K): every menu command plus the tools of the open workspace, fuzzy-searched. */
@@ -89,6 +91,7 @@
     if (document.querySelector('.modal-backdrop')) return;
     if (cmd.startsWith('photo:')) { if (active !== 'photo') show('photo'); return PhotoEditor.menu(cmd); }
     if (cmd.startsWith('video:')) { if (active !== 'video') show('video'); return VideoEditor.menu(cmd); }
+    if (cmd.startsWith('vector:')) { if (active !== 'vector') show('vector'); return VectorEditor.menu(cmd); }
     modules[active].menu && modules[active].menu(cmd);
   }
 

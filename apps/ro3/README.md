@@ -37,6 +37,28 @@ The app isn't code-signed, which is fine for personal use:
 
 ## What's inside
 
+**New in 1.4 — Vector (replaces Illustrator)**
+- A fourth workspace (Ctrl/Cmd+4) for logos, social graphics, print pieces and icons. Everything stays as editable vector paths.
+- **Documents & artboards:** presets for social, screen and print (px, pt, in, mm), multiple artboards (add, duplicate with artwork, rename, resize, reorder, fit to artwork), infinite pasteboard, rulers, guides, grid and magenta smart guides.
+- **Drawing:** Pen (with add/delete/convert anchor), Curvature, Pencil, Paintbrush, Eraser, Scissors, Knife, Rectangle (live rounded corners), Ellipse, Polygon, Star, Line, Arc, Spiral — click with a shape tool for exact sizes — plus Rotate, Reflect and Scale tools.
+- **Selection & arranging:** Selection and Direct Selection, Lasso, groups (double-click to isolate), lock/hide, arrange, align and distribute (to selection, artboard or key object), Transform Again, Alt-drag duplicate, Paste in Front / Back / in Place.
+- **Appearance:** colour picker (RGB, HSB, CMYK, hex, screen eyedropper), linear and radial gradients with a Gradient tool, opacity and blend modes, full stroke options (weight, caps, joins, dashes, inside/outside alignment, arrowheads), Eyedropper, swatches and brand palettes that carry across documents.
+- **Pathfinder & paths:** Unite, Minus Front, Intersect, Exclude, Divide, Trim, Merge, Crop, Minus Back; Offset Path, Outline Stroke, Simplify, Smooth, Join, compound paths (Ctrl/Cmd+8) and clipping masks (Ctrl/Cmd+7).
+- **Type:** point, area and type-on-a-path, edited right on the canvas; any installed font or a loaded TTF/OTF/WOFF; **Create Outlines** (Ctrl/Cmd+Shift+O). Fonts you use are embedded in the `.ro3d` file.
+- **Layers** panel with nested groups, plus Artboards and History panels.
+- **Images:** Place photos, and **Image Trace** (six presets with a live preview) to turn a logo or sketch into paths.
+- **Open:** `.ai` (any Illustrator file saved with PDF compatibility — the default), `.pdf` and `.svg`, keeping layers, colours, gradients, clipping and images; text comes in as exact outlines or as editable text.
+- **Export:** vector **PDF** (every artboard a page at its own size), **SVG** (outlined or live text, embedded fonts, minified), PNG / JPG / WebP / AVIF / TIFF at any scale or ppi with transparency, and **Export for Screens** (every artboard at 1×/2×/3× in one go). Save editable work as `.ro3d`.
+- Illustrator's shortcuts throughout (V, A, P, T, M, L, X, Shift+X, D, Ctrl/Cmd+G, Ctrl/Cmd+Shift+O …), 120 undo steps and autosave with recovery.
+
+**New in 1.4 — Video**
+- **Auto-captions (speech to text):** Timeline › Auto-caption… listens to the whole mix and writes timed captions, split into readable lines (standard, short or punchy single-line "social" style). It runs OpenAI's Whisper **on this computer** — nothing is uploaded. Choose Fast, Balanced or Accurate; the model downloads once per level (about 40 / 80 / 250 MB), then works offline. 20+ languages, or translate speech into English captions. Uses the GPU where available.
+- **Real tracks:** V1 is the storyline; overlays and titles sit on **V2, V3…** (higher tracks draw on top) and music / voice-over on **A2, A3…**. Drag items up and down between tracks (drag above the top track to make a new one). Track headers have **hide**, **mute**, **solo** and **lock**; click a track's name for its **volume**, add or delete. A1 is the storyline clips' own sound.
+- **Motion on storyline clips:** position, scale, rotation and opacity (Effect Controls → Motion style), all **keyframable** with the same curves as overlays, plus **volume keyframes** for rides and fades. Splitting a clip keeps its animation.
+- **Speed ramps:** smooth speed changes across a clip — presets (slow-mo moment, speed-through, ease into slow motion, hit-and-hold) or drag points on the ramp graph. Rendered frame-accurately; the ramped clip's own sound is silenced.
+- **Ripple trim** Q / W (trim the clip under the playhead to the playhead; the rest of the edit closes up).
+- Export and Render preview now run to the end of the last item on any track (holding on black after the last clip), like Premiere. FCPXML / OTIO hand-off keeps your tracks.
+
 **New in 1.3 — Photo**
 - **Filter galleries**, all with a live on-canvas preview (big images preview at reduced size and render full size on Apply), heavy maths running in the background:
   - *Blur:* Gaussian, Box, Motion, Radial (spin/zoom, click to place the centre), Tilt-Shift, Iris, Surface.
@@ -114,11 +136,11 @@ The app isn't code-signed, which is fine for personal use:
 
 **Video**
 - Import video, audio and images; MKV/AVI/WMV etc. get an automatic preview copy so they play in the viewer (export always uses the originals).
-- **Overlay track:** picture-in-picture video, logos and still images. Drag them in the viewer to place them (they snap to the thirds), and set size, opacity and fades. Overlapping overlays stack into lanes.
+- **Overlay tracks:** picture-in-picture video, logos and still images. Drag them in the viewer to place them (they snap to the thirds), and set size, opacity and fades.
 - **Titles:** lower third, centered title, caption and headline presets. You can edit the text, font, weight, color, background box, accent bar and shadow, and titles scale with the export resolution.
 - **Per-clip effects:** speed from 0.25× to 8× (audio pitch is kept), brightness, contrast, saturation, hue, warmth, rotate 90°, flip, and fade in/out.
 - **Markers** (M), **J/K/L shuttle** (tap L or J again for 2×/4×/8×), and **snapping** (N) to cuts, markers and the playhead.
-- One main video track plus a music lane: drag to reorder, drag clip edges to trim, split at the playhead (S), duplicate, delete.
+- Storyline (V1) plus overlay and audio tracks: drag to reorder, drag clip edges to trim, split at the playhead (S), duplicate, delete.
 - 20 transitions (crossfade, dip to black, wipes, slides, circle, pixelize, zoom…), fade in/out from black, per-clip volume and mute, music fades.
 - Render preview (fast 480p) shows transitions exactly. Export renders MP4, MKV, MOV, WebM, AVI, M4V, animated GIF, or audio only (MP3/WAV/M4A). Choose **H.264, H.265/HEVC or ProRes 422 HQ**, and optionally **normalize loudness** to −14 LUFS for social media.
 - Save/open `.ro3v` projects. If a source file has moved, RO3 tells you which one.
@@ -139,13 +161,13 @@ The app isn't code-signed, which is fine for personal use:
 
 | | Photo | Video |
 | --- | --- | --- |
-| Tools | V move, Ctrl/Cmd+T transform, M rect, Shift+M ellipse, L lasso, Shift+L polygonal lasso, Q selection brush, W quick selection, Shift+W wand, P pen, Ctrl/Cmd+Shift+X liquify, C crop, Shift+C perspective crop, B brush, Shift+B pencil, Alt+B color replacement, E eraser, Shift+E background eraser, Alt+E magic eraser, J spot heal, Shift+J healing brush, Alt+J patch, S clone, Y history brush, R blur, Alt+R sharpen, Shift+R smudge, Shift+I color sampler, Alt+I ruler, O dodge, Shift+O burn, Alt+O sponge, Shift+G gradient, G fill, U shapes, T text, I eyedropper, H hand, Z zoom | T title, C caption, M marker, N snapping, J/K/L shuttle, Shift+F freeze frame, Ctrl/Cmd+C/V copy/paste clip, Ctrl/Cmd+Alt+V paste effects |
+| Tools | V move, Ctrl/Cmd+T transform, M rect, Shift+M ellipse, L lasso, Shift+L polygonal lasso, Q selection brush, W quick selection, Shift+W wand, P pen, Ctrl/Cmd+Shift+X liquify, C crop, Shift+C perspective crop, B brush, Shift+B pencil, Alt+B color replacement, E eraser, Shift+E background eraser, Alt+E magic eraser, J spot heal, Shift+J healing brush, Alt+J patch, S clone, Y history brush, R blur, Alt+R sharpen, Shift+R smudge, Shift+I color sampler, Alt+I ruler, O dodge, Shift+O burn, Alt+O sponge, Shift+G gradient, G fill, U shapes, T text, I eyedropper, H hand, Z zoom | T title, C caption, M marker, N snapping, J/K/L shuttle, Q/W ripple trim, Shift+F freeze frame, Ctrl/Cmd+C/V copy/paste clip, Ctrl/Cmd+Alt+V paste effects |
 | Selection | Ctrl/Cmd+A all, Ctrl/Cmd+D deselect, Ctrl/Cmd+Shift+D reselect, Ctrl/Cmd+Shift+I invert, Ctrl/Cmd+Alt+R select and mask, Shift+F6 feather, Delete clears inside it, Shift+Delete content-aware fill | — |
 | Layers | Ctrl/Cmd+E merge down, Ctrl/Cmd+Shift+E merge visible, Ctrl/Cmd+G group, Ctrl/Cmd+Shift+G ungroup, Ctrl/Cmd+Alt+G clipping mask, Ctrl/Cmd+/ lock, Ctrl/Cmd+I invert, Ctrl/Cmd+R rulers, Ctrl/Cmd+; guides | — |
 | Clipboard | Ctrl/Cmd+C copy, X cut, V paste as new layer, Shift+C copy merged, Shift+V paste as new image | — |
 | Transform | Enter apply, Esc cancel, arrows nudge | — |
 | Editing | [ ] brush size, X swap colours, Ctrl/Cmd+J duplicate layer, ' thirds grid, Space+drag pan, Ctrl/Cmd+scroll zoom | Space play, S split, Delete remove, ←/→ frame step, Shift+←/→ 1 s, +/− timeline zoom |
-| Everywhere | Ctrl/Cmd+K command palette, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (Mac) / Ctrl+Y (Win) redo, Ctrl/Cmd+S save, Ctrl/Cmd+Shift+S save as, Ctrl/Cmd+Alt+E export, Ctrl/Cmd+1/2/3 switch tabs | |
+| Everywhere | Ctrl/Cmd+K command palette, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (Mac) / Ctrl+Y (Win) redo, Ctrl/Cmd+S save, Ctrl/Cmd+Shift+S save as, Ctrl/Cmd+Alt+E export, Ctrl/Cmd+1/2/3/4 switch tabs (Photo, Video, Quick Convert, Vector) | |
 
 ## Known limits
 
@@ -153,11 +175,12 @@ The app isn't code-signed, which is fine for personal use:
 - Vector tracing is great for logos, icons and flat art. Photos turn into stylised posters, which is a limit of tracing itself.
 - Very large photos (over about 100 megapixels) will be slow in the editor.
 - PSD: smart objects and text layers open as pixels. Groups nested inside groups are merged into their outer group. Color Lookup and Color Grade layers are flattened into pixels in the PSD (Photoshop can't store them).
-- Timeline exports (FCPXML/EDL/OTIO) carry cuts, timing, speed, transitions, overlays, music and markers; titles, effects and grades stay in RO3.
+- Timeline exports (FCPXML/EDL/OTIO) carry cuts, timing, speed, transitions, overlays, music and markers; titles, effects, grades, motion and keyframes stay in RO3, and speed ramps hand off as their average speed.
+- Premiere project files (.prproj) can't be opened — hand edits over as FCPXML or EDL from Premiere instead (File › Export).
 - Playback in the viewer shows transitions as crossfades. Colour grades, LUTs, keying, Ken Burns, crop and blur preview exactly; grain, glow, RGB split, echo, stabilize, noise reduction, reverb and pitch appear in Render preview and Export.
-- Keyframes are for overlays and titles; main-track clips animate with Ken Burns.
-- RO3 has no AI features such as Select Subject, Generative Fill or auto-captions, and no 3D. Content-aware fill is pattern-based (the same family of technique Photoshop's original version used), so it is excellent on texture, sky, grass and walls and weaker at inventing complex objects.
+- Apart from auto-captions, RO3 has no AI features such as Select Subject or Generative Fill, and no 3D. Auto-captions are very good on clear speech; always read them through for names and jargon before publishing. Content-aware fill is pattern-based (the same family of technique Photoshop's original version used), so it is excellent on texture, sky, grass and walls and weaker at inventing complex objects.
 - Liquify works on the layer's pixels; it doesn't warp the layer's mask.
+- Vector: no symbols, graphic styles, live effects (drop shadow / blur) or Shape Builder yet (Pathfinder covers most Shape Builder jobs). Imported mesh gradients, pattern fills and soft masks become flat colour. `.ai` files saved without PDF compatibility, and `.eps`, can't be opened — re-save them as PDF or SVG. Because Ctrl/Cmd+1–4 switch tabs, Lock and Hide use Ctrl/Cmd+/ and Ctrl/Cmd+Shift+/, and Outline view is Ctrl/Cmd+Alt+Y.
 
 ## Project layout
 
@@ -165,14 +188,18 @@ The app isn't code-signed, which is fine for personal use:
 main.js          window, menus, file dialogs, job runner
 preload.js       safe bridge between UI and engine
 engine/          conversion engine (FFmpeg, sharp, SVG/PSD, timeline renderer with overlays and titles)
-src/             the interface — index.html, styles.css, js/ (photo, video, convert)
+src/             the interface — index.html, styles.css, vector.css, js/ (photo, video, vector, convert)
   js/photo-compose.js   layer compositor (masks, styles, clipping, adjustment layers)
   js/photo-adjust.js    adjustment maths and the Levels/Curves editors
   js/photo-psd.js       Photoshop import/export
   js/photo-filters.js   filter galleries (runs in js/filter-worker.js)
   js/color-grade.js     shared colour-grade / LUT engine (photo, video preview and export)
   js/glview.js          WebGL viewer layer for graded / keyed video
+  js/vector*.js        Vector workspace (document, tools, panels, file I/O; built on paper.js)
+  js/caption-worker.js  auto-captions (Whisper via transformers.js, runs in a worker)
+  vendor/transformers/  transformers.js (Apache-2.0) + ONNX Runtime Web (MIT) for speech-to-text
   vendor/ag-psd.js      PSD library (MIT)
+  vendor/               also paper.js, opentype.js, pdf.js, paperjs-offset, imagetracerjs, Manrope — licences in vendor/licenses/
 engine/interchange.js  FCPXML, EDL and OpenTimelineIO export
 engine/captions.js     SRT / VTT / chapters
 engine/ora.js          OpenRaster read/write

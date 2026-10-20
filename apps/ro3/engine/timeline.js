@@ -47,7 +47,17 @@ const CACHE = path.join(os.tmpdir(), 'ro3-cache');
 const even = n => Math.max(2, Math.round(n / 2) * 2);
 const speedOf = c => c.kind === 'image' ? 1 : Math.min(8, Math.max(0.1, c.speed || 1));
 /** Length of a clip on the timeline (source length ÷ speed). */
-const clipLen = c => (c.out - c.in) / speedOf(c);
+const clipLen = c => { const r = rampOf(c); return r ? r.reduce((a, [l, sp]) => a + l / sp, 0) : (c.out - c.in) / speedOf(c); };
+/** Speed ramp: [[sourceSeconds, speed], …] segments covering the clip's source range in order. */
+function rampOf(c) { return c && c.kind !== 'image' && Array.isArray(c.ramp) && c.ramp.length ? c.ramp.map(([l, sp]) => [Math.max(1e-3, +l), Math.min(8, Math.max(0.1, +sp))]) : null; }
+/** setpts expression that maps source time to ramped output time (sum of each segment's share ÷ its speed). */
+function rampSetpts(r) { let off = 0; const terms = r.map(([l, sp]) => { const e = `clip(T-${off.toFixed(4)},0,${l.toFixed(4)})/${sp.toFixed(4)}`; off += l; return e; }); return `setpts='(${terms.join('+')})/TB'`; }
+const MOTION_KEYS = ['x', 'y', 'scale', 'rotation', 'opacity'];
+/** Does a storyline clip need the motion pass (position / scale / rotation / opacity, static or keyframed)? */
+function hasMotion(c) {
+  const m = c.motion || {};
+  return MOTION_KEYS.some(p => hasKf(c, p)) || (m.x ?? 0.5) !== 0.5 || (m.y ?? 0.5) !== 0.5 || (m.scale ?? 1) !== 1 || (m.rotation || 0) !== 0 || (m.opacity ?? 1) < 1;
+}
 const AUDIO_ONLY = ['mp3', 'wav', 'm4a', 'flac', 'ogg', 'opus', 'aac'];
 // Image formats FFmpeg can't decode itself; these are converted to PNG before rendering.
 const NEEDS_PNG = ['psd', 'avif', 'svg', 'ico', 'heic', 'heif', 'jxl', 'tif', 'tiff'];
@@ -244,7 +254,9 @@ function buildArgs(project, out) {
       ? addInput('-loop', '1', '-framerate', String(F), '-t', f3(d + 0.5), '-i', c.path)
       : addInput('-ss', f3(c.in), '-t', f3(src + 0.5), '-i', c.path);
     const fit = { fit: fx.fit || S.fit };
-    const vf = [`trim=duration=${f3(src)}`, sp !== 1 ? `setpts=(PTS-STARTPTS)/${sp}` : 'setpts=PTS-STARTPTS', ...(fx.reverse && c.kind !== 'image' ? ['reverse'] : []),
+    const motion = hasMotion(c), vl = motion ? `vm${i}` : `v${i}`;
+    const ramp = rampOf(c);
+    const vf = [`trim=duration=${f3(src)}`, ...(ramp ? ['setpts=PTS-STARTPTS', rampSetpts(ramp)] : [sp !== 1 ? `setpts=(PTS-STARTPTS)/${sp}` : 'setpts=PTS-STARTPTS']), ...(fx.reverse && c.kind !== 'image' ? ['reverse'] : []),
       ...preScaleFx(fx), ...pictureFx(fx),
       ...frameFit(fit, W, H), 'setsar=1', ...kenBurns(fx.kb, W, H, F, d), `fps=${R}`, 'format=yuv420p',
       ...colorFx(fx), ...gradeFx(c.grade, dir), ...postFx(fx), ...(fx.posterizeTime > 0 ? [`fps=${R}`] : []),
@@ -255,10 +267,24 @@ function buildArgs(project, out) {
       // glow: screen a blurred copy over the picture
       graph.push(`[${idx}:v:0]${vf.join(',')},settb=AVTB,split[g${i}a][g${i}b]`);
       graph.push(`[g${i}b]gblur=sigma=${f3(6 + fx.glow / 6)}[g${i}c]`);
-      graph.push(`[g${i}a][g${i}c]blend=all_mode=screen:all_opacity=${f3(Math.min(1, fx.glow / 100))},format=yuv420p[v${i}]`);
-    } else graph.push(`[${idx}:v:0]${vf.join(',')},settb=AVTB[v${i}]`);
-    if (c.kind !== 'image' && c.hasAudio && !c.muted && (c.volume ?? 1) > 0) {
-      const af = ['aresample=48000', 'aformat=sample_fmts=fltp:channel_layouts=stereo', `atrim=duration=${f3(src)}`, 'asetpts=PTS-STARTPTS', ...(fx.reverse ? ['areverse'] : []), ...atempo(sp), ...audioFx(c.afx), `volume=${f3(c.volume ?? 1)}`];
+      graph.push(`[g${i}a][g${i}c]blend=all_mode=screen:all_opacity=${f3(Math.min(1, fx.glow / 100))},format=yuv420p[${vl}]`);
+    } else graph.push(`[${idx}:v:0]${vf.join(',')},settb=AVTB[${vl}]`);
+    if (motion) {
+      // Motion: the clip as a layer over black, moved / scaled / rotated / faded (keyframes use the clip's local time t)
+      const m = c.motion || {}, k = c.kf || {}, base = (hasKf(c, 'rotation') || (m.rotation || 0)) ? Math.hypot(W, H) : W;
+      const lf = [`format=rgba`];
+      if (hasKf(c, 'rotation') || m.rotation) lf.push(`rotate=a='${hasKf(c, 'rotation') ? kfExpr(k.rotation, 't', Math.PI / 180) : f3((m.rotation || 0) * Math.PI / 180)}':c=none:ow='hypot(iw,ih)':oh='ow'`);
+      if (hasKf(c, 'scale')) lf.push(`scale=w='max(2,2*trunc(${kfExpr(k.scale, 't', base)}/2))':h=-2:eval=frame:flags=bicubic`);
+      else if ((m.scale ?? 1) !== 1 || base !== W) lf.push(`scale=${even(Math.max(0.02, m.scale ?? 1) * base)}:-2:flags=bicubic`);
+      if (hasKf(c, 'opacity')) lf.push(`geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*(${kfExpr(k.opacity, 'T')})'`);
+      else if ((m.opacity ?? 1) < 1) lf.push(`colorchannelmixer=aa=${f3(m.opacity)}`);
+      graph.push(`[${vl}]${lf.join(',')}[mf${i}]`);
+      graph.push(`color=c=black:s=${W}x${H}:r=${R}:d=${f3(d + 0.5)},format=yuv420p[mb${i}]`);
+      const px = hasKf(c, 'x') ? kfExpr(k.x, 't', W) : f3((m.x ?? 0.5) * W), py = hasKf(c, 'y') ? kfExpr(k.y, 't', H) : f3((m.y ?? 0.5) * H);
+      graph.push(`[mb${i}][mf${i}]overlay=x='${px}-overlay_w/2':y='${py}-overlay_h/2':eval=frame:eof_action=pass,trim=duration=${f3(d)},format=yuv420p,setsar=1,settb=AVTB[v${i}]`);
+    }
+    if (c.kind !== 'image' && c.hasAudio && !c.muted && !ramp && ((c.volume ?? 1) > 0 || hasKf(c, 'volume'))) {
+      const af = ['aresample=48000', 'aformat=sample_fmts=fltp:channel_layouts=stereo', `atrim=duration=${f3(src)}`, 'asetpts=PTS-STARTPTS', ...(fx.reverse ? ['areverse'] : []), ...atempo(sp), ...audioFx(c.afx), hasKf(c, 'volume') ? `volume='${kfExpr(c.kf.volume, 't')}':eval=frame` : `volume=${f3(c.volume ?? 1)}`];
       if (fx.fadeIn > 0) af.push(`afade=t=in:st=0:d=${f3(Math.min(fx.fadeIn, d / 2))}`);
       if (fx.fadeOut > 0) af.push(`afade=t=out:st=${f3(Math.max(0, d - fx.fadeOut))}:d=${f3(Math.min(fx.fadeOut, d / 2))}`);
       graph.push(`[${idx}:a:0]${af.join(',')},apad,atrim=duration=${f3(d)}[a${i}]`);
@@ -429,4 +455,4 @@ async function renderProject(project, out, onProgress, signal) {
   return { output: out.output, bytes: stat.size, duration };
 }
 
-module.exports = { buildArgs, renderProject, sequenceDuration, clipLen, TRANSITIONS, supportedTransitions, kfExpr, audioFx, rateOf };
+module.exports = { rampOf, rampSetpts, hasMotion, buildArgs, renderProject, sequenceDuration, clipLen, TRANSITIONS, supportedTransitions, kfExpr, audioFx, rateOf };

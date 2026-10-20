@@ -205,6 +205,56 @@ const Captions = (() => {
     return out;
   }
 
-  return { parseSRT, parseVTT, parse, toSRT, toVTT, toChapters, toFFMetadata, clock };
+  /**
+   * Turn speech-recognition segments ({start,end,text}) into readable subtitle cues:
+   * at most `maxLines` lines of `maxChars`, broken at sentence ends / commas where possible,
+   * with each piece's time shared out by its length. Cues never overlap and stay on screen ≥ minDur.
+   */
+  function fromSegments(segs, opts = {}) {
+    const maxChars = opts.maxChars || 42, maxLines = opts.maxLines || 2, minDur = opts.minDur || 0.8, maxDur = opts.maxDur || 7;
+    const limit = maxChars * maxLines;
+    const wrap = (txt) => {
+      if (txt.length <= maxChars || maxLines < 2) return txt;
+      // break nearest the middle on a space
+      const mid = txt.length / 2; let best = -1;
+      for (let i = 0; i < txt.length; i++) if (txt[i] === ' ' && (best < 0 || Math.abs(i - mid) < Math.abs(best - mid))) best = i;
+      return best > 0 ? txt.slice(0, best) + '\n' + txt.slice(best + 1) : txt;
+    };
+    const out = [];
+    for (const sg of (segs || [])) {
+      const text = String(sg.text || '').replace(/\s+/g, ' ').trim();
+      if (!text || !(sg.end > sg.start)) continue;
+      // greedy pieces of whole words, preferring to end on punctuation
+      const words = text.split(' '); const pieces = []; let cur = [];
+      const len = a => a.join(' ').length;
+      for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        if (cur.length && len([...cur, w]) > limit) { pieces.push(cur); cur = []; }
+        cur.push(w);
+        const ln = len(cur);
+        if (/[.!?…]["')\]]?$/.test(w) && ln >= maxChars * 0.6 && i < words.length - 1) { pieces.push(cur); cur = []; }
+        else if (/[,;:]$/.test(w) && ln >= limit * 0.7 && i < words.length - 1) { pieces.push(cur); cur = []; }
+      }
+      if (cur.length) pieces.push(cur);
+      const total = pieces.reduce((n, p) => n + len(p), 0) || 1, span = sg.end - sg.start;
+      let t = sg.start;
+      pieces.forEach((p, i) => {
+        const d = span * len(p) / total;
+        const end = i === pieces.length - 1 ? sg.end : t + d;
+        out.push({ start: t, end, text: wrap(p.join(' ')) }); t = end;
+      });
+    }
+    out.sort((a, b) => a.start - b.start);
+    for (let i = 0; i < out.length; i++) {
+      const c = out[i], nx = out[i + 1];
+      if (c.end - c.start > maxDur) c.end = c.start + maxDur;
+      if (c.end - c.start < minDur) c.end = c.start + minDur;
+      if (nx && c.end > nx.start) c.end = Math.max(c.start + 0.1, nx.start);
+      c.start = Math.round(c.start * 1000) / 1000; c.end = Math.round(c.end * 1000) / 1000;
+    }
+    return out.filter(c => c.end > c.start);
+  }
+
+  return { parseSRT, parseVTT, parse, toSRT, toVTT, toChapters, toFFMetadata, clock, fromSegments };
 })();
 if (typeof module !== 'undefined') module.exports = Captions;

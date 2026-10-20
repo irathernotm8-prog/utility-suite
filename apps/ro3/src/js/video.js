@@ -1,4 +1,4 @@
-// Video editor: media bin, viewer, single video track + music lane, transitions, export.
+// Video editor: media bin, viewer, V1 storyline + V2… overlay tracks + A2… audio tracks, captions, transitions, export.
 const VideoEditor = (() => {
   // Transition styles grouped (FFmpeg xfade names).
   const TRANSITION_GROUPS = [
@@ -35,10 +35,11 @@ const VideoEditor = (() => {
 
   const byId = (arr, id) => arr.find(x => x.id === id);
   const mOf = c => byId(media, c.mediaId);
-  const dur = c => Math.max(0, (c.out - c.in) / spd(c));
+  const dur = c => { const r = c.ramp && c.ramp.on ? rampSegs(c) : null; return r ? r.reduce((a, [l, sp]) => a + l / sp, 0) : Math.max(0, (c.out - c.in) / spd(c)); };
 
   // ---------- history ----------
-  function snapshot() { return JSON.stringify({ clips, audio, overlays, markers, markerNames, captions, settings }); }
+  function snapshot() { normalizeTracks(); return snapshot0(); }
+  function snapshot0() { return JSON.stringify({ clips, audio, overlays, markers, markerNames, captions, settings }); }
   function commit(label) {
     if (hist.stack.length && label !== 'Start' && label !== 'Open project') { dirty = true; scheduleAutosave(); }
     hist.stack = hist.stack.slice(0, hist.index + 1);
@@ -74,6 +75,30 @@ const VideoEditor = (() => {
     return end;
   }
   const audioLen = a => Math.max(0, a.out - a.in);
+  // ---------- tracks ----------
+  // V1 is the magnetic storyline (clips), V2… hold overlays/titles, A1 is the storyline's sound, A2… hold music & voice-over.
+  const vName = n => 'V' + ((n || 0) + 2), aName = n => 'A' + ((n || 0) + 2);
+  const tpeek = id => (settings.tracks && settings.tracks[id]) || {};
+  const tstate = id => { settings.tracks = settings.tracks || {}; return settings.tracks[id] || (settings.tracks[id] = {}); };
+  const soloOn = () => Object.entries(settings.tracks || {}).some(([k, v]) => k[0] === 'A' && v && v.solo);
+  /** Volume multiplier for an audio track after mute / solo / track volume. */
+  function trackGain(id) { const s = tpeek(id); if (s.mute || (soloOn() && !s.solo)) return 0; return s.vol ?? 1; }
+  const ovShown = o => !tpeek(vName(o.track)).hide;
+  const lockedItem = (type, x) => type === 'overlay' ? !!tpeek(vName(x.track)).lock : type === 'audio' ? !!tpeek(aName(x.track)).lock : type === 'clip' ? !!tpeek('V1').lock : false;
+  /** Lowest track where [start, start+len) is free. */
+  function freeTrack(arr, lenOf, start, len, skip) {
+    for (let k = 0; k < 64; k++) if (!arr.some(x => x !== skip && x.track === k && x.start < start + len - 1e-3 && start < x.start + lenOf(x) - 1e-3)) return k;
+    return 0;
+  }
+  function normalizeTracks() {
+    for (const [arr, lenOf] of [[overlays, olen], [audio, audioLen]]) {
+      [...arr].filter(x => !Number.isInteger(x.track)).sort((a, b) => a.start - b.start).forEach(x => { x.track = -1; x.track = freeTrack(arr, lenOf, x.start, lenOf(x), x); });
+    }
+    settings.vtracks = Math.max(1, settings.vtracks || 1, ...overlays.map(o => o.track + 1));
+    settings.atracks = Math.max(1, settings.atracks || 1, ...audio.map(a => a.track + 1));
+  }
+  /** Overlays bottom track first (later ones draw on top). */
+  const ovOrder = () => overlays.map((o, i) => [o, i]).sort((a, b) => (a[0].track || 0) - (b[0].track || 0) || a[1] - b[1]).map(x => x[0]);
   function timelineEnd() { return Math.max(total, ...audio.map(a => a.start + audioLen(a)), ...overlays.map(o => o.start + olen(o)), ...captions.map(c => c.end), 0); }
 
   // ---------- media import ----------
@@ -188,9 +213,23 @@ const VideoEditor = (() => {
     let c = sel && sel.type === 'clip' ? byId(clips, sel.id) : null;
     if (!c || t <= c._start || t >= c._start + dur(c)) c = clipAt(t);
     if (c) {
-      const local = c.in + (t - c._start) * spd(c);
+      const uCut = t - c._start, rs = rampSegs(c);
+      const local = rs ? rampAt(c, rs, uCut).src : c.in + uCut * spd(c);
       if (local - c.in < 0.1 || c.out - local < 0.1) return toast('Move the playhead further from the clip edge to split.', 'error');
       const n = { ...JSON.parse(JSON.stringify(c)), id: uid('c'), in: local, fx: { ...JSON.parse(JSON.stringify(c.fx || FX0())), fadeIn: 0 } };
+      // keyframes and speed-ramp shapes are cut at the split so both halves keep playing exactly as before
+      if (c.kf) for (const [p, list] of Object.entries(c.kf)) {
+        if (!list || !list.length) continue;
+        const v = kfEval(list, uCut);
+        c.kf[p] = [...list.filter(k => k.t < uCut - 1e-3), { t: +uCut.toFixed(3), v, ease: 'linear' }];
+        n.kf[p] = [{ t: 0, v, ease: (list.filter(k => k.t <= uCut).pop() || {}).ease || 'linear' }, ...list.filter(k => k.t > uCut + 1e-3).map(k => ({ ...k, t: +(k.t - uCut).toFixed(3) }))];
+      }
+      if (rs && c.ramp.pts) {
+        const f = (local - c.in) / (c.out - c.in), sAt = u => { const pts = [...c.ramp.pts].sort((a, b) => a.u - b.u); if (u <= pts[0].u) return pts[0].s; for (let i = 0; i < pts.length - 1; i++) if (u <= pts[i + 1].u) { const x = (u - pts[i].u) / Math.max(1e-6, pts[i + 1].u - pts[i].u); return pts[i].s + (pts[i + 1].s - pts[i].s) * x * x * (3 - 2 * x); } return pts[pts.length - 1].s; };
+        const mid = +sAt(f).toFixed(3);
+        n.ramp.pts = [{ u: 0, s: mid }, ...c.ramp.pts.filter(q => q.u > f + 1e-3).map(q => ({ u: (q.u - f) / (1 - f), s: q.s }))]; if (n.ramp.pts.length < 2) n.ramp.pts.push({ u: 1, s: mid });
+        c.ramp.pts = [...c.ramp.pts.filter(q => q.u < f - 1e-3).map(q => ({ u: q.u / f, s: q.s })), { u: 1, s: mid }]; if (c.ramp.pts.length < 2) c.ramp.pts.unshift({ u: 0, s: mid });
+      }
       c.out = local; c.transition = { type: 'none', duration: 1 }; c.fx = { ...(c.fx || FX0()), fadeOut: 0 };
       clips.splice(clips.indexOf(c) + 1, 0, n);
       sel = { type: 'clip', id: n.id };
@@ -213,6 +252,18 @@ const VideoEditor = (() => {
       return commit('Split music');
     }
     toast('Place the playhead over a clip to split it.', 'error');
+  }
+  /** Ripple trim (Premiere Q / W): cut the clip under the playhead from its start / to its end; later clips close the gap. */
+  function rippleTrim(side) {
+    layout();
+    const c = clipAt(t); if (!c) return toast('Place the playhead over a clip on V1.', 'error');
+    if (lockedItem('clip', c)) return toast('V1 is locked.', 'error');
+    const u = t - c._start, rs = rampSegs(c), local = rs ? rampAt(c, rs, u).src : c.in + u * spd(c);
+    if (local - c.in < 0.1 || c.out - local < 0.1) return toast('The playhead is too close to the clip edge.', 'error');
+    if (c.kf && side === 'start') for (const [p, list] of Object.entries(c.kf)) { if (!list || !list.length) continue; const v = kfEval(list, u); c.kf[p] = [{ t: 0, v, ease: 'linear' }, ...list.filter(q => q.t > u + 1e-3).map(q => ({ ...q, t: +(q.t - u).toFixed(3) }))]; }
+    if (side === 'start') c.in = local; else c.out = local;
+    sel = { type: 'clip', id: c.id }; commit(side === 'start' ? 'Ripple trim start' : 'Ripple trim end');
+    layout(); seek(side === 'start' ? c._start : c._start + dur(c));
   }
   function removeSelected() {
     if (!sel) return;
@@ -388,7 +439,7 @@ const VideoEditor = (() => {
   /** Set (or add) a keyframe for property p at the playhead. */
   function setKey(o, p, val, ease) {
     o.kf = o.kf || {}; const list = o.kf[p] = o.kf[p] || [];
-    const u = +clamp(t - o.start, 0, olen(o)).toFixed(3), i = list.findIndex(k => Math.abs(k.t - u) < 0.04);
+    const u = +clamp(t - itemStart(o), 0, itemLen(o)).toFixed(3), i = list.findIndex(k => Math.abs(k.t - u) < 0.04);
     if (i >= 0) { list[i].v = val; if (ease) list[i].ease = ease; } else { list.push({ t: u, v: val, ease: ease || 'ease' }); list.sort((a, b) => a.t - b.t); }
   }
   const KF_PROPS = [['x', 'Left ↔ right'], ['y', 'Top ↕ bottom'], ['scale', 'Size'], ['opacity', 'Opacity'], ['rotation', 'Rotation']];
@@ -396,6 +447,32 @@ const VideoEditor = (() => {
   function ovState(o, time) {
     const u = time - o.start, k = o.kf || {};
     return { x: kfEval(k.x, u, o.x ?? 0.5), y: kfEval(k.y, u, o.y ?? 0.5), scale: kfEval(k.scale, u, o.scale ?? (o.kind === 'title' ? 1 : 0.35)), opacity: kfEval(k.opacity, u, o.opacity ?? 1), rotation: kfEval(k.rotation, u, o.rotation || 0) };
+  }
+  // Storyline clips: motion (position / scale / rotation / opacity) and volume, static or keyframed in clip time.
+  const CLIP_KF = [['x', 'Position ↔'], ['y', 'Position ↕'], ['scale', 'Scale'], ['rotation', 'Rotation'], ['opacity', 'Opacity'], ['volume', 'Volume']];
+  const isClip = o => clips.includes(o);
+  const itemStart = o => isClip(o) ? (o._start ?? 0) : o.start;
+  const itemLen = o => isClip(o) ? dur(o) : olen(o);
+  function clipState(c, u) {
+    const M = c.motion || {}, k = c.kf || {};
+    return { x: kfEval(k.x, u, M.x ?? 0.5), y: kfEval(k.y, u, M.y ?? 0.5), scale: kfEval(k.scale, u, M.scale ?? 1), rotation: kfEval(k.rotation, u, M.rotation || 0), opacity: kfEval(k.opacity, u, M.opacity ?? 1), volume: clipVol(c, u) };
+  }
+  const clipVol = (c, u) => kfEval(c.kf && c.kf.volume, u, c.volume ?? 1);
+  // Speed ramps: points [{u: 0…1 of the source range, s: speed}] → 24 constant-speed segments the engine renders exactly.
+  const RAMP_STEPS = 24;
+  function rampSegs(c) {
+    const m = mOf(c); const r = c.ramp;
+    if (!r || !r.on || !r.pts || r.pts.length < 2 || !m || m.kind !== 'video') return null;
+    const pts = [...r.pts].sort((a, b) => a.u - b.u), src = c.out - c.in, out = [];
+    const at = u => { if (u <= pts[0].u) return pts[0].s; for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; if (u <= b.u) { const x = (u - a.u) / Math.max(1e-6, b.u - a.u), e = x * x * (3 - 2 * x); return a.s + (b.s - a.s) * e; } } return pts[pts.length - 1].s; };
+    for (let i = 0; i < RAMP_STEPS; i++) out.push([src / RAMP_STEPS, clamp(at((i + 0.5) / RAMP_STEPS), 0.1, 8)]);
+    return out;
+  }
+  /** Source time and instantaneous speed at local timeline time u of a ramped clip. */
+  function rampAt(c, segs, u) {
+    let acc = 0, src = c.in;
+    for (const [l, sp] of segs) { const d = l / sp; if (u <= acc + d) return { src: src + (u - acc) * sp, speed: sp }; acc += d; src += l; }
+    return { src: c.out, speed: segs[segs.length - 1][1] };
   }
   function assign(c) {
     let s = slots.find(s => s.clipId === c.id);
@@ -424,7 +501,7 @@ const VideoEditor = (() => {
     actives.forEach((x, k) => {
       const s = assign(x.c); s.inUse = true;
       const m = mOf(x.c);
-      const sp = spd(x.c), u = time - x.c._start, local = x.c.in + u * sp;
+      const u = time - x.c._start, rs = rampSegs(x.c), ra = rs ? rampAt(x.c, rs, u) : null, sp = ra ? ra.speed : spd(x.c), local = ra ? ra.src : x.c.in + u * sp, ms = clipState(x.c, u);
       const top = k === actives.length - 1;
       const fa = fadeAlpha(x.c.fx, u, dur(x.c));
       s.v.style.zIndex = s.img.style.zIndex = top ? 2 : 1;
@@ -436,16 +513,17 @@ const VideoEditor = (() => {
       let kb = '';
       if (fx.kb && fx.kb.on) { const uu = clamp(u / Math.max(0.01, dur(x.c)), 0, 1), e = uu * uu * (3 - 2 * uu), z = (fx.kb.z0 || 1) + ((fx.kb.z1 || 1.3) - (fx.kb.z0 || 1)) * e, px = (fx.kb.x0 ?? 0.5) + ((fx.kb.x1 ?? 0.5) - (fx.kb.x0 ?? 0.5)) * e, py = (fx.kb.y0 ?? 0.5) + ((fx.kb.y1 ?? 0.5) - (fx.kb.y0 ?? 0.5)) * e;
         kb = `scale(${z.toFixed(4)}) translate(${((0.5 - px) * (1 - 1 / z) * 100).toFixed(3)}%, ${((0.5 - py) * (1 - 1 / z) * 100).toFixed(3)}%)`; }
-      tgt.style.transform = [kb, cssTransform(fx)].filter(Boolean).join(' ');
+      const mot = (ms.x !== 0.5 || ms.y !== 0.5 ? `translate(${((ms.x - 0.5) * 100).toFixed(3)}%, ${((ms.y - 0.5) * 100).toFixed(3)}%) ` : '') + (ms.scale !== 1 ? `scale(${ms.scale.toFixed(4)}) ` : '') + (ms.rotation ? `rotate(${ms.rotation.toFixed(2)}deg)` : '');
+      tgt.style.transform = [mot.trim(), kb, cssTransform(fx)].filter(Boolean).join(' ');
       tgt.style.objectFit = (fx.fit || settings.fit) === 'fill' ? 'cover' : 'contain';
       const cr = fx.crop; tgt.style.objectViewBox = cr && (cr.l || cr.t || cr.r || cr.b) ? `inset(${cr.t || 0}% ${cr.r || 0}% ${cr.b || 0}% ${cr.l || 0}%)` : '';
       if (m.kind === 'image') {
-        tgt.style.opacity = String(x.alpha);
+        tgt.style.opacity = String(x.alpha * ms.opacity);
       } else {
-        tgt.style.opacity = String(x.alpha);
+        tgt.style.opacity = String(x.alpha * ms.opacity);
         if (fx.reverse) { const rl = x.c.out - u * sp; if (Math.abs(s.v.currentTime - rl) > 0.03) s.v.currentTime = Math.max(x.c.in, rl); if (!s.v.paused) s.v.pause(); s.v.muted = true; setAudioFx(s, x.c); return; }
-        s.v.muted = x.c.muted || rate !== 1;
-        s.v.volume = clamp((x.c.volume ?? 1) * x.vol * fa * (settings.mix ? settings.mix.main ?? 1 : 1), 0, 1);
+        s.v.muted = x.c.muted || rate !== 1 || !!rs;
+        s.v.volume = clamp(clipVol(x.c, u) * x.vol * fa * (settings.mix ? settings.mix.main ?? 1 : 1) * trackGain('A1'), 0, 1);
         setAudioFx(s, x.c);
         const pr = clamp(sp * Math.abs(rate), 0.0625, 16);
         if (Math.abs(s.v.playbackRate - pr) > 1e-3) s.v.playbackRate = pr;
@@ -467,8 +545,8 @@ const VideoEditor = (() => {
     const live = new Set();
     for (const a of audio) {
       const m = byId(media, a.mediaId); if (!m) continue;
-      const len = audioLen(a);
-      if (time < a.start || time >= a.start + len) continue;
+      const len = audioLen(a), tg = trackGain(aName(a.track));
+      if (time < a.start || time >= a.start + len || tg === 0) continue;
       live.add(a.id);
       let au = musicEls.get(a.id);
       if (!au) { au = new Audio(); au.preload = 'auto'; musicEls.set(a.id, au); }
@@ -477,7 +555,7 @@ const VideoEditor = (() => {
       let vol = a.volume ?? 1;
       if (a.fadeIn && time - a.start < a.fadeIn) vol *= (time - a.start) / a.fadeIn;
       if (a.fadeOut && a.start + len - time < a.fadeOut) vol *= (a.start + len - time) / a.fadeOut;
-      au.volume = clamp(vol * (settings.mix ? settings.mix.music ?? 1 : 1), 0, 1);
+      au.volume = clamp(vol * tg * (settings.mix ? settings.mix.music ?? 1 : 1), 0, 1);
       applyAfx(au, a.afx);
       if (!isPlaying) { if (!au.paused) au.pause(); if (Math.abs(au.currentTime - local) > 0.05) au.currentTime = local; }
       else { if (Math.abs(au.currentTime - local) > 0.3) au.currentTime = local; if (au.paused) au.play().catch(() => {}); }
@@ -601,7 +679,7 @@ const VideoEditor = (() => {
     const p = TITLE_PRESETS[preset];
     const o = { id: uid('o'), kind: 'title', start: at, in: 0, out: 4, x: p.x, y: p.y, opacity: 1, fadeIn: 0.3, fadeOut: 0.3,
       title: { text: preset === 'lower' ? 'Your name\nRule of 3s' : 'Your title', font: 'Manrope', size: p.size, weight: p.weight, italic: false, color: p.color, align: p.align, bg: p.bg, bgColor: p.bgColor, bgOpacity: p.bgOpacity, shadow: p.shadow, accent: p.accent } };
-    overlays.push(o); sel = { type: 'overlay', id: o.id }; commit('Add title');
+    o.track = freeTrack(overlays, olen, o.start, olen(o)); overlays.push(o); sel = { type: 'overlay', id: o.id }; commit('Add title');
   }
   function titleMenu(anchor) { menuAt(anchor, Object.entries(TITLE_PRESETS).map(([k, p]) => ({ label: p.label, onClick: () => addTitle(k) }))); }
   function addOverlay(m, at = t) {
@@ -609,7 +687,7 @@ const VideoEditor = (() => {
     if (m.kind === 'audio') return addToTimelineAudio(m, at);
     const o = { id: uid('o'), kind: m.kind, mediaId: m.id, start: at, in: 0, out: m.kind === 'image' ? 5 : m.info.duration, x: 0.78, y: 0.24, scale: 0.32, opacity: 1, fadeIn: 0.25, fadeOut: 0.25, volume: 1, muted: true, fx: FX0() };
     if (m.kind === 'image' && m.info.width && m.info.width < 600) { o.scale = 0.12; o.x = 0.1; o.y = 0.12; o.fadeIn = o.fadeOut = 0; o.out = Math.max(5, total || 5); }
-    overlays.push(o); sel = { type: 'overlay', id: o.id }; commit(m.kind === 'image' ? 'Add image overlay' : 'Add picture-in-picture');
+    o.track = Number.isInteger(addOverlay.track) ? addOverlay.track : freeTrack(overlays, olen, o.start, olen(o)); overlays.push(o); sel = { type: 'overlay', id: o.id }; commit(m.kind === 'image' ? 'Add image overlay' : 'Add picture-in-picture');
   }
 
   /** Snap a time to nearby edits, markers and the playhead (within 8px). */
@@ -719,6 +797,67 @@ const VideoEditor = (() => {
     captions.push(c); captions.sort((a, b) => a.start - b.start); sel = { type: 'caption', id: c.id }; commit('Add caption');
     setTimeout(() => { const ta = el.ins.querySelector('textarea'); if (ta) { ta.focus(); ta.select(); } }, 30);
   }
+  // Auto-captions: Whisper speech-to-text in a worker, on this computer. Nothing is uploaded.
+  const ASR_LANGS = [['auto', 'Detect automatically'], ['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['nl', 'Dutch'], ['ar', 'Arabic'], ['ur', 'Urdu'], ['hi', 'Hindi'], ['tr', 'Turkish'], ['ru', 'Russian'], ['pl', 'Polish'], ['uk', 'Ukrainian'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ko', 'Korean'], ['id', 'Indonesian'], ['vi', 'Vietnamese'], ['fa', 'Persian'], ['bn', 'Bengali'], ['sv', 'Swedish']];
+  let asrWorker = null;
+  function asrPrefs() { try { return JSON.parse(localStorage.getItem('ro3.asr') || '{}'); } catch (_) { return {}; } }
+  function autoCaption() {
+    if (!clips.length) return toast('Add clips with sound to the timeline first.', 'error');
+    if (playing) pause();
+    const pr = asrPrefs();
+    const model = selectField('Accuracy', [['tiny', 'Fast — about 40 MB download'], ['base', 'Balanced — about 80 MB'], ['small', 'Accurate — about 250 MB, slower']], pr.model || 'base');
+    const lang = selectField('Spoken language', ASR_LANGS, pr.language || 'auto');
+    const task = selectField('Captions in', [['transcribe', 'The spoken language'], ['translate', 'English (translate)']], 'transcribe');
+    const mode = selectField('Existing captions', [['replace', 'Replace them'], ['add', 'Keep them and add these']], captions.length ? 'replace' : 'add');
+    const len = selectField('Line length', [['42', 'Standard (42 characters, 2 lines)'], ['32', 'Short (32 characters, 2 lines)'], ['22', 'Social — punchy single lines']], pr.len || '42');
+    const body = h('<div class="stack"></div>');
+    body.append(model, lang, task); if (captions.length) body.append(mode); body.append(len,
+      h('<p class="hint">Speech is recognised on this computer with OpenAI Whisper — nothing is uploaded. The model downloads once the first time you use each accuracy level, then works offline.</p>'));
+    modal({ title: 'Auto-caption', body, width: 440, actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Generate captions', kind: 'primary', onClick: () => {
+      const o = { model: model.get(), language: lang.get(), translate: task.get() === 'translate', mode: captions.length ? mode.get() : 'add', len: len.get() };
+      try { localStorage.setItem('ro3.asr', JSON.stringify({ model: o.model, language: o.language, len: o.len })); } catch (_) {}
+      runAutoCaption(o);
+    } }] });
+  }
+  async function runAutoCaption(o) {
+    let job = null, stopped = false;
+    const pb = progressBox('Auto-caption', () => { stopped = true; if (job) job.cancel(); if (asrWorker) { asrWorker.terminate(); asrWorker = null; } });
+    try {
+      pb.set(0, 'Mixing the timeline audio…');
+      job = ro3.captionAudio(await buildProject({ width: 320, height: 180 }, { burnCaptions: false }), p => pb.set(p * 0.1, 'Mixing the timeline audio…'));
+      const bytes = await job.promise; job = null;
+      if (stopped) return;
+      const samples = bytes.byteLength / 4;
+      if (samples < 16000 * 0.5) { pb.close(); return toast('The timeline has no audio to caption.', 'error'); }
+      const buf = bytes.byteOffset % 4 === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer : bytes.slice().buffer;
+      if (!asrWorker) asrWorker = new Worker('js/caption-worker.js', { type: 'module' });
+      const res = await new Promise((resolve, reject) => {
+        asrWorker.onmessage = (e) => {
+          const m = e.data;
+          if (m.type === 'progress') {
+            if (m.stage === 'download') pb.set(0.1 + m.value * 0.25, `Downloading speech model… ${(m.loaded / 1048576).toFixed(0)} / ${(m.total / 1048576).toFixed(0)} MB`);
+            else if (m.stage === 'load') pb.set(0.35, 'Loading speech model…');
+            else pb.set(0.35 + m.value * 0.65, `Listening… ${Math.round(m.value * 100)}%${m.device === 'webgpu' ? ' (GPU)' : ''}`);
+          } else if (m.type === 'done') resolve(m); else if (m.type === 'error') reject(new Error(m.message));
+        };
+        asrWorker.onerror = (e) => { e.preventDefault && e.preventDefault(); reject(new Error(e.message || 'The speech engine stopped unexpectedly.')); };
+        asrWorker.postMessage({ type: 'run', id: Date.now(), audio: buf, model: o.model, language: o.language, translate: o.translate }, [buf]);
+      });
+      pb.close();
+      const n = Number(o.len) || 42;
+      const cues = Captions.fromSegments(res.chunks, n <= 22 ? { maxChars: 22, maxLines: 1, maxDur: 3 } : { maxChars: n, maxLines: 2 });
+      if (!cues.length) return toast('No speech was found.', 'info');
+      const fresh = cues.map(c => ({ id: uid('cap'), start: c.start, end: c.end, text: c.text }));
+      captions = (o.mode === 'replace' ? fresh : [...captions, ...fresh]).sort((a, b) => a.start - b.start);
+      sel = null; commit('Auto-caption'); toast(`Added ${fresh.length} captions. Check names and spellings before exporting.`, 'ok', 6000);
+    } catch (e) {
+      pb.close();
+      if (stopped || e.cancelled) return;
+      if (asrWorker) { asrWorker.terminate(); asrWorker = null; }
+      const msg = /fetch|network|Failed to load|ENOTFOUND|NetworkError/i.test(e.message) ? 'Could not download the speech model — check your internet connection (needed once per accuracy level).' : 'Auto-caption failed: ' + e.message;
+      toast(msg, 'error', 9000);
+    }
+  }
   async function importCaptions() {
     const ps = await ro3.openDialog({ title: 'Import captions', filters: [{ name: 'Subtitles', extensions: ['srt', 'vtt'] }] }).catch(() => null);
     const p = ps && (Array.isArray(ps) ? ps[0] : ps); if (!p) return;
@@ -793,9 +932,9 @@ const VideoEditor = (() => {
   }
   function syncOverlays(time, isPlaying) {
     const live = new Set();
-    overlays.forEach((o, k) => {
+    ovOrder().forEach((o, k) => {
       const len = olen(o);
-      if (time < o.start || time >= o.start + len) return;
+      if (time < o.start || time >= o.start + len || !ovShown(o)) return;
       live.add(o.id);
       const e = overlayEl(o), m = o.mediaId ? byId(media, o.mediaId) : null;
       e.style.zIndex = 10 + k;
@@ -828,7 +967,7 @@ const VideoEditor = (() => {
       }
       if (o.kind === 'video') {
         const local = o.in + u;
-        e.muted = !!o.muted; e.volume = clamp(o.volume ?? 1, 0, 1);
+        e.muted = !!o.muted || rate !== 1; e.volume = clamp((o.volume ?? 1) * (settings.mix ? settings.mix.overlay ?? 1 : 1), 0, 1);
         const drift = Math.abs(e.currentTime - local);
         if (!isPlaying) { if (!e.paused) e.pause(); if (drift > 0.04) e.currentTime = local; }
         else { if (drift > 0.3) e.currentTime = local; if (e.paused) e.play().catch(() => {}); }
@@ -870,7 +1009,7 @@ const VideoEditor = (() => {
     $$('.trim', node).forEach(handle => {
       const left = handle.classList.contains('l');
       onDrag(handle, {
-        start: e => { e.stopPropagation(); sel = { type: 'overlay', id: o.id }; handle._o = { in: o.in, out: o.out, start: o.start, x: e.clientX }; },
+        start: e => { e.stopPropagation(); sel = { type: 'overlay', id: o.id }; if (lockedItem('overlay', o)) { refreshSel(); return false; } handle._o = { in: o.in, out: o.out, start: o.start, x: e.clientX }; },
         move: e => {
           const d = (e.clientX - handle._o.x) / zoom;
           if (left) {
@@ -887,8 +1026,15 @@ const VideoEditor = (() => {
       });
     });
     onDrag(node, {
-      start: e => { if (e.target.classList.contains('trim')) return false; sel = { type: 'overlay', id: o.id }; node._d = { x: e.clientX, s: o.start, moved: false }; renderTimeline(); renderInspector(); syncOverlays(t, playing); },
-      move: e => { const dx = e.clientX - node._d.x; if (!node._d.moved && Math.abs(dx) < 4) return; node._d.moved = true; o.start = snapTime(Math.max(0, node._d.s + dx / zoom), o); node.style.left = o.start * zoom + 'px'; },
+      start: e => { if (e.target.classList.contains('trim')) return false; sel = { type: 'overlay', id: o.id }; node._d = { x: e.clientX, y: e.clientY, s: o.start, tr: o.track, moved: false, locked: lockedItem('overlay', o) }; markSel(node); syncOverlays(t, playing); },
+      move: e => {
+        const dx = e.clientX - node._d.x, dy = e.clientY - node._d.y; if (node._d.locked || (!node._d.moved && Math.abs(dx) < 4 && Math.abs(dy) < 8)) return; node._d.moved = true;
+        o.start = snapTime(Math.max(0, node._d.s + dx / zoom), o);
+        // drag up/down between tracks; above the top track makes a new one
+        const VT = settings.vtracks, k = clamp(trackOfY(el.otrack, VT, OV_ROW, e.clientY, true), 0, VT);
+        if (k !== o.track && !lockedItem('overlay', { track: k })) { o.track = k; node.style.top = ((VT - 1 - k) * OV_ROW + 3) + 'px'; }
+        node.style.left = o.start * zoom + 'px';
+      },
       end: e => { if (node._d.moved) commit('Move overlay'); else { seek(xToTime(e.clientX)); refresh(); } },
     });
   }
@@ -1064,21 +1210,23 @@ const VideoEditor = (() => {
   }
   /** Keyframes for an overlay: position, size, opacity and rotation over time. */
   function animateSection(o) {
-    const [box, inner] = details('Animate (keyframes)', !!(o.kf && Object.values(o.kf).some(l => l && l.length)));
+    const clip = isClip(o), o0 = itemStart(o), oL = itemLen(o);
+    const [box, inner] = details(clip ? 'Keyframes' : 'Animate (keyframes)', !!(o.kf && Object.values(o.kf).some(l => l && l.length)));
     o.kf = o.kf || {};
-    const u = clamp(t - o.start, 0, olen(o));
-    const inRange = t >= o.start && t <= o.start + olen(o);
-    const st = ovState(o, t);
+    const u = clamp(t - o0, 0, oL);
+    const inRange = t >= o0 && t <= o0 + oL;
+    const st = clip ? clipState(o, u) : ovState(o, t);
     const ease = selectField('Easing for new keys', [['ease', 'Ease in & out'], ['linear', 'Linear'], ['in', 'Ease in'], ['out', 'Ease out'], ['hold', 'Hold (jump)']], animateSection.ease || 'ease');
     ease.select.addEventListener('change', () => { animateSection.ease = ease.get(); });
-    inner.append(h(`<p class="hint">${inRange ? `Playhead is ${u.toFixed(2)}s into this overlay.` : 'Move the playhead over this overlay to add keyframes.'} Once a property has keyframes, dragging the overlay or changing its slider keys it at the playhead.</p>`), ease);
-    for (const [p, label] of KF_PROPS) {
+    const what = clip ? 'clip' : 'overlay';
+    inner.append(h(`<p class="hint">${inRange ? `Playhead is ${u.toFixed(2)}s into this ${what}.` : `Move the playhead over this ${what} to add keyframes.`} Once a property has keyframes, ${clip ? 'changing its Motion slider' : 'dragging the overlay or changing its slider'} keys it at the playhead.</p>`), ease);
+    for (const [p, label] of (clip ? CLIP_KF : KF_PROPS)) {
       const list = o.kf[p] || [];
       const row = h(`<div class="kf-row"><span class="kf-name">${label}</span><span class="kf-dots"></span><button class="icon-btn kf-add" title="Add keyframe at playhead" ${inRange ? '' : 'disabled'}>${icon('marker')}</button></div>`);
-      const dots = $('.kf-dots', row), len = Math.max(0.01, olen(o));
+      const dots = $('.kf-dots', row), len = Math.max(0.01, oL);
       list.forEach((k, i) => {
-        const d = h(`<button class="kf-dot ${Math.abs(k.t - u) < 0.04 ? 'here' : ''} ${k.ease === 'hold' ? 'hold' : ''}" style="left:${k.t / len * 100}%" title="${k.t.toFixed(2)}s · ${p === 'opacity' ? Math.round(k.v * 100) + '%' : p === 'rotation' ? Math.round(k.v) + '°' : p === 'scale' ? Math.round(k.v * 100) + '%' : Math.round(k.v * 100) + '%'} · ${k.ease || 'ease'} — click to jump, double-click to delete"></button>`);
-        d.addEventListener('click', () => seek(o.start + k.t));
+        const d = h(`<button class="kf-dot ${Math.abs(k.t - u) < 0.04 ? 'here' : ''} ${k.ease === 'hold' ? 'hold' : ''}" style="left:${k.t / len * 100}%" title="${k.t.toFixed(2)}s · ${p === 'opacity' || p === 'volume' ? Math.round(k.v * 100) + '%' : p === 'rotation' ? Math.round(k.v) + '°' : p === 'scale' ? Math.round(k.v * 100) + '%' : Math.round(k.v * 100) + '%'} · ${k.ease || 'ease'} — click to jump, double-click to delete"></button>`);
+        d.addEventListener('click', () => seek(o0 + k.t));
         d.addEventListener('dblclick', () => { list.splice(i, 1); if (!list.length) delete o.kf[p]; commit('Delete keyframe'); });
         dots.appendChild(d);
       });
@@ -1088,11 +1236,71 @@ const VideoEditor = (() => {
     const clr = h('<button class="btn btn-sm btn-ghost">Clear all keyframes</button>'); clr.addEventListener('click', () => { o.kf = {}; commit('Clear keyframes'); });
     const nav = h('<div class="row"></div>');
     const prevB = h(`<button class="btn btn-sm">${icon('prev')}Previous key</button>`), nextB = h(`<button class="btn btn-sm">Next key${icon('next')}</button>`);
-    const allT = () => [...new Set(Object.values(o.kf).flat().map(k => +(o.start + k.t).toFixed(3)))].sort((a, b) => a - b);
+    const allT = () => [...new Set(Object.values(o.kf).flat().map(k => +(o0 + k.t).toFixed(3)))].sort((a, b) => a - b);
     prevB.addEventListener('click', () => { const ts = allT().filter(x => x < t - 0.01); if (ts.length) seek(ts[ts.length - 1]); });
     nextB.addEventListener('click', () => { const ts = allT().filter(x => x > t + 0.01); if (ts.length) seek(ts[0]); });
     nav.append(prevB, nextB);
     inner.append(nav, clr);
+    return box;
+  }
+  /** Motion for storyline clips: position, scale, rotation and opacity (like Premiere's Effect Controls → Motion). */
+  function motionSection(c) {
+    c.motion = c.motion || {};
+    const M = c.motion, u = clamp(t - (c._start ?? 0), 0, dur(c)), st = clipState(c, u);
+    const on = Object.keys(M).length || ['x', 'y', 'scale', 'rotation', 'opacity'].some(p => hasKfs(c, p));
+    const [box, inner] = details('Motion', !!on);
+    const S = (label, key, min, max, step, scale, fmt, def) => {
+      const s = slider({ label, min, max, step, value: +(st[key] * scale).toFixed(2), fmt });
+      s.input.addEventListener('input', () => { const v = s.get() / scale; if (hasKfs(c, key)) setKey(c, key, v); else M[key] = v; sync(t, playing); });
+      s.input.addEventListener('change', () => commit('Motion'));
+      s.input.addEventListener('dblclick', () => { if (!hasKfs(c, key)) { M[key] = def; commit('Reset ' + label.toLowerCase()); } });
+      return s;
+    };
+    const row = h('<div class="row"></div>'); row.append(S('Position ↔', 'x', -50, 150, 0.5, 100, v => Math.round(v) + '%', 0.5), S('Position ↕', 'y', -50, 150, 0.5, 100, v => Math.round(v) + '%', 0.5));
+    const reset = h('<button class="btn btn-sm btn-ghost">Reset motion</button>'); reset.addEventListener('click', () => { c.motion = {}; if (c.kf) for (const p of ['x', 'y', 'scale', 'rotation', 'opacity']) delete c.kf[p]; commit('Reset motion'); });
+    inner.append(row, S('Scale', 'scale', 5, 400, 1, 100, v => Math.round(v) + '%', 1), S('Rotation', 'rotation', -180, 180, 1, 1, v => Math.round(v) + '°', 0), S('Opacity', 'opacity', 0, 100, 1, 100, v => Math.round(v) + '%', 1),
+      h('<p class="hint">Use Keyframes below to animate these over time — punch-ins, slow pushes, picture slides. Areas the clip no longer covers show black.</p>'), reset);
+    return box;
+  }
+  /** Speed ramp (time remapping): speed changes smoothly across the clip. */
+  const RAMP_PRESETS = [
+    ['slowmid', 'Slow-motion moment in the middle', [{ u: 0, s: 1 }, { u: 0.35, s: 1 }, { u: 0.5, s: 0.3 }, { u: 0.65, s: 1 }, { u: 1, s: 1 }]],
+    ['fastmid', 'Speed through the middle', [{ u: 0, s: 1 }, { u: 0.3, s: 1 }, { u: 0.5, s: 4 }, { u: 0.7, s: 1 }, { u: 1, s: 1 }]],
+    ['intoslow', 'Ease into slow motion', [{ u: 0, s: 1 }, { u: 0.5, s: 1 }, { u: 1, s: 0.3 }]],
+    ['outofslow', 'Slow motion, then back to speed', [{ u: 0, s: 0.3 }, { u: 0.5, s: 1 }, { u: 1, s: 1 }]],
+    ['hit', 'Speed up, hit, slow down', [{ u: 0, s: 3 }, { u: 0.45, s: 3 }, { u: 0.55, s: 0.3 }, { u: 0.8, s: 0.3 }, { u: 1, s: 1 }]],
+  ];
+  function rampSection(c) {
+    const r = c.ramp = c.ramp || { on: false, pts: RAMP_PRESETS[0][2].map(p => ({ ...p })) };
+    const [box, inner] = details('Speed ramp', r.on);
+    const on = checkField('Ramp the speed across this clip', r.on); on.input.addEventListener('change', () => { r.on = on.get(); commit(r.on ? 'Speed ramp' : 'Remove speed ramp'); });
+    const pre = selectField('Shape', [['', 'Custom'], ...RAMP_PRESETS.map(([k, l]) => [k, l])], RAMP_PRESETS.find(([, , pts]) => JSON.stringify(pts) === JSON.stringify(r.pts))?.[0] || '');
+    pre.select.addEventListener('change', () => { const f = RAMP_PRESETS.find(([k]) => k === pre.get()); if (f) { r.pts = f[2].map(p => ({ ...p })); r.on = true; commit('Speed ramp'); } });
+    // editable graph: drag points up/down for speed, sideways for timing; double-click adds / removes a point
+    const W = 240, H = 90, cv = h(`<canvas class="ramp-graph" width="${W * 2}" height="${H * 2}" style="width:100%;height:${H}px"></canvas>`);
+    const ys = sp => H - 6 - (Math.log2(sp) + 3.33) / 6.33 * (H - 12), sOf = y => clamp(2 ** ((H - 6 - y) / (H - 12) * 6.33 - 3.33), 0.1, 8);
+    const draw = () => {
+      const g = cv.getContext('2d'); g.setTransform(2, 0, 0, 2, 0, 0); g.clearRect(0, 0, W, H);
+      g.strokeStyle = 'rgba(255,255,255,.12)'; g.beginPath(); g.moveTo(0, ys(1)); g.lineTo(W, ys(1)); g.stroke();
+      g.fillStyle = 'rgba(255,255,255,.35)'; g.font = '10px Manrope, sans-serif'; g.fillText('1×', 4, ys(1) - 3); g.fillText('8×', 4, 12); g.fillText('0.1×', 4, H - 4);
+      const segs = rampSegs({ ...c, ramp: { ...r, on: true } }) || [];
+      g.strokeStyle = r.on ? '#2fd67f' : 'rgba(47,214,127,.4)'; g.lineWidth = 2; g.beginPath();
+      segs.forEach(([, sp], i) => { const x0 = i / segs.length * W, x1 = (i + 1) / segs.length * W; if (!i) g.moveTo(x0, ys(sp)); g.lineTo(x0, ys(sp)); g.lineTo(x1, ys(sp)); }); g.stroke();
+      r.pts.forEach(p => { g.fillStyle = '#e4ece7'; g.beginPath(); g.arc(p.u * W, ys(p.s), 4, 0, 7); g.fill(); });
+    };
+    let drag = null;
+    const pos = e => { const b = cv.getBoundingClientRect(); return { x: (e.clientX - b.left) / b.width * W, y: (e.clientY - b.top) / b.height * H }; };
+    cv.addEventListener('pointerdown', e => { const q = pos(e); drag = r.pts.find(p => Math.hypot(p.u * W - q.x, ys(p.s) - q.y) < 9); if (drag) cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener('pointermove', e => { if (!drag) return; const q = pos(e), i = r.pts.indexOf(drag), sorted = [...r.pts].sort((a, b) => a.u - b.u), k = sorted.indexOf(drag);
+      if (k > 0 && k < sorted.length - 1) drag.u = clamp(q.x / W, sorted[k - 1].u + 0.02, sorted[k + 1].u - 0.02);
+      drag.s = +sOf(q.y).toFixed(2); r.on = true; draw(); sync(t, playing); void i; });
+    cv.addEventListener('pointerup', () => { if (drag) { drag = null; commit('Speed ramp'); } });
+    cv.addEventListener('dblclick', e => { const q = pos(e), hit = r.pts.find(p => Math.hypot(p.u * W - q.x, ys(p.s) - q.y) < 9);
+      if (hit) { const sorted = [...r.pts].sort((a, b) => a.u - b.u); if (hit !== sorted[0] && hit !== sorted[sorted.length - 1]) r.pts.splice(r.pts.indexOf(hit), 1); }
+      else r.pts.push({ u: clamp(q.x / W, 0.01, 0.99), s: +sOf(q.y).toFixed(2) });
+      r.pts.sort((a, b) => a.u - b.u); r.on = true; commit('Speed ramp'); });
+    draw();
+    inner.append(on, pre, cv, h(`<p class="hint">Drag the dots: up is faster, down is slower. Double-click to add or remove a point. ${r.on ? `Clip length ${fmtTime(dur(c))}.` : ''} The clip's own sound is silenced while ramped — add music or a voice-over on an audio track.</p>`));
     return box;
   }
   /** Green / blue screen keying for overlays. */
@@ -1164,7 +1372,7 @@ const VideoEditor = (() => {
       <section class="vd-timeline">
         <div class="tl-bar"></div>
         <div class="tl-body">
-          <div class="tl-heads"><div class="tl-head captions">${icon('title')}Captions</div><div class="tl-head overlay">${icon('overlay')}Overlay</div><div class="tl-head">${icon('film')}Video</div><div class="tl-head audio">${icon('music')}Music</div></div>
+          <div class="tl-heads"><div class="tl-head captions">${icon('title')}Captions</div><div class="tl-head overlay"></div><div class="tl-head video"></div><div class="tl-head audio"></div></div>
           <div class="tl-scroll"><div class="tl-inner"><div class="tl-ruler"></div><div class="tl-track captions"></div><div class="tl-track overlay"></div><div class="tl-track video"></div><div class="tl-track audio"></div><div class="playhead"></div></div></div>
         </div>
       </section></div>`);
@@ -1195,7 +1403,7 @@ const VideoEditor = (() => {
       move: e => seek(xToTime(e.clientX)),
     });
     // clicking empty track area deselects / moves playhead
-    [el.vtrack, el.atrack, el.otrack].forEach(tr => tr.addEventListener('pointerdown', e => { if (e.target === tr) { sel = null; seek(xToTime(e.clientX)); refresh(); } }));
+    [el.vtrack, el.atrack, el.otrack].forEach(tr => tr.addEventListener('pointerdown', e => { if (e.target === tr || e.target.classList.contains('tl-row')) { sel = null; seek(xToTime(e.clientX)); refresh(); } }));
     // drops from bin or OS
     const dropOn = (track, isAudio) => {
       track.addEventListener('dragover', e => { e.preventDefault(); if (!isAudio) showInsert(insertIndexAt(e.clientX)); });
@@ -1206,7 +1414,7 @@ const VideoEditor = (() => {
         let list = id ? [byId(media, id)].filter(Boolean) : await importPaths(Array.from(e.dataTransfer.files).map(f => ro3.pathOf(f)).filter(Boolean));
         let idx = insertIndexAt(e.clientX), at = Math.max(0, xToTime(e.clientX));
         for (const m of list) {
-          if (isAudio || m.kind === 'audio') { if (m.info && (m.info.hasAudio || m.kind === 'audio')) { addToTimelineAudio(m, at); at += m.info.duration; } }
+          if (isAudio || m.kind === 'audio') { if (m.info && (m.info.hasAudio || m.kind === 'audio')) { addToTimelineAudio(m, at, isAudio ? clamp(trackOfY(el.atrack, settings.atracks, AU_ROW, e.clientY, false), 0, settings.atracks - 1) : undefined); at += m.info.duration; } }
           else { addToTimeline(m, idx++); }
         }
       });
@@ -1218,7 +1426,8 @@ const VideoEditor = (() => {
       const id = e.dataTransfer.getData('text/ro3-media');
       const list = id ? [byId(media, id)].filter(Boolean) : await importPaths(Array.from(e.dataTransfer.files).map(f => ro3.pathOf(f)).filter(Boolean));
       let at = snapTime(Math.max(0, xToTime(e.clientX)));
-      for (const m of list) { addOverlay(m, at); at += m.kind === 'video' ? m.info.duration : 5; }
+      addOverlay.track = clamp(trackOfY(el.otrack, settings.vtracks, OV_ROW, e.clientY, true), 0, settings.vtracks - 1);
+      try { for (const m of list) { addOverlay(m, at); at += m.kind === 'video' ? m.info.duration : 5; } } finally { addOverlay.track = null; }
     });
     // clicking the empty frame deselects overlays
     el.frame.addEventListener('pointerdown', e => { if (!e.target.classList.contains('ov-el') && sel && sel.type === 'overlay') { sel = null; refresh(); } });
@@ -1232,8 +1441,9 @@ const VideoEditor = (() => {
     hist.stack[0].label = 'Start';
     renderBin(); refresh();
   }
-  function addToTimelineAudio(m, at) {
+  function addToTimelineAudio(m, at, track) {
     const a = { id: uid('a'), mediaId: m.id, start: at, in: 0, out: m.info.duration, volume: 0.8, fadeIn: 0, fadeOut: 1 };
+    a.track = Number.isInteger(track) ? track : freeTrack(audio, audioLen, at, audioLen(a));
     audio.push(a); sel = { type: 'audio', id: a.id }; commit('Add music');
   }
 
@@ -1309,6 +1519,39 @@ const VideoEditor = (() => {
   }
   function hideInsert() { $$('.insert-mark', el.vtrack).forEach(x => x.remove()); }
 
+  const OV_ROW = 38, AU_ROW = 42;
+  const trackOfY = (track, rows, rowH, clientY, topFirst) => { const r = track.getBoundingClientRect(); const i = Math.floor((clientY - r.top) / rowH); return topFirst ? rows - 1 - i : i; };
+  /** Track header controls: V tracks hide / lock, A tracks mute / solo / lock, plus a menu for volume, add and delete. */
+  function paintTrackHeads() {
+    const ws = el.ws, VT = settings.vtracks, AT = settings.atracks;
+    const btn = (id, key, ic, icOff, title) => { const on = !!tpeek(id)[key]; return `<button class="trk-b ${on ? 'on' : ''}" data-id="${id}" data-k="${key}" title="${title}" aria-label="${title}" aria-pressed="${on}">${key === 'mute' || key === 'solo' ? `<b>${key === 'mute' ? 'M' : 'S'}</b>` : icon(on ? icOff : ic)}</button>`; };
+    const vh = $('.tl-head.overlay', ws); vh.style.height = VT * OV_ROW + 'px';
+    vh.innerHTML = Array.from({ length: VT }, (_, r) => { const id = vName(VT - 1 - r); return `<div class="trk" style="height:${OV_ROW}px"><button class="trk-name" data-id="${id}" title="Track options">${id}</button>${btn(id, 'hide', 'eye', 'eyeOff', 'Show / hide track')}${btn(id, 'lock', 'unlock', 'lock', 'Lock track')}</div>`; }).join('');
+    const v1 = $('.tl-head.video', ws);
+    v1.innerHTML = `<div class="trk" style="height:100%"><button class="trk-name" data-id="V1" title="Track options">V1</button>${btn('V1', 'lock', 'unlock', 'lock', 'Lock track')}${btn('A1', 'mute', '', '', 'Mute the clips’ sound (A1)')}${btn('A1', 'solo', '', '', 'Solo A1')}</div>`;
+    const ah = $('.tl-head.audio', ws); ah.style.height = AT * AU_ROW + 'px';
+    ah.innerHTML = Array.from({ length: AT }, (_, k) => { const id = aName(k), vol = tpeek(id).vol; return `<div class="trk" style="height:${AU_ROW}px"><button class="trk-name" data-id="${id}" title="Track options">${id}${vol != null && vol !== 1 ? `<small>${vol > 1 ? '+' : ''}${(20 * Math.log10(Math.max(1e-3, vol))).toFixed(0)}</small>` : ''}</button>${btn(id, 'mute', '', '', 'Mute track')}${btn(id, 'solo', '', '', 'Solo track')}${btn(id, 'lock', 'unlock', 'lock', 'Lock track')}</div>`; }).join('');
+    $$('.trk-b', ws).forEach(b => b.addEventListener('click', () => { const st = tstate(b.dataset.id); st[b.dataset.k] = !st[b.dataset.k]; commit({ hide: 'Hide track', lock: 'Lock track', mute: 'Mute track', solo: 'Solo track' }[b.dataset.k]); }));
+    $$('.trk-name', ws).forEach(b => b.addEventListener('click', () => trackMenu(b, b.dataset.id)));
+  }
+  function trackMenu(anchor, id) {
+    const isV = id[0] === 'V', n = Number(id.slice(1)) - 2, items = [];
+    if (id !== 'V1') items.push({ label: `Add ${isV ? 'video' : 'audio'} track`, onClick: () => { isV ? settings.vtracks++ : settings.atracks++; commit('Add track'); } });
+    if (id === 'V1') items.push({ label: 'Add video track', onClick: () => { settings.vtracks++; commit('Add track'); } }, { label: 'Add audio track', onClick: () => { settings.atracks++; commit('Add track'); } });
+    if (id[0] === 'A' || id === 'V1') {
+      const aid = id === 'V1' ? 'A1' : id;
+      for (const [db, l] of [[6, '+6 dB'], [3, '+3 dB'], [0, '0 dB (unity)'], [-3, '−3 dB'], [-6, '−6 dB'], [-12, '−12 dB']]) items.push({ label: `${aid} volume ${l}`, onClick: () => { tstate(aid).vol = +(10 ** (db / 20)).toFixed(4); commit('Track volume'); } });
+    }
+    if (id !== 'V1') {
+      const arr = isV ? overlays : audio, count = isV ? settings.vtracks : settings.atracks;
+      if (count > 1) items.push({ label: arr.some(x => x.track === n) ? `Delete ${id} and its ${arr.filter(x => x.track === n).length} item(s)` : `Delete ${id}`, onClick: () => {
+        if (isV) { overlays = overlays.filter(x => x.track !== n); overlays.forEach(x => { if (x.track > n) x.track--; }); settings.vtracks--; }
+        else { audio = audio.filter(x => x.track !== n); audio.forEach(x => { if (x.track > n) x.track--; }); settings.atracks--; }
+        const shift = (pre, cnt) => { const T = settings.tracks || {}; for (let k = n; k < cnt; k++) { const nx = T[pre + (k + 3)]; if (nx) T[pre + (k + 2)] = nx; else delete T[pre + (k + 2)]; } };
+        shift(isV ? 'V' : 'A', count); sel = null; commit('Delete track'); } });
+    }
+    menuAt(anchor, items);
+  }
   function renderTimeline() {
     layout();
     const end = timelineEnd();
@@ -1331,29 +1574,26 @@ const VideoEditor = (() => {
       b.addEventListener('dblclick', e => { e.stopPropagation(); editMarker(+b.dataset.i); });
     });
     // captions track
-    el.ctrack.innerHTML = captions.length ? '' : '<div class="drop-hint">Double-click to add a caption (C), or import an .srt / .vtt file</div>';
+    el.ctrack.innerHTML = captions.length ? '' : '<div class="drop-hint">Double-click to add a caption (C), import an .srt / .vtt, or use Timeline › Auto-caption</div>';
     captions.forEach(c => {
       const isSel = sel && sel.type === 'caption' && sel.id === c.id;
       const node = h(`<div class="clip cap-clip ${isSel ? 'sel' : ''}" data-id="${c.id}" style="left:${c.start * zoom}px;width:${Math.max(4, (c.end - c.start) * zoom)}px"><div class="clabel">${esc(String(c.text).split('\n')[0])}</div><div class="trim l"></div><div class="trim r"></div></div>`);
       bindCaption(node, c); el.ctrack.appendChild(node);
     });
     // overlay track
-    el.otrack.innerHTML = overlays.length ? '' : '<div class="drop-hint">Drop media here for picture-in-picture, or add a Title</div>';
-    // Overlapping overlays stack into lanes (later items draw on top in the frame).
-    const laneEnds = [], laneOf = new Map();
-    [...overlays].sort((a, b) => a.start - b.start).forEach(o => {
-      let ln = laneEnds.findIndex(e => e <= o.start + 1e-3);
-      if (ln < 0) { ln = laneEnds.length; laneEnds.push(0); }
-      laneEnds[ln] = o.start + olen(o); laneOf.set(o.id, ln);
-    });
-    const LANE = 40, lanes = Math.max(1, laneEnds.length), th = lanes * LANE + 12;
-    el.otrack.style.height = th + 'px'; el.ws.querySelector('.tl-head.overlay').style.height = th + 'px';
+    // video tracks V2… (top row is the highest track; higher tracks draw on top)
+    normalizeTracks();
+    const VT = settings.vtracks, AT = settings.atracks;
+    el.otrack.innerHTML = ''; el.otrack.style.height = VT * OV_ROW + 'px';
+    for (let r = 0; r < VT; r++) { const k = VT - 1 - r, st = tpeek(vName(k)); el.otrack.appendChild(h(`<div class="tl-row ${st.hide ? 'off' : ''} ${st.lock ? 'locked' : ''}" data-track="${k}" style="top:${r * OV_ROW}px;height:${OV_ROW}px"></div>`)); }
+    if (!overlays.length) el.otrack.appendChild(h(`<div class="drop-hint" style="top:${(VT - 1) * OV_ROW + 4}px;height:${OV_ROW - 8}px;bottom:auto">Drop media here for picture-in-picture, or add a Title</div>`));
+    paintTrackHeads();
     overlays.forEach(o => {
       const m = o.mediaId ? byId(media, o.mediaId) : null;
       if (o.mediaId && !m) return;
       const isSel = sel && sel.type === 'overlay' && sel.id === o.id;
       const label = o.kind === 'title' ? (o.title.text.split('\n')[0] || 'Title') : m.name;
-      const node = h(`<div class="clip ov-clip ${o.kind === 'title' ? 'title-clip' : ''} ${isSel ? 'sel' : ''}" data-id="${o.id}" style="left:${o.start * zoom}px;width:${Math.max(4, olen(o) * zoom)}px;top:${6 + laneOf.get(o.id) * LANE}px;height:${LANE - 4}px;bottom:auto">
+      const node = h(`<div class="clip ov-clip ${o.kind === 'title' ? 'title-clip' : ''} ${isSel ? 'sel' : ''} ${lockedItem('overlay', o) ? 'locked' : ''} ${ovShown(o) ? '' : 'hidden-track'}" data-id="${o.id}" style="left:${o.start * zoom}px;width:${Math.max(4, olen(o) * zoom)}px;top:${(VT - 1 - o.track) * OV_ROW + 3}px;height:${OV_ROW - 6}px;bottom:auto">
         <div class="clabel">${o.kind === 'title' ? icon('title') : ''}${esc(label)}<em>${fmtTime(olen(o))}</em></div><div class="trim l"></div><div class="trim r"></div></div>`);
       if (m && m.kind === 'video' && m.strip) { node.style.backgroundImage = `url('${m.strip}')`; node.style.backgroundSize = `${m.info.duration * zoom}px 100%`; node.style.backgroundPosition = `${-o.in * zoom}px 0`; node.style.backgroundRepeat = 'no-repeat'; }
       else if (m && m.thumb) node.style.backgroundImage = `url('${m.thumb}')`;
@@ -1366,15 +1606,15 @@ const VideoEditor = (() => {
       const m = mOf(c); if (!m) return;
       const d = dur(c);
       const isSel = sel && sel.type === 'clip' && sel.id === c.id;
-      const node = h(`<div class="clip ${m.kind === 'image' ? 'image-clip' : ''} ${isSel ? 'sel' : ''}" data-id="${c.id}" style="left:${c._start * zoom}px;width:${Math.max(4, d * zoom)}px;z-index:${i + 1}">
-        <div class="clabel">${esc(m.name)}<em>${fmtTime(d)}</em>${spd(c) !== 1 ? `<b class="speed-badge">${spd(c)}×</b>` : ''}</div>
+      const node = h(`<div class="clip ${m.kind === 'image' ? 'image-clip' : ''} ${isSel ? 'sel' : ''} ${lockedItem('clip', c) ? 'locked' : ''}" data-id="${c.id}" style="left:${c._start * zoom}px;width:${Math.max(4, d * zoom)}px;z-index:${i + 1}">
+        <div class="clabel">${esc(m.name)}<em>${fmtTime(d)}</em>${c.ramp && c.ramp.on && rampSegs(c) ? '<b class="speed-badge">ramp</b>' : spd(c) !== 1 ? `<b class="speed-badge">${spd(c)}×</b>` : ''}${c.kf && Object.values(c.kf).some(l => l && l.length) ? `<b class="kf-badge" title="Keyframed">◆</b>` : ''}</div>
         <div class="trim l" title="Trim start"></div><div class="trim r" title="Trim end"></div>
         ${c.muted && m.kind === 'video' ? `<span class="muted-ico">${icon('mute')}</span>` : ''}</div>`);
       if (m.kind === 'video' && m.strip) {
-        const full = m.info.duration * zoom / spd(c);
+        const k = rampSegs(c) ? d / Math.max(0.01, c.out - c.in) : 1 / spd(c), full = m.info.duration * zoom * k;
         node.style.backgroundImage = `url('${m.strip}')`;
         node.style.backgroundSize = `${full}px 100%`;
-        node.style.backgroundPosition = `${-c.in * zoom / spd(c)}px 0`;
+        node.style.backgroundPosition = `${-c.in * zoom * k}px 0`;
         node.style.backgroundRepeat = 'no-repeat';
       } else if (m.thumb) node.style.backgroundImage = `url('${m.thumb}')`;
       bindClip(node, c, i);
@@ -1390,11 +1630,13 @@ const VideoEditor = (() => {
       }
     });
     // audio track
-    el.atrack.innerHTML = audio.length ? '' : '<div class="drop-hint">Drop music or voice-over here</div>';
+    el.atrack.innerHTML = ''; el.atrack.style.height = AT * AU_ROW + 'px';
+    for (let k = 0; k < AT; k++) { const g = trackGain(aName(k)); el.atrack.appendChild(h(`<div class="tl-row ${g === 0 ? 'off' : ''} ${tpeek(aName(k)).lock ? 'locked' : ''}" data-track="${k}" style="top:${k * AU_ROW}px;height:${AU_ROW}px"></div>`)); }
+    if (!audio.length) el.atrack.appendChild(h(`<div class="drop-hint" style="top:4px;height:${AU_ROW - 8}px;bottom:auto">Drop music or voice-over here</div>`));
     audio.forEach(a => {
       const m = byId(media, a.mediaId); if (!m) return;
       const isSel = sel && sel.type === 'audio' && sel.id === a.id;
-      const node = h(`<div class="clip audio-clip ${isSel ? 'sel' : ''}" data-id="${a.id}" style="left:${a.start * zoom}px;width:${Math.max(4, audioLen(a) * zoom)}px">
+      const node = h(`<div class="clip audio-clip ${isSel ? 'sel' : ''} ${lockedItem('audio', a) ? 'locked' : ''} ${trackGain(aName(a.track)) === 0 ? 'hidden-track' : ''}" data-id="${a.id}" style="left:${a.start * zoom}px;width:${Math.max(4, audioLen(a) * zoom)}px;top:${a.track * AU_ROW + 3}px;height:${AU_ROW - 6}px;bottom:auto">
         <div class="clabel">${esc(m.name)}<em>${fmtTime(audioLen(a))}</em></div><div class="trim l"></div><div class="trim r"></div></div>`);
       if (m.wave) { node.style.backgroundImage = `url('${m.wave}')`; node.style.backgroundSize = `${m.info.duration * zoom}px 100%`; node.style.backgroundPosition = `${-a.in * zoom}px 0`; }
       bindAudio(node, a);
@@ -1412,6 +1654,7 @@ const VideoEditor = (() => {
       onDrag(handle, {
         start: e => {
           e.stopPropagation(); sel = { type: 'clip', id: c.id };
+          if (lockedItem('clip', c)) { refreshSel(); return false; }
           const i0 = clips.indexOf(c), nb = left ? clips[i0 - 1] : clips[i0 + 1];
           handle._o = { in: c.in, out: c.out, x: e.clientX, speed: spd(c), dur: dur(c), nb, nbIn: nb && nb.in, nbOut: nb && nb.out, mode: e.altKey && nb ? 'roll' : e.shiftKey && m.kind !== 'image' && !left ? 'stretch' : 'trim' };
           handle._o.label = { roll: 'Roll edit', stretch: 'Rate stretch', trim: 'Trim clip' }[handle._o.mode];
@@ -1441,6 +1684,7 @@ const VideoEditor = (() => {
       start: e => {
         if (e.target.classList.contains('trim')) return false;
         sel = { type: 'clip', id: c.id };
+        if (lockedItem('clip', c)) { refreshSel(); return false; }
         node._d = { x: e.clientX, moved: false, left: c._start * zoom, slip: e.altKey && m.kind === 'video', in: c.in, out: c.out };
         $$('.clip.sel', el.vtrack).forEach(x => x.classList.remove('sel')); node.classList.add('sel');
         renderInspector();
@@ -1478,7 +1722,7 @@ const VideoEditor = (() => {
     $$('.trim', node).forEach(handle => {
       const left = handle.classList.contains('l');
       onDrag(handle, {
-        start: e => { e.stopPropagation(); sel = { type: 'audio', id: a.id }; handle._o = { in: a.in, out: a.out, start: a.start, x: e.clientX }; },
+        start: e => { e.stopPropagation(); sel = { type: 'audio', id: a.id }; if (lockedItem('audio', a)) { refreshSel(); return false; } handle._o = { in: a.in, out: a.out, start: a.start, x: e.clientX }; },
         move: e => {
           const d = (e.clientX - handle._o.x) / zoom;
           if (left) { const nd = clamp(d, -handle._o.in, handle._o.out - handle._o.in - 0.2); a.in = handle._o.in + nd; a.start = Math.max(0, handle._o.start + nd); }
@@ -1489,12 +1733,20 @@ const VideoEditor = (() => {
       });
     });
     onDrag(node, {
-      start: e => { if (e.target.classList.contains('trim')) return false; sel = { type: 'audio', id: a.id }; node._d = { x: e.clientX, s: a.start, moved: false }; refreshSel(); },
-      move: e => { const dx = e.clientX - node._d.x; if (!node._d.moved && Math.abs(dx) < 4) return; node._d.moved = true; a.start = snapTime(Math.max(0, node._d.s + dx / zoom), a); node.style.left = a.start * zoom + 'px'; },
+      start: e => { if (e.target.classList.contains('trim')) return false; sel = { type: 'audio', id: a.id }; node._d = { x: e.clientX, y: e.clientY, s: a.start, moved: false, locked: lockedItem('audio', a) }; markSel(node); },
+      move: e => {
+        const dx = e.clientX - node._d.x, dy = e.clientY - node._d.y; if (node._d.locked || (!node._d.moved && Math.abs(dx) < 4 && Math.abs(dy) < 8)) return; node._d.moved = true;
+        a.start = snapTime(Math.max(0, node._d.s + dx / zoom), a);
+        const AT = settings.atracks, k = clamp(trackOfY(el.atrack, AT, AU_ROW, e.clientY, false), 0, AT);
+        if (k !== a.track && !lockedItem('audio', { track: k })) { a.track = k; node.style.top = (k * AU_ROW + 3) + 'px'; }
+        node.style.left = a.start * zoom + 'px';
+      },
       end: e => { if (node._d.moved) commit('Move music'); else { seek(xToTime(e.clientX)); refresh(); } },
     });
   }
   function refreshSel() { renderTimeline(); renderInspector(); }
+  /** Select without rebuilding the timeline (the dragged node must stay in the page to keep pointer capture). */
+  function markSel(node) { $$('.clip.sel', el.ws).forEach(x => x.classList.remove('sel')); node.classList.add('sel'); renderInspector(); }
   function bindCaption(node, c) {
     $$('.trim', node).forEach(handle => {
       const left = handle.classList.contains('l');
@@ -1505,7 +1757,7 @@ const VideoEditor = (() => {
       });
     });
     onDrag(node, {
-      start: e => { if (e.target.classList.contains('trim')) return false; sel = { type: 'caption', id: c.id }; node._d = { x: e.clientX, s: c.start, len: c.end - c.start, moved: false }; refreshSel(); },
+      start: e => { if (e.target.classList.contains('trim')) return false; sel = { type: 'caption', id: c.id }; node._d = { x: e.clientX, s: c.start, len: c.end - c.start, moved: false }; markSel(node); },
       move: e => { const dx = e.clientX - node._d.x; if (!node._d.moved && Math.abs(dx) < 4) return; node._d.moved = true; c.start = snapTime(Math.max(0, node._d.s + dx / zoom)); c.end = c.start + node._d.len; node.style.left = c.start * zoom + 'px'; },
       end: e => { if (node._d.moved) { captions.sort((a, b) => a.start - b.start); commit('Move caption'); } else { seek(xToTime(e.clientX)); refresh(); } },
     });
@@ -1580,13 +1832,16 @@ const VideoEditor = (() => {
         b.appendChild(sp);
         if (m.info.hasAudio) {
           const v = slider({ label: 'Volume', min: 0, max: 200, value: Math.round((c.volume ?? 1) * 100), unit: '%' });
-          v.input.addEventListener('input', () => { c.volume = v.get() / 100; sync(t, playing); });
+          v.input.addEventListener('input', () => { if (hasKfs(c, 'volume')) setKey(c, 'volume', v.get() / 100); else c.volume = v.get() / 100; sync(t, playing); });
           v.input.addEventListener('change', () => commit('Clip volume'));
           const mute = checkField('Mute this clip', c.muted);
           mute.input.addEventListener('change', () => { c.muted = mute.get(); commit(c.muted ? 'Mute clip' : 'Unmute clip'); });
           b.append(v, mute);
         }
       }
+      b.append(motionSection(c));
+      if (m.kind === 'video') b.append(rampSection(c));
+      b.append(animateSection(c));
       b.appendChild(colorControls(c));
       b.append(gradeSection(c), effectsSection(c, false));
       if (m.kind !== 'image' && m.info.hasAudio) b.append(audioSection(c));
@@ -1661,14 +1916,14 @@ const VideoEditor = (() => {
     // captions & chapters & interchange
     const [capBox, capIn] = details('Captions, chapters & hand-off', false);
     const bb = (ic, l, fn) => { const x = h(`<button class="btn btn-sm">${icon(ic)}${l}</button>`); x.addEventListener('click', fn); return x; };
-    const r1 = h('<div class="ins-actions"></div>'); r1.append(bb('plus', 'Import .srt/.vtt', importCaptions), bb('export', 'Save .srt', () => exportCaptions('srt')), bb('export', 'Save .vtt', () => exportCaptions('vtt')));
+    const r1 = h('<div class="ins-actions"></div>'); r1.append(bb('wand', 'Auto-caption…', autoCaption), bb('plus', 'Import .srt/.vtt', importCaptions), bb('export', 'Save .srt', () => exportCaptions('srt')), bb('export', 'Save .vtt', () => exportCaptions('vtt')));
     const r2 = h('<div class="ins-actions"></div>'); r2.append(bb('marker', 'YouTube chapters', copyChapters));
     const r3 = h('<div class="ins-actions"></div>'); r3.append(bb('export', 'Final Cut / Resolve (FCPXML)', () => exportInterchange('fcpxml')), bb('export', 'EDL', () => exportInterchange('edl')), bb('export', 'OpenTimelineIO', () => exportInterchange('otio')));
     capIn.append(r1, captionStyleBox(), r2, h('<p class="hint">Markers become chapters: press M at each chapter start and double-click a marker to name it.</p>'), r3, h('<p class="hint">Hand the edit to Final Cut Pro, DaVinci Resolve, Premiere (EDL/FCPXML) or any OTIO tool.</p>'));
     layout();
     b.append(res, h(`<p class="hint" style="margin-top:-8px">${settings.width} × ${settings.height}</p>`), fps, fit, fi, fo, mixBox, capBox,
       h(`<div class="divider"></div>`),
-      h(`<p class="hint">${clips.length} clip${clips.length === 1 ? '' : 's'} · ${fmtTime(total)} long${overlays.length ? ` · ${overlays.length} overlay${overlays.length > 1 ? 's' : ''}` : ''}${audio.length ? ` · ${audio.length} music clip${audio.length > 1 ? 's' : ''}` : ''}${markers.length ? ` · ${markers.length} marker${markers.length > 1 ? 's' : ''}` : ''}<br>Select a clip, transition, overlay or music to edit it. Space plays · J/K/L shuttle · S splits · M marks · Delete removes.</p>`));
+      h(`<p class="hint">${clips.length} clip${clips.length === 1 ? '' : 's'} · ${fmtTime(total)} long${overlays.length ? ` · ${overlays.length} overlay${overlays.length > 1 ? 's' : ''}` : ''}${audio.length ? ` · ${audio.length} music clip${audio.length > 1 ? 's' : ''}` : ''}${markers.length ? ` · ${markers.length} marker${markers.length > 1 ? 's' : ''}` : ''}<br>Select a clip, transition, overlay or music to edit it. Space plays · J/K/L shuttle · S splits · Q/W ripple-trim · M marks · Delete removes. Click a track name (V2, A2…) for volume, add and delete.</p>`));
   }
 
   function refresh() {
@@ -1687,10 +1942,17 @@ const VideoEditor = (() => {
     if (g.lut && g.lut.path) { let tx = lutTexts.get(g.lut.path); if (!tx) { try { tx = await ro3.readText(g.lut.path); lutTexts.set(g.lut.path, tx); } catch (_) { tx = null; } } return { ...g, lut: tx ? { ...g.lut, text: tx } : null }; }
     return g;
   }
+  let blackPath = null;
+  async function blackStill() {
+    if (blackPath) return blackPath;
+    const c = document.createElement('canvas'); c.width = 16; c.height = 16; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 16, 16);
+    blackPath = await ro3.writeTemp(await pngBytes(c), 'black-16.png'); return blackPath;
+  }
   async function buildProject(size, opts = {}) {
     const W = size ? size.width : settings.width, H = size ? size.height : settings.height;
     const ovs = [];
-    for (const o of overlays) {
+    for (const o of ovOrder()) {
+      if (!ovShown(o)) continue;
       if (o.kind === 'title') {
         const animated = o.kf && Object.values(o.kf).some(l => l && l.length);
         const c = renderTitle(o, W, H);
@@ -1702,14 +1964,14 @@ const VideoEditor = (() => {
           const kf = {};
           if (o.kf.x) kf.x = o.kf.x.map(k => ({ ...k, v: k.v + dx })); if (o.kf.y) kf.y = o.kf.y.map(k => ({ ...k, v: k.v + dy }));
           if (o.kf.scale) kf.scale = o.kf.scale.map(k => ({ ...k, v: k.v * sc })); if (o.kf.opacity) kf.opacity = o.kf.opacity; if (o.kf.rotation) kf.rotation = o.kf.rotation;
-          ovs.push({ path: p, kind: 'image', start: o.start, in: 0, out: olen(o), x: cx, y: cy, scale: sc, opacity: o.opacity, fadeIn: o.fadeIn, fadeOut: o.fadeOut, kf });
+          ovs.push({ path: p, track: o.track, kind: 'image', start: o.start, in: 0, out: olen(o), x: cx, y: cy, scale: sc, opacity: o.opacity, fadeIn: o.fadeIn, fadeOut: o.fadeOut, kf });
         } else {
           const p = await ro3.writeTemp(await pngBytes(c), `title-${o.id}-${W}x${H}.png`);
-          ovs.push({ path: p, kind: 'title', start: o.start, in: 0, out: olen(o), opacity: o.opacity, fadeIn: o.fadeIn, fadeOut: o.fadeOut });
+          ovs.push({ path: p, track: o.track, kind: 'title', start: o.start, in: 0, out: olen(o), opacity: o.opacity, fadeIn: o.fadeIn, fadeOut: o.fadeOut });
         }
       } else {
         const m = byId(media, o.mediaId); if (!m) continue;
-        ovs.push({ path: m.path, name: m.name, kind: o.kind, start: o.start, in: o.in, out: o.out, x: o.x, y: o.y, scale: o.scale, opacity: o.opacity, rotation: o.rotation || 0, fadeIn: o.fadeIn, fadeOut: o.fadeOut,
+        ovs.push({ path: m.path, name: m.name, track: o.track, kind: o.kind, start: o.start, in: o.in, out: o.out, x: o.x, y: o.y, scale: o.scale, opacity: o.opacity, rotation: o.rotation || 0, fadeIn: o.fadeIn, fadeOut: o.fadeOut,
           hasAudio: !!(m.info && m.info.hasAudio), volume: o.volume, muted: o.muted, fx: o.fx, kf: o.kf, key: o.key, grade: await gradeForExport(o.grade), afx: o.afx });
       }
     }
@@ -1723,13 +1985,16 @@ const VideoEditor = (() => {
       }
     }
     const clipsOut = [];
-    for (const c of clips) { const m = mOf(c); clipsOut.push({ path: m.path, name: m.name, sourceDuration: m.info.duration, kind: m.kind === 'image' ? 'image' : 'video', in: c.in, out: c.out, speed: spd(c), fx: c.fx, hasAudio: !!m.info.hasAudio, volume: c.volume, muted: c.muted, transition: c.transition, grade: await gradeForExport(c.grade), afx: c.afx }); }
+    const tail = opts.noTail ? 0 : timelineEnd() - layout();
+    for (const c of clips) { const m = mOf(c); const rs = rampSegs(c); clipsOut.push({ path: m.path, name: m.name, sourceDuration: m.info.duration, kind: m.kind === 'image' ? 'image' : 'video', in: c.in, out: c.out, speed: rs ? 1 : spd(c), ramp: rs || undefined, motion: c.motion, kf: c.kf, fx: c.fx, hasAudio: !!m.info.hasAudio, volume: c.volume, muted: c.muted, transition: c.transition, grade: await gradeForExport(c.grade), afx: c.afx }); }
+    // music, overlays or captions that run past the last clip: hold on black until they finish (like Premiere)
+    if (tail > 0.05) clipsOut.push({ path: await blackStill(), name: 'Black', kind: 'image', in: 0, out: +tail.toFixed(3), speed: 1, fx: {}, hasAudio: false });
     return {
       name: projectPath ? stripExt(baseName(projectPath)) : 'RO3 edit',
-      settings: { width: W, height: H, fps: settings.fps, fadeIn: settings.fadeIn, fadeOut: settings.fadeOut, fit: opts.fit || settings.fit, audioCrossfade: settings.audioCrossfade, duck: settings.duck, mix: settings.mix },
+      settings: { width: W, height: H, fps: settings.fps, fadeIn: settings.fadeIn, fadeOut: settings.fadeOut, fit: opts.fit || settings.fit, audioCrossfade: settings.audioCrossfade, duck: settings.duck, mix: { ...(settings.mix || {}), main: ((settings.mix && settings.mix.main) ?? 1) * trackGain('A1') } },
       clips: clipsOut,
       overlays: ovs,
-      audio: audio.map(a => { const m = byId(media, a.mediaId); return { path: m.path, name: m.name, start: a.start, in: a.in, out: a.out, volume: a.volume, fadeIn: a.fadeIn, fadeOut: a.fadeOut, afx: a.afx }; }),
+      audio: audio.filter(a => byId(media, a.mediaId) && trackGain(aName(a.track)) > 0).map(a => { const m = byId(media, a.mediaId); return { path: m.path, name: m.name, track: a.track, start: a.start, in: a.in, out: a.out, volume: (a.volume ?? 1) * trackGain(aName(a.track)), fadeIn: a.fadeIn, fadeOut: a.fadeOut, afx: a.afx }; }),
       markers: markers.map(tm => ({ time: tm, name: markerNames[mkKey(tm)] || '' })),
     };
   }
@@ -1842,7 +2107,7 @@ const VideoEditor = (() => {
     const out = await ro3.saveDialog({ title: 'Export timeline', defaultPath: `${base}.${ext}`, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
     if (!out) return;
     try {
-      const p = await buildProject(null, { burnCaptions: false });
+      const p = await buildProject(null, { burnCaptions: false, noTail: true });
       p.overlays = p.overlays.map(o => o.kind === 'title' ? { ...o, text: (overlays.find(x => x.kind === 'title' && Math.abs(x.start - o.start) < 1e-3) || {}).title?.text || '' } : o);
       await ro3.interchange(p, fmt, out);
       toast(`Saved ${baseName(out)}. Titles and effects stay in RO3; cuts, timing, speed, transitions and markers carry over.`, 'ok', 6000);
@@ -1900,6 +2165,7 @@ const VideoEditor = (() => {
     const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
     if (e.code === 'Space') { e.preventDefault(); toggle(); }
     else if (k === 's' && !mod) split();
+    else if ((k === 'q' || k === 'w') && !mod) rippleTrim(k === 'q' ? 'start' : 'end');
     else if (k === 'm' && !mod) toggleMarker();
     else if (k === 'n' && !mod) { snapOn = !snapOn; el.snapB && el.snapB.classList.toggle('on', snapOn); toast(snapOn ? 'Snapping on' : 'Snapping off', 'info', 900); }
     else if (k === 'j' && !mod) shuttle(-1);
@@ -1941,22 +2207,23 @@ const VideoEditor = (() => {
     if (cmd === 'redo') restore(hist.index + 1);
     if (!cmd.startsWith('video:')) return;
     const map = {
-      caption: () => addCaption(), 'import-captions': importCaptions, 'export-srt': () => exportCaptions('srt'), 'export-vtt': () => exportCaptions('vtt'),
+      caption: () => addCaption(), 'auto-caption': autoCaption, 'import-captions': importCaptions, 'export-srt': () => exportCaptions('srt'), 'export-vtt': () => exportCaptions('vtt'),
       chapters: copyChapters, freeze: freezeFrame, 'paste-attrs': pasteAttributes, 'copy-clip': copyClip, 'paste-clip': pasteClip,
       'export-fcpxml': () => exportInterchange('fcpxml'), 'export-edl': () => exportInterchange('edl'), 'export-otio': () => exportInterchange('otio'),
       scopes: () => $('[data-act="scopes"]', el.ws).click(), meters: () => $('[data-act="meter"]', el.ws).click(),
+      'ripple-start': () => rippleTrim('start'), 'ripple-end': () => rippleTrim('end'), 'add-vtrack': () => { settings.vtracks = (settings.vtracks || 1) + 1; commit('Add track'); }, 'add-atrack': () => { settings.atracks = (settings.atracks || 1) + 1; commit('Add track'); },
       split, marker: toggleMarker, title: () => addTitle('lower'), 'render-preview': renderPreview, export: exportDialog,
     };
     const f = map[cmd.slice(6)]; if (f) f();
   }
   /** Palette entries for the video workspace. */
   const commands = () => [
-    ['Add caption at playhead', 'caption', 'C'], ['Import captions (.srt / .vtt)', 'import-captions'], ['Save captions as .srt', 'export-srt'], ['Save captions as .vtt', 'export-vtt'],
+    ['Add caption at playhead', 'caption', 'C'], ['Auto-caption (speech to text)…', 'auto-caption'], ['Import captions (.srt / .vtt)', 'import-captions'], ['Save captions as .srt', 'export-srt'], ['Save captions as .vtt', 'export-vtt'],
     ['Copy YouTube chapters', 'chapters'], ['Freeze frame', 'freeze', 'Shift+F'], ['Paste effects onto clip', 'paste-attrs', 'Ctrl+Alt+V'],
     ['Export to Final Cut / Resolve (FCPXML)', 'export-fcpxml'], ['Export EDL', 'export-edl'], ['Export OpenTimelineIO', 'export-otio'],
-    ['Toggle video scopes', 'scopes'], ['Toggle audio meters', 'meters'], ['Split at playhead', 'split', 'S'], ['Add marker', 'marker', 'M'], ['Add title', 'title', 'T'], ['Render preview', 'render-preview'],
+    ['Toggle video scopes', 'scopes'], ['Toggle audio meters', 'meters'], ['Split at playhead', 'split', 'S'], ['Ripple trim start to playhead', 'ripple-start', 'Q'], ['Ripple trim end to playhead', 'ripple-end', 'W'], ['Add video track', 'add-vtrack'], ['Add audio track', 'add-atrack'], ['Add marker', 'marker', 'M'], ['Add title', 'title', 'T'], ['Render preview', 'render-preview'],
   ].map(([label, c, accel]) => ({ label, path: 'Video', accel: accel || '', run: () => { RO3App.show('video'); menu('video:' + c); } }));
 
   const unsaved = () => dirty && (clips.length || overlays.length || audio.length) ? ['The video edit'] : [];
-  return { unsaved, recover, openProjectPath, init, activate, deactivate, menu, commands, importPaths, addToTimeline, _debug: () => ({ media, clips, audio, overlays, markers, markerNames, captions, settings, t, total: layout(), buildProject, addTitle, addOverlay, toggleMarker, shuttle, addCaption, setKey, freezeFrame, copyClip, pasteClip, pasteAttributes, exportInterchange, chapterData, get sel() { return sel; }, set sel(v) { sel = v; } }), _seek: seek, _select: (s) => { sel = s; refresh(); } };
+  return { unsaved, recover, openProjectPath, init, activate, deactivate, menu, commands, importPaths, addToTimeline, _debug: () => ({ autoCaption, runAutoCaption, rippleTrim, rampSegs, clipState, addToTimelineAudio, media, clips, audio, overlays, markers, markerNames, captions, settings, t, total: layout(), buildProject, addTitle, addOverlay, toggleMarker, shuttle, addCaption, setKey, freezeFrame, copyClip, pasteClip, pasteAttributes, exportInterchange, chapterData, get sel() { return sel; }, set sel(v) { sel = v; } }), _seek: seek, _select: (s) => { sel = s; refresh(); } };
 })();

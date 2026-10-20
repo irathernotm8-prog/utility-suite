@@ -101,13 +101,14 @@ function buildMenu() {
   const template = [
     ...(isMac ? [{ role: 'appMenu' }] : []),
     { label: 'File', submenu: [
-      item('New Image…', 'photo:new', 'CmdOrCtrl+N'),
+      item('New Image…', 'photo:new', 'CmdOrCtrl+N'), item('New Vector Document…', 'vector:new'),
       { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: send('open') },
       { label: 'Open Recent', submenu: recentItems },
       { type: 'separator' },
       { label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('save') },
       { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: send('save-as') },
       { label: 'Export…', accelerator: 'CmdOrCtrl+Alt+E', click: send('export') },
+      item('Place in Vector Document…', 'vector:place', 'CmdOrCtrl+Shift+P'), item('Export for Screens…', 'vector:export-screens'), item('Vector Document Setup…', 'vector:doc-setup'),
       { type: 'separator' },
       isMac ? { role: 'close' } : { role: 'quit' },
     ] },
@@ -116,6 +117,8 @@ function buildMenu() {
       item('Redo', 'redo', isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y'),
       { type: 'separator' },
       { role: 'cut' }, { role: 'copy' }, item('Copy Merged', 'photo:copy-merged', 'CmdOrCtrl+Shift+C'), { role: 'paste' }, item('Paste as New Image', 'photo:paste-new', 'CmdOrCtrl+Shift+V'),
+      { type: 'separator' },
+      { label: 'Vector Paste', submenu: [item('Paste in Front', 'vector:paste-front', 'CmdOrCtrl+F'), item('Paste in Back', 'vector:paste-back', 'CmdOrCtrl+B'), item('Paste in Place', 'vector:paste-in-place', 'CmdOrCtrl+Shift+V')] },
       { type: 'separator' },
       item('Fill Selection', 'photo:fill', 'Alt+Backspace'), item('Content-Aware Fill', 'photo:content-aware', 'Shift+Backspace'), item('Free Transform', 'photo:transform', 'CmdOrCtrl+T'),
     ] },
@@ -159,11 +162,31 @@ function buildMenu() {
       { type: 'separator' },
       { label: 'Classic', submenu: [item('Sharpen…', 'photo:filter:sharpen'), item('Pixelate…', 'photo:filter:pixelate'), item('Vignette…', 'photo:filter:vignette'), item('Posterize…', 'photo:filter:posterize')] },
     ] },
+    { label: 'Object', submenu: [
+      { label: 'Transform', submenu: [item('Transform Again', 'vector:transform-again', 'CmdOrCtrl+D'), item('Move…', 'vector:move'), item('Rotate…', 'vector:rotate'), item('Scale…', 'vector:scale'), item('Flip Horizontal', 'vector:flip-h'), item('Flip Vertical', 'vector:flip-v')] },
+      { label: 'Arrange', submenu: [item('Bring to Front', 'vector:front', 'CmdOrCtrl+Shift+]'), item('Bring Forward', 'vector:forward', 'CmdOrCtrl+]'), item('Send Backward', 'vector:backward', 'CmdOrCtrl+['), item('Send to Back', 'vector:back', 'CmdOrCtrl+Shift+[')] },
+      { label: 'Align', submenu: [item('Left', 'vector:align:left'), item('Horizontal Center', 'vector:align:hcenter'), item('Right', 'vector:align:right'), item('Top', 'vector:align:top'), item('Vertical Center', 'vector:align:vcenter'), item('Bottom', 'vector:align:bottom'), item('Distribute Horizontally', 'vector:distribute:h'), item('Distribute Vertically', 'vector:distribute:v')] },
+      { type: 'separator' },
+      item('Group', 'vector:group', 'CmdOrCtrl+G'), item('Ungroup', 'vector:ungroup', 'CmdOrCtrl+Shift+G'), item('Lock Selection', 'vector:lock', 'CmdOrCtrl+/'), item('Unlock All', 'vector:unlock-all', 'CmdOrCtrl+Alt+/'), item('Hide Selection', 'vector:hide', 'CmdOrCtrl+Shift+/'), item('Show All', 'vector:show-all', 'CmdOrCtrl+Alt+\\'),
+      { type: 'separator' },
+      { label: 'Path', submenu: [item('Join', 'vector:join', 'CmdOrCtrl+J'), item('Reverse Direction', 'vector:reverse'), item('Offset Path…', 'vector:offset'), item('Outline Stroke', 'vector:outline-stroke'), item('Simplify…', 'vector:simplify'), item('Smooth', 'vector:smooth'), item('Add Anchor Points', 'vector:add-anchors'), item('Round Corners…', 'vector:corner-radius')] },
+      { label: 'Pathfinder', submenu: [item('Unite', 'vector:pathfinder:unite'), item('Minus Front', 'vector:pathfinder:minus-front'), item('Intersect', 'vector:pathfinder:intersect'), item('Exclude', 'vector:pathfinder:exclude'), item('Divide', 'vector:pathfinder:divide'), item('Trim', 'vector:pathfinder:trim'), item('Merge', 'vector:pathfinder:merge'), item('Crop', 'vector:pathfinder:crop'), item('Minus Back', 'vector:pathfinder:minus-back')] },
+      { label: 'Compound Path', submenu: [item('Make', 'vector:compound', 'CmdOrCtrl+8'), item('Release', 'vector:release-compound', 'CmdOrCtrl+Alt+Shift+8')] },
+      { label: 'Clipping Mask', submenu: [item('Make', 'vector:clip', 'CmdOrCtrl+7'), item('Release', 'vector:release-clip', 'CmdOrCtrl+Alt+7')] },
+      item('Expand Appearance', 'vector:flatten'),
+      { type: 'separator' },
+      { label: 'Image', submenu: [item('Place Image…', 'vector:place-image'), item('Image Trace…', 'vector:trace'), item('Rasterize', 'vector:rasterize')] },
+      { label: 'Artboards', submenu: [item('New Artboard', 'vector:artboard-new'), item('Duplicate Artboard', 'vector:artboard-duplicate'), item('Delete Artboard', 'vector:artboard-delete'), item('Fit to Artwork Bounds', 'vector:artboard-fit')] },
+      { type: 'separator' },
+      item('Select Same Fill', 'vector:select-same-fill'), item('Select Same Stroke', 'vector:select-same-stroke'),
+    ] },
+    { label: 'Type', submenu: [item('Create Outlines', 'vector:outline-text', 'CmdOrCtrl+Shift+O'), item('Load Font…', 'vector:load-font')] },
     { label: 'Timeline', submenu: [
       item('Split at Playhead', 'video:split', 'S'), item('Add Marker', 'video:marker', 'M'), item('Add Title', 'video:title', 'T'), item('Add Caption', 'video:caption', 'C'),
+      item('Ripple Trim Start to Playhead', 'video:ripple-start', 'Q'), item('Ripple Trim End to Playhead', 'video:ripple-end', 'W'), item('Add Video Track', 'video:add-vtrack'), item('Add Audio Track', 'video:add-atrack'), { type: 'separator' },
       item('Freeze Frame', 'video:freeze', 'Shift+F'), item('Paste Effects onto Clip', 'video:paste-attrs', 'CmdOrCtrl+Alt+V'),
       { type: 'separator' },
-      item('Import Captions…', 'video:import-captions'), item('Save Captions as SRT…', 'video:export-srt'), item('Save Captions as VTT…', 'video:export-vtt'), item('Copy YouTube Chapters', 'video:chapters'),
+      item('Auto-caption…', 'video:auto-caption'), item('Import Captions…', 'video:import-captions'), item('Save Captions as SRT…', 'video:export-srt'), item('Save Captions as VTT…', 'video:export-vtt'), item('Copy YouTube Chapters', 'video:chapters'),
       { type: 'separator' },
       { label: 'Export Timeline', submenu: [item('Final Cut Pro / Resolve (FCPXML)…', 'video:export-fcpxml'), item('EDL (CMX 3600)…', 'video:export-edl'), item('OpenTimelineIO…', 'video:export-otio')] },
       { type: 'separator' },
@@ -173,12 +196,14 @@ function buildMenu() {
       { label: 'Photo', accelerator: 'CmdOrCtrl+1', click: send('tab:photo') },
       { label: 'Video', accelerator: 'CmdOrCtrl+2', click: send('tab:video') },
       { label: 'Quick Convert', accelerator: 'CmdOrCtrl+3', click: send('tab:convert') },
+      { label: 'Vector', accelerator: 'CmdOrCtrl+4', click: send('tab:vector') },
       { type: 'separator' },
       item('Command Palette…', 'palette', 'CmdOrCtrl+K'),
       { type: 'separator' },
       item('Rulers', 'photo:rulers', 'CmdOrCtrl+R'), item('Guides', 'photo:guides', 'CmdOrCtrl+;'), item('Rule of Thirds Grid', 'photo:thirds', "'"), item('Clear Guides', 'photo:clear-guides'),
       { type: 'separator' },
       item('Fit on Screen', 'photo:fit', 'CmdOrCtrl+0'), item('Actual Pixels', 'photo:actual', 'CmdOrCtrl+Alt+1'),
+      { label: 'Vector', submenu: [item('Fit Artboard', 'vector:fit-artboard', 'CmdOrCtrl+0'), item('Fit All', 'vector:fit-all', 'CmdOrCtrl+Alt+0'), item('Actual Size', 'vector:actual-size', 'CmdOrCtrl+Alt+1'), item('Outline Mode', 'vector:outline-mode', 'CmdOrCtrl+Alt+Y'), item('Rulers', 'vector:rulers', 'CmdOrCtrl+R'), item('Guides', 'vector:guides', 'CmdOrCtrl+;'), item('Clear Guides', 'vector:clear-guides'), item('Grid', 'vector:grid', "CmdOrCtrl+'"), item('Snap to Grid', 'vector:snap-grid', "CmdOrCtrl+Shift+'"), item('Smart Guides', 'vector:smart-guides', 'CmdOrCtrl+U'), item('Bounding Box', 'vector:bounding-box', 'CmdOrCtrl+Shift+H'), { type: 'separator' }, item('Properties', 'vector:panel:props'), item('Align', 'vector:panel:align'), item('Swatches', 'vector:panel:swatches'), item('Layers', 'vector:panel:layers'), item('Artboards', 'vector:panel:artboards')] },
       { type: 'separator' },
       { role: 'togglefullscreen' }, { role: 'toggleDevTools' },
     ] },
@@ -295,6 +320,21 @@ handle('video:interchange', async (project, fmt, out) => {
   await fs.promises.writeFile(out, text, 'utf8'); return out;
 });
 handle('video:transitions', () => [...timeline.supportedTransitions()]);
+// Vector: print SVG pages to a vector PDF through a hidden window (keeps text and paths as vectors).
+handle('vector:pdf', async (pages, out, opts = {}) => {
+  // Each artboard becomes a page of its own size (named CSS pages; 1 document unit = 1 pt, as in Illustrator).
+  const w = new BrowserWindow({ show: false, webPreferences: { offscreen: false, javascript: false } });
+  try {
+    const esc = t => String(t || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const css = pages.map((p, i) => `@page p${i}{size:${+p.w}pt ${+p.h}pt;margin:0}div.p${i}{page:p${i};width:${+p.w}pt;height:${+p.h}pt}`).join('');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(opts.title || 'RO3 Vector')}</title><style>@page{margin:0}${css}html,body{margin:0;padding:0}div.pg{overflow:hidden;break-after:page}div.pg:last-child{break-after:auto}svg{display:block;width:100%;height:100%}</style></head><body>${pages.map((p, i) => `<div class="pg p${i}">${p.svg}</div>`).join('')}</body></html>`;
+    const tmp = path.join(TMP, `vector-${Date.now()}.html`); fs.mkdirSync(TMP, { recursive: true }); fs.writeFileSync(tmp, html);
+    await w.loadFile(tmp);
+    const pdf = await w.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true, margins: { marginType: 'none' } });
+    await fs.promises.writeFile(out, pdf); fs.unlink(tmp, () => {});
+    return { bytes: pdf.length };
+  } finally { w.destroy(); }
+});
 handle('media:proxy', (jobId, p) => withJob(jobId, (signal, progress) => {
   const out = path.join(TMP, 'proxy-' + Buffer.from(p).toString('base64url').slice(-40) + '.mp4');
   if (fs.existsSync(out)) return out;
@@ -339,6 +379,18 @@ handle('video:render', (jobId, project, out) => withJob(jobId, (signal, progress
   if (!out.preview) out.output = uniquePath(out.output);
   return timeline.renderProject(project, out, progress, signal);
 }));
+// Auto-captions: mix the timeline's sound down to 16 kHz mono float samples for the speech model.
+handle('captions:audio', (jobId, project) => withJob(jobId, async (signal, progress) => {
+  fs.mkdirSync(TMP, { recursive: true });
+  const wav = path.join(TMP, `asr-${Date.now()}.wav`), raw = wav.replace(/\.wav$/, '.f32');
+  try {
+    await timeline.renderProject(project, { output: wav }, p => progress(p * 0.9), signal);
+    await require('./engine/ffmpeg').runFfmpeg(['-i', wav, '-vn', '-ac', '1', '-ar', '16000', '-f', 'f32le', '-acodec', 'pcm_f32le', raw], { signal });
+    progress(1);
+    const buf = await fs.promises.readFile(raw);
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  } finally { fs.unlink(wav, () => {}); fs.unlink(raw, () => {}); }
+}));
 handle('video:previewPath', () => path.join(TMP, `preview-${Date.now()}.mp4`));
 handle('video:writeTemp', async (bytes, name) => { const p = path.join(TMP, String(name).replace(/[^a-z0-9._-]/gi, '_')); await fs.promises.writeFile(p, Buffer.from(bytes)); return p; });
 
@@ -355,7 +407,7 @@ handle('job:cancel', (jobId) => { const ac = jobs.get(jobId); if (ac) ac.abort()
 
 // Files opened by double-click / "Open with" (macOS sends open-file, Windows passes argv).
 const pendingOpen = [];
-const openableArg = a => /\.(ro3|ro3v|psd|png|jpe?g|webp|tiff?|gif|bmp|mp4|mov|mkv|webm)$/i.test(a) && fs.existsSync(a);
+const openableArg = a => /\.(ro3|ro3v|ro3d|svg|ai|pdf|psd|png|jpe?g|webp|tiff?|gif|bmp|mp4|mov|mkv|webm)$/i.test(a) && fs.existsSync(a);
 process.argv.slice(1).filter(openableArg).forEach(a => pendingOpen.push(a));
 app.on('open-file', (e, p) => { e.preventDefault(); if (win && win.webContents && !win.webContents.isLoading()) win.webContents.send('menu', 'open-path:' + p); else pendingOpen.push(p); });
 const gotLock = process.env.RO3_SMOKE ? true : app.requestSingleInstanceLock();

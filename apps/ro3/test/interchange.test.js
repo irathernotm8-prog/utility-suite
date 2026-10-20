@@ -202,6 +202,26 @@ test('FFMETADATA chapters', () => {
 
 // ---------- ORA ----------
 
+test('captions fromSegments: readable cues, no overlap, word-safe', () => {
+  const segs = [
+    { start: 0, end: 11, text: ' And so my fellow Americans, ask not what your country can do for you, ask what you can do for your country.' },
+    { start: 10.9, end: 11.2, text: 'Thanks.' },
+    { start: 20, end: 60, text: 'one two three' },
+    { start: 61, end: 61, text: 'zero length' },
+  ];
+  const c = cap.fromSegments(segs);
+  assert.ok(c.length >= 4);
+  for (let i = 0; i < c.length; i++) {
+    const lines = c[i].text.split('\n');
+    assert.ok(lines.length <= 2 && lines.every(l => l.length <= 42), 'line limits: ' + c[i].text);
+    assert.ok(c[i].end > c[i].start);
+    if (c[i + 1]) assert.ok(c[i].end <= c[i + 1].start + 1e-9, 'no overlap');
+  }
+  assert.strictEqual(c.map(x => x.text.replace(/\n/g, ' ')).join(' ').split(' ').length, 26, 'no words lost');
+  assert.ok(c.find(x => x.text === 'one two three').end - 20 <= 7, 'max duration');
+  const single = cap.fromSegments(segs.slice(0, 1), { maxChars: 22, maxLines: 1 });
+  assert.ok(single.every(x => !x.text.includes('\n') && x.text.length <= 22));
+});
 test('ORA write → read round trip', async () => {
   const sharp = require('sharp');
   const red = await sharp({ create: { width: 4, height: 3, channels: 4, background: '#ff0000' } }).png().toBuffer();
