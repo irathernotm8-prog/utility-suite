@@ -89,4 +89,4 @@ async function extract(zip, destDir) {
   return run('unzip', ['-q', zip, '-d', destDir]);
 }
 
-module.exports = {available, openTerminal, openInEditor, openWith, compress, extract};
+module.exports = {run, available, openTerminal, openInEditor, openWith, compress, extract};

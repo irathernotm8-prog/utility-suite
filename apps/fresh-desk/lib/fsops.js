@@ -59,7 +59,7 @@ async function entry(dir, name) {
     size: isDir ? null : st.size,
     mtime: st.mtimeMs, ctime: st.birthtimeMs || st.ctimeMs,
     ext: isDir && !isPackage ? '' : extOf(name),
-    kind: isPackage ? 'Application' : kindOf(name, isDir),
+    kind: isPackage ? packageKind(name) : kindOf(name, isDir),
     hidden: isHidden(name),
   };
 }
@@ -73,6 +73,10 @@ function hiddenHere(dir, name) {
     if (dir === os.homedir() && name === 'Library') return true;
   }
   return false;
+}
+function packageKind(name) {
+  const ext = extOf(name);
+  return {app: 'Application', photoslibrary: 'Photos Library', musiclibrary: 'Music Library', rtfd: 'Document', framework: 'Framework', bundle: 'Bundle'}[ext] || 'Package';
 }
 async function list(dir, {hidden = false} = {}) {
   dir = path.resolve(dir);

@@ -56,6 +56,8 @@ async function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
   win.webContents.on('will-navigate', e => e.preventDefault());
   win.on('resize', debounce(saveWindowState, 400)); win.on('move', debounce(saveWindowState, 400)); win.on('close', saveWindowState);
+  // If the page process ever dies, bring the window back instead of leaving it blank.
+  win.webContents.on('render-process-gone', (_e, d) => { if (d.reason !== 'clean-exit') setTimeout(() => { if (!win.isDestroyed()) win.webContents.reload(); }, 300); });
   win.loadFile('renderer/index.html', {query: {platform: process.platform}});
 }
 nativeTheme.on('updated', () => {
@@ -202,15 +204,48 @@ handle('thumb', async (p, size = 256, mtime = 0) => {
   if (thumbCache.has(key)) return thumbCache.get(key);
   let img = null;
   try {
-    if (isMac || isWin) img = await nativeImage.createThumbnailFromPath(p, {width: size, height: size});
+    if (/\.(app|photoslibrary|musiclibrary|framework|bundle)$/i.test(p)) return null;
+    if (isMac || isWin) img = await nativeQueue(() => nativeImage.createThumbnailFromPath(p, {width: size, height: size}));
     else if (/\.(png|jpe?g|gif|webp|bmp)$/i.test(p)) { img = nativeImage.createFromPath(p); if (!img.isEmpty()) { const s = img.getSize(); const k = size / Math.max(s.width, s.height); if (k < 1) img = img.resize({width: Math.round(s.width * k), height: Math.round(s.height * k), quality: 'good'}); } }
   } catch { img = null; }
   return remember(key, img && !img.isEmpty() ? img.toDataURL() : null);
 });
+// Native image work runs a few at a time; flooding it froze or crashed macOS builds.
+function queue(limit) {
+  let active = 0; const waiting = [];
+  const next = () => { if (active >= limit || !waiting.length) return; active++; const {fn, resolve} = waiting.shift(); Promise.resolve().then(fn).then(resolve, () => resolve(null)).finally(() => { active--; next(); }); };
+  return fn => new Promise(resolve => { waiting.push({fn, resolve}); next(); });
+}
+const nativeQueue = queue(3);
+// App icons. macOS: app.getFileIcon crashes Electron 44 (a CHECK on a worker thread), so read the
+// bundle's .icns with the system's plutil + sips instead and cache the PNG in app-data.
+async function macAppIcon(appPath) {
+  if (!/\.app$/i.test(appPath)) return null;
+  const st = await fs.stat(appPath);
+  const cacheDir = path.join(userData(), 'app-icons');
+  const out = path.join(cacheDir, crypto.createHash('sha1').update(`${appPath}|${st.mtimeMs}`).digest('hex') + '.png');
+  try { await fs.access(out); return nativeImage.createFromPath(out).toDataURL(); } catch {}
+  const plist = path.join(appPath, 'Contents', 'Info.plist');
+  let name = '';
+  try { name = (await launch.run('/usr/bin/plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', plist], {timeout: 5000})).trim(); } catch {}
+  if (!name) return null;
+  if (!/\.icns$/i.test(name)) name += '.icns';
+  const icns = path.join(appPath, 'Contents', 'Resources', name);
+  try { await fs.access(icns); } catch { return null; }
+  await fs.mkdir(cacheDir, {recursive: true});
+  await launch.run('/usr/bin/sips', ['-s', 'format', 'png', '-Z', '128', icns, '--out', out], {timeout: 10000});
+  const img = nativeImage.createFromPath(out);
+  return img.isEmpty() ? null : img.toDataURL();
+}
 handle('icon', async (p, size = 'normal') => {
   const key = `icon|${p}|${size}`;
   if (thumbCache.has(key)) return thumbCache.get(key);
-  try { const img = await app.getFileIcon(p, {size}); return remember(key, img.isEmpty() ? null : img.toDataURL()); } catch { return remember(key, null); }
+  const src = await nativeQueue(async () => {
+    if (isMac) return macAppIcon(asPath(p));
+    const img = await app.getFileIcon(asPath(p), {size});
+    return img.isEmpty() ? null : img.toDataURL();
+  });
+  return remember(key, src || null);
 });
 const dragIcon = () => nativeImage.createFromPath(path.join(__dirname, 'build/icon.png')).resize({width: 40, height: 40});
 ipcMain.on('startDrag', (e, paths) => { try { e.sender.startDrag({files: asPaths(paths), icon: dragIcon()}); } catch {} });

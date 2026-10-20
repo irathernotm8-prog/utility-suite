@@ -78,6 +78,7 @@ async function load(t, {keep = false} = {}) {
 async function reload(keep = true) { for (const t of S.tabs) if (t.listing || t.error) await load(t, {keep}); }
 
 function addRecent(p) {
+  if (S.prefs.showRecents === false) return;
   const r = S.prefs.recents.filter(x => x !== p); r.unshift(p);
   S.prefs.recents = r.slice(0, 12);
 }
@@ -157,18 +158,25 @@ function renderPlaces() {
   favBox.addEventListener('drop', e => { if (e.target !== favBox) return; e.preventDefault(); favBox.classList.remove('drop'); for (const f of e.dataTransfer.files) { const p = desk.pathForFile(f); if (p) pin(p); } });
   const favSet = new Set([...favs, ...pins].map(f => f.path));
   const recents = S.prefs.recents.filter(p => !favSet.has(p) && p !== S.env.home).slice(0, 5).map(p => ({name: U.basename(p) || p, path: p, icon: 'clock'}));
-  if (recents.length) section('Recent', 'recent', recents, 'recent');
+  if (recents.length && S.prefs.showRecents !== false) section('Recent', 'recent', recents, 'recent');
   section('Locations', 'loc', S.places.volumes, 'vol');
 }
 async function placeMenu(p, kind) {
   const items = [{id: 'open', label: 'Open'}, {id: 'tab', label: 'Open in New Tab'}, {id: 'term', label: 'Open in Terminal'}, {type: 'separator'}];
   if (kind === 'fav') items.push({id: 'remove', label: 'Remove from Sidebar'});
-  if (kind === 'recent') items.push({id: 'pin', label: 'Add to Favorites'}, {id: 'forget', label: 'Remove from Recent'});
+  if (kind === 'recent') items.push({id: 'pin', label: 'Add to Favorites'}, {id: 'forget', label: 'Remove from Recent'}, {type: 'separator'}, {id: 'hideRecents', label: 'Hide Recent Folders'});
   const id = await desk.menu(items);
   if (id === 'open') navigate(p); else if (id === 'tab') navigate(p, {newTab: true}); else if (id === 'term') desk.terminal(p).catch(err);
   else if (id === 'remove') { if (S.prefs.pins.includes(p)) S.prefs.pins = S.prefs.pins.filter(x => x !== p); else S.prefs.unpinned = [...new Set([...S.prefs.unpinned, p])]; renderPlaces(); savePrefsSoon(); }
   else if (id === 'pin') pin(p);
+  else if (id === 'hideRecents') setRecents(false);
   else if (id === 'forget') { S.prefs.recents = S.prefs.recents.filter(x => x !== p); renderPlaces(); savePrefsSoon(); }
+}
+function setRecents(on) {
+  S.prefs.showRecents = on;
+  if (!on) S.prefs.recents = []; else addRecent(tab().path);
+  renderPlaces(); savePrefsSoon();
+  toast(on ? 'Recent folders are back in the sidebar' : 'Recent folders hidden and cleared — turn them back on in Settings');
 }
 function pin(p) {
   if (S.places.favorites.some(f => f.path === p)) S.prefs.unpinned = S.prefs.unpinned.filter(x => x !== p);
@@ -769,6 +777,7 @@ function command(id) {
     case 'viewColumns': return setView('columns');
     case 'togglePreview': S.prefs.showPreview = !S.prefs.showPreview; render(); return savePrefsSoon();
     case 'toggleHidden': S.prefs.showHidden = !S.prefs.showHidden; savePrefsSoon(); toast(S.prefs.showHidden ? 'Showing hidden files' : 'Hiding hidden files'); return reload();
+    case 'toggleRecents': return setRecents(S.prefs.showRecents === false);
     case 'tidy': return window.Tidy?.isOpen() ? Tidy.close() : window.Tidy?.open(t.path);
     case 'settings': return openSettings();
     case 'history': return historyMenu();
@@ -852,7 +861,7 @@ window.addEventListener('mouseup', e => { if (e.button === 3) { e.preventDefault
 const PALETTE_COMMANDS = [
   ['newFolder', 'New folder', '⌘⇧N'], ['newFile', 'New text file', '⌘⌥N'], ['newTab', 'New tab', '⌘T'], ['terminal', 'Open in Terminal', '⌃`'], ['editor', 'Open in code editor', '⌘⇧E'],
   ['reveal', 'Show in Finder / Explorer', ''], ['copyPath', 'Copy path', '⌘⌥C'], ['tidy', 'Tidy this folder', '⌘⇧Y'], ['toggleHidden', 'Show / hide hidden files', '⌘⇧.'],
-  ['togglePreview', 'Show / hide preview', '⌘⇧P'], ['viewList', 'View as list', '⌘1'], ['viewGrid', 'View as grid', '⌘2'], ['viewColumns', 'View as columns', '⌘3'],
+  ['togglePreview', 'Show / hide preview', '⌘⇧P'], ['toggleRecents', 'Show / hide recent folders in sidebar', ''], ['viewList', 'View as list', '⌘1'], ['viewGrid', 'View as grid', '⌘2'], ['viewColumns', 'View as columns', '⌘3'],
   ['undo', 'Undo last change', '⌘Z'], ['history', 'Recent changes (undo any)', ''], ['compress', 'Compress selection', ''], ['duplicate', 'Duplicate selection', '⌘D'],
   ['trash', 'Move selection to Trash', '⌘⌫'], ['goto', 'Go to folder by path…', '⌘⇧G'], ['settings', 'Settings', '⌘,'], ['refresh', 'Refresh', ''],
 ];
@@ -910,11 +919,13 @@ async function openSettings() {
     pick('setEditor', 'Code editor', L.editors.map(x => [x.id, x.label]), S.prefs.editor || L.editors[0]?.id),
     check('setFolders', 'Keep folders on top', S.prefs.foldersFirst),
     check('setHidden', 'Show hidden files', S.prefs.showHidden, 'Dotfiles and system files'),
+    check('setRecents', 'Show recent folders in the sidebar', S.prefs.showRecents !== false, 'Turning this off also clears the list'),
     el('p', {class: 'muted small', text: `Fresh Desk ${S.env.version} · part of the Utility Package. Nothing is ever deleted permanently; removals go to the ${isWin() ? 'Recycle Bin' : 'Trash'}.`}),
     el('div', {class: 'dialog-actions'}, el('button', {class: 'btn ghost', value: 'cancel', text: 'Cancel'}), el('button', {class: 'btn primary', value: 'save', text: 'Save'}))));
   d.onclose = async () => {
     if (d.returnValue !== 'save') return;
     const hiddenChanged = S.prefs.showHidden !== $('setHidden').checked;
+    if ((S.prefs.showRecents !== false) !== $('setRecents').checked) { S.prefs.showRecents = $('setRecents').checked; if (!S.prefs.showRecents) S.prefs.recents = []; else addRecent(tab().path); }
     Object.assign(S.prefs, {theme: $('setTheme').value, terminal: $('setTerminal').value, editor: $('setEditor').value, foldersFirst: $('setFolders').checked, showHidden: $('setHidden').checked});
     await savePrefs();
     for (const x of S.tabs) refreshItems(x);
