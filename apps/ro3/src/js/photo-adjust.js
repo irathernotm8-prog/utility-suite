@@ -26,7 +26,7 @@ const PhotoAdjust = (() => {
     grade:        { name: 'Color Grade', icon: 'sliders', make: () => ({ grade: ColorGrade.DEFAULT() }) },
   };
   const ORDER = ['brightness', 'levels', 'curves', 'exposure', 'vibrance', 'huesat', 'colorbalance', 'bw', 'photofilter', 'channelmixer', 'selectivecolor', 'gradientmap', 'lookup', 'grade', 'invert', 'posterize', 'threshold'];
-  // Selective Color hue/tone ranges (PhotoCraft compose/src/adjust.rs)
+  // Selective Color hue/tone ranges
   const SC_RANGES = [['reds', 'Reds'], ['yellows', 'Yellows'], ['greens', 'Greens'], ['cyans', 'Cyans'], ['blues', 'Blues'], ['magentas', 'Magentas'], ['whites', 'Whites'], ['neutrals', 'Neutrals'], ['blacks', 'Blacks']];
   /** Parsed LUT files, keyed by a content hash. The text is kept so projects can save it. */
   const LUTS = new Map();
@@ -193,7 +193,7 @@ const PhotoAdjust = (() => {
         return;
       }
       case 'selectivecolor': {
-        // weights per range, then CMYK-style shifts (PhotoCraft compose/src/adjust.rs:828-876)
+        // weights per range, then CMYK-style shifts
         const rs = SC_RANGES.map(([key]) => a.ranges[key] || [0, 0, 0, 0]);
         if (rs.every(v => v.every(x => !x))) return;
         const w = new Float32Array(9), c = [0, 0, 0];

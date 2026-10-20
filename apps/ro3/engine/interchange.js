@@ -8,7 +8,6 @@
 //   markers:  [{ time, name, color }],
 // }
 // All times are seconds; everything is snapped to whole frames of settings.fps before writing.
-// Format logic ported from FilmCraft's interchange crate (edl.rs, fcpxml.rs, otio.rs), MIT/Apache-2.0.
 const path = require('path');
 const { pathToFileURL } = require('url');
 

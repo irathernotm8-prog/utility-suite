@@ -1,6 +1,6 @@
 // Video editor: media bin, viewer, single video track + music lane, transitions, export.
 const VideoEditor = (() => {
-  // Transition styles grouped like FilmCraft's effects panel (FFmpeg xfade names).
+  // Transition styles grouped (FFmpeg xfade names).
   const TRANSITION_GROUPS = [
     ['Dissolve', [['fade', 'Crossfade'], ['dissolve', 'Dissolve'], ['fadeblack', 'Dip to black'], ['fadewhite', 'Dip to white'], ['fadegrays', 'Film dissolve'], ['fadefast', 'Fast fade'], ['fadeslow', 'Slow fade'], ['distance', 'Distance']]],
     ['Wipe', [['wipeleft', 'Wipe left'], ['wiperight', 'Wipe right'], ['wipeup', 'Wipe up'], ['wipedown', 'Wipe down'], ['wipetl', 'Wipe ↖'], ['wipetr', 'Wipe ↗'], ['wipebl', 'Wipe ↙'], ['wipebr', 'Wipe ↘'], ['diagtl', 'Diagonal ↖'], ['diagtr', 'Diagonal ↗'], ['diagbl', 'Diagonal ↙'], ['diagbr', 'Diagonal ↘'], ['radial', 'Clock wipe']]],
@@ -655,7 +655,7 @@ const VideoEditor = (() => {
     commit(i >= 0 ? 'Remove marker' : 'Add marker');
   }
 
-  // ---------- scopes (FilmCraft crates/scopes: waveform, RGB parade, vectorscope, histogram) ----------
+  // ---------- scopes: waveform, RGB parade, vectorscope, histogram ----------
   let scopeMode = 'wave', scopeRaf = 0, supported = null;
   const SW = 512, SH = 288, scopeSrc = document.createElement('canvas'); scopeSrc.width = SW; scopeSrc.height = SH;
   function scopeLoop() { cancelAnimationFrame(scopeRaf); const tick = () => { if (!el.scopes || el.scopes.hidden) return; if (playing) drawScopes(); scopeRaf = requestAnimationFrame(tick); }; tick(); drawScopes(); }
@@ -992,7 +992,7 @@ const VideoEditor = (() => {
     const row = h('<div class="row"></div>'); row.append(copy, rm); inner.appendChild(row);
     return box;
   }
-  /** Picture effects (FilmCraft's effect catalogue, rendered with FFmpeg). */
+  /** Picture effects (rendered with FFmpeg). */
   function effectsSection(c, isOverlay) {
     c.fx = Object.assign(FX0(), c.fx || {});
     const fx = c.fx;
@@ -1039,7 +1039,7 @@ const VideoEditor = (() => {
     inner.append(h('<p class="hint">Blur, crop, framing, Ken Burns and reverse preview live; grain, glow, RGB split, echo and stabilize show in Render preview and Export.</p>'));
     return box;
   }
-  /** Audio effects (FilmCraft essential sound → FFmpeg), with an EQ/filter/compressor preview through WebAudio. */
+  /** Audio effects, with an EQ/filter/compressor preview through WebAudio. */
   function audioSection(item) {
     item.afx = item.afx || {};
     const a = item.afx;
@@ -1746,7 +1746,7 @@ const VideoEditor = (() => {
       modal({ title: 'Preview', body: v, width: 760, onClose: () => v.pause() });
     } catch (e) { pb.close(); if (!e.cancelled) toast(e.message, 'error', 8000); }
   }
-  // Platform presets (FilmCraft crates/export/src/presets.rs, plus social formats).
+  // Platform presets and social formats.
   const EXPORT_PRESETS = [
     ['custom', 'Custom', {}],
     ['yt1080', 'YouTube 1080p', { fmt: 'mp4', codec: 'h264', short: 1080, bitrate: 16, loud: -14 }],

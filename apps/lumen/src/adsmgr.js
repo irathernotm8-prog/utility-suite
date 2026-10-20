@@ -52,6 +52,35 @@ function makeAds({ S, cfgFor, api, readMedia, getCap, now = Date.now }) {
     } catch (err) { S.addAudit(ws, { ...e, after: p, ok: false, error: err.message }); throw err; }
   }
 
+  // ---- existing ads: read, preview, edit the creative ----
+  const adNode = (ws, id) => { const { node } = find(ws, id); if (node.kind !== 'ad') throw new Error('Pick an ad.'); return node; };
+  async function creative(ws, id) {
+    adNode(ws, id); const c = await api.fetchAdCreative(cfgFor(ws), id);
+    const image = c.imageUrl ? await api.imageData(c.imageUrl).catch(() => '') : '';
+    const { _spec, imageUrl, ...rest } = c; return { ...rest, image };
+  }
+  const preview = (ws, id) => { adNode(ws, id); return api.previewLinks(cfgFor(ws), id); };
+  const CTA_OK = new Set(['LEARN_MORE', 'SIGN_UP', 'GET_QUOTE', 'CONTACT_US', 'APPLY_NOW', 'CALL_NOW', 'BOOK_TRAVEL', 'SHOP_NOW', 'NO_BUTTON']);
+  async function editCreative(ws, id, patch, opts = {}) {
+    const node = adNode(ws, id), p = {};
+    const text = (k, max) => { if (patch[k] === undefined) return; const v = String(patch[k]).trim(); if (v.length > max) throw new Error(`${k} is too long (max ${max} characters).`); p[k] = v; };
+    text('message', 2000); text('headline', 255); text('description', 255);
+    if (patch.link !== undefined) { const v = String(patch.link).trim(); if (!/^https?:\/\/[^\s]+\.[^\s]+$/i.test(v)) throw new Error('The link must be a full web address starting with https://'); p.link = v; }
+    if (patch.cta !== undefined) { if (!CTA_OK.has(patch.cta)) throw new Error('Unknown button.'); p.cta = patch.cta; }
+    if (patch.mediaPath) p.mediaPath = patch.mediaPath;
+    if (!Object.keys(p).length) throw new Error('Nothing to change.');
+    if (node.effective === 'ACTIVE' && !opts.confirmedLive) throw new Error('This ad is live. Editing it needs your confirmation.');
+    const before = await api.fetchAdCreative(cfgFor(ws), id);
+    const pick = (c) => ({ message: c.message, headline: c.headline, description: c.description, link: c.link, cta: c.cta });
+    const e = { action: 'creative', kind: 'ad', target_id: id, target_name: node.name, before: { ...pick(before), creativeId: before.creativeId } };
+    const shown = { ...p }; delete shown.mediaPath; if (patch.mediaPath) shown.image = 'new photo';
+    try {
+      const r = await api.editAdCreative(cfgFor(ws), id, p, readMedia);
+      Object.assign(node, { headline: p.headline !== undefined ? p.headline : node.headline, text: p.message !== undefined ? p.message : node.text });
+      S.addAudit(ws, { ...e, after: { ...shown, creativeId: r.newCreativeId } }); return r;
+    } catch (err) { S.addAudit(ws, { ...e, after: shown, ok: false, error: err.message }); throw err; }
+  }
+
   async function copy(ws, id) {
     const { node } = find(ws, id); if (node.kind !== 'campaign') throw new Error('Only campaigns can be duplicated.');
     const e = { action: 'copy', kind: 'campaign', target_id: id, target_name: node.name };
@@ -76,14 +105,21 @@ function makeAds({ S, cfgFor, api, readMedia, getCap, now = Date.now }) {
 
   async function revert(ws, auditId, opts = {}) {
     const e = S.auditEntry(auditId);
-    if (!e || e.workspace_id !== ws || e.action !== 'update' || !e.ok || !e.before) throw new Error('This change cannot be undone automatically.');
+    if (!e || e.workspace_id !== ws || (e.action !== 'update' && e.action !== 'creative') || !e.ok || !e.before) throw new Error('This change cannot be undone automatically.');
     if (e.reverted) throw new Error('This change was already undone.');
     if (!cache.get(ws)) throw new Error('Refresh the list and try again.');
+    if (e.action === 'creative') {
+      const node = adNode(ws, e.target_id); if (node.effective === 'ACTIVE' && !opts.confirmedLive) throw new Error('This ad is live. Undoing needs your confirmation.');
+      if (!e.before.creativeId) throw new Error('This change cannot be undone automatically.');
+      const log = { action: 'revert', kind: 'ad', target_id: e.target_id, target_name: node.name, before: e.after, after: e.before };
+      try { await api.setAdCreative(cfgFor(ws), e.target_id, e.before.creativeId); } catch (err) { S.addAudit(ws, { ...log, ok: false, error: err.message }); throw err; }
+      S.addAudit(ws, log); S.markReverted(auditId); return node;
+    }
     const r = await change(ws, e.target_id, e.before, { ...opts, action: 'revert' });
     S.markReverted(auditId); return r;
   }
 
-  return { tree, change, copy, create, revert, geo: (ws, q) => api.geoSearch(cfgFor(ws), q), audit: (ws) => S.audit(ws), cap, _cache: cache };
+  return { tree, change, creative, preview, editCreative, copy, create, revert, geo: (ws, q) => api.geoSearch(cfgFor(ws), q), audit: (ws) => S.audit(ws), cap, _cache: cache };
 }
 
 module.exports = { makeAds, STATUSES };

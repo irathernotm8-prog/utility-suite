@@ -116,7 +116,7 @@ function kfExpr(list, T, scale = 1) {
 const hasKf = (o, p) => !!(o.kf && o.kf[p] && o.kf[p].length);
 
 // ---------- audio effects ----------
-/** Audio effect chain for a clip / overlay / music item (FilmCraft's essential clip effects mapped to FFmpeg). */
+/** Audio effect chain for a clip / overlay / music item. */
 function audioFx(a = {}) {
   const f = [];
   if (!a) return f;
@@ -297,7 +297,7 @@ function buildArgs(project, out) {
       f.push(...preScaleFx(o.fx), ...pictureFx(o.fx));
       const key = o.key;
       if (key && key.on) {
-        // green/blue screen: remove the key colour (FilmCraft Ultra Key → colorkey + despill)
+        // green/blue screen: remove the key colour (colorkey + despill)
         const hex = String(key.color || '#00ff00').replace('#', '0x');
         f.push('format=rgba');
         const kc = String(key.color || '#00ff00').replace('#', ''), isBlue = parseInt(kc.slice(4, 6), 16) > parseInt(kc.slice(2, 4), 16);
@@ -356,7 +356,7 @@ function buildArgs(project, out) {
     });
     const duck = S.duck && S.duck.on && musicLabels.length;
     if (duck) {
-      // auto-ducking: the main track's sound compresses the music (sidechain), like FilmCraft's Essential Sound ducking
+      // auto-ducking: the main track's sound compresses the music (sidechain)
       const amt = clamp(S.duck.amount ?? 12, 3, 30);
       graph.push(`[${aOut}]asplit=2[amd][asc]`); aOut = 'amd';
       graph.push(`${musicLabels.map(l => `[${l}]`).join('')}amix=inputs=${musicLabels.length}:duration=longest:normalize=0[mus0]`);

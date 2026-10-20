@@ -37,7 +37,7 @@ The app isn't code-signed, which is fine for personal use:
 
 ## What's inside
 
-**New in 1.3 — Photo** (features modelled on the open-source PhotoCraft editor)
+**New in 1.3 — Photo**
 - **Filter galleries**, all with a live on-canvas preview (big images preview at reduced size and render full size on Apply), heavy maths running in the background:
   - *Blur:* Gaussian, Box, Motion, Radial (spin/zoom, click to place the centre), Tilt-Shift, Iris, Surface.
   - *Sharpen:* Unsharp Mask, Smart Sharpen, High Pass.
@@ -97,7 +97,7 @@ The app isn't code-signed, which is fine for personal use:
 - Export to PNG, JPG, WebP, AVIF, TIFF, GIF, BMP, ICO, PDF or **SVG**. SVG export traces the raster image into vector shapes in colour, black & white or posterized style, with a live preview.
 - Save (Ctrl/Cmd+S saves straight back to the same file) and reopen layered work as `.ro3` projects.
 
-**New in 1.3 — Video** (features modelled on the open-source FilmCraft editor)
+**New in 1.3 — Video**
 - **Color grade per clip** (and per overlay): the Lumetri-style panel — white balance, exposure, tone, vibrance/saturation, looks, colour wheels, curves, **.cube/.3dl LUTs**, vignette and sharpening. The viewer shows the exact grade (GPU, with a CPU fallback) and export bakes the same maths into a 3D LUT, so what you see is what you get. "Copy grade to all clips" matches a sequence in one click.
 - **Video scopes:** waveform, RGB parade, vectorscope (with skin-tone line) and histogram. **Audio meters** with peak hold.
 - **Keyframes** for overlays and titles: position, size, opacity and rotation with linear, ease, ease-in/out and hold curves; dragging an animated overlay keys it at the playhead.
@@ -179,10 +179,6 @@ engine/ora.js          OpenRaster read/write
 scripts/         install and build checks
 test/            npm run test:engine — converts sample media in every format, renders timelines
 ```
-
-## Credits
-
-Many 1.3 features follow the designs of **PhotoCraft** and **FilmCraft** by the ArtCraft team (https://github.com/storytold/photocraft, https://github.com/storytold/filmcraft), dual-licensed MIT / Apache-2.0. Their algorithms were re-implemented here in JavaScript; no code from those projects is bundled.
 
 ## Troubleshooting
 

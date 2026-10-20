@@ -339,6 +339,33 @@ let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok -', 
     await A.tree(ws, { since: '2026-10-01', until: '2026-10-07' }, true); await assert.rejects(A.copy(ws, 's1'), /Only campaigns/);
   });
 
+  await t('ads: read, preview and edit an existing ad creative; edit is undoable', async () => {
+    const { makeAds } = require('../src/adsmgr'); const S = store(open(':memory:')); const ws = S.addWorkspace('x'); const calls = []; let cur = 'cr1';
+    const spec = { page_id: 'P1', link_data: { link: 'https://a.com', message: 'Old text', name: 'Old head', image_hash: 'H1', call_to_action: { type: 'LEARN_MORE', value: { link: 'https://a.com' } } } };
+    const f = async (url, o = {}) => { const u = String(url), body = o.body && o.body.get ? Object.fromEntries(o.body) : {}; calls.push({ u, body });
+      const ok = (j) => ({ ok: true, status: 200, json: async () => j, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => Buffer.from('img') });
+      if (/\/previews/.test(u)) return ok({ data: [{ body: '<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=1&amp;t=2"></iframe>' }] });
+      if (/adcreatives/.test(u)) return ok({ id: 'cr2' });
+      if (/\/ad1$/.test(u) && o.method === 'POST') { cur = JSON.parse(body.creative).creative_id; return ok({ success: true }); }
+      if (/\/ad2\?/.test(u)) return ok({ name: 'Boost', creative: { id: 'x', object_story_id: '1_2' } });
+      if (/\/ad1\?/.test(u)) return ok({ name: 'Ad one', creative: { id: cur, object_story_spec: spec, image_url: 'https://scontent.fbcdn.net/a.jpg' } });
+      return ok({}); };
+    const tree = { account: { id: 'act_1', currency: 'USD' }, campaigns: [], adsets: [], ads: [{ id: 'ad1', kind: 'ad', name: 'Ad one', status: 'ACTIVE', effective: 'ACTIVE' }, { id: 'ad2', kind: 'ad', name: 'Boost', status: 'PAUSED', effective: 'PAUSED' }] };
+    const api = { fetchTree: async () => tree, fetchAdCreative: (c, id) => adsApi.fetchAdCreative(c, id, f), previewLinks: (c, id) => adsApi.previewLinks(c, id, f), editAdCreative: (c, id, p, rm) => adsApi.editAdCreative(c, id, p, f, rm), setAdCreative: (c, id, cid) => adsApi.setAdCreative(c, id, cid, f), imageData: (u) => adsApi.imageData(u, f) };
+    const A = makeAds({ S, cfgFor: () => adsCfg, api, readMedia: rm, getCap: () => 100 }); await A.tree(ws, { since: 'a', until: 'b' });
+    const c = await A.creative(ws, 'ad1'); assert.strictEqual(c.message, 'Old text'); assert.strictEqual(c.cta, 'LEARN_MORE'); assert.strictEqual(c.editable, true); assert.ok(c.image.startsWith('data:image/jpeg;base64,'));
+    const pv = await A.preview(ws, 'ad1'); assert.strictEqual(pv.facebook, 'https://www.facebook.com/ads/api/preview_iframe.php?d=1&t=2');
+    assert.strictEqual((await A.creative(ws, 'ad2')).editable, false);
+    await assert.rejects(A.editCreative(ws, 'ad2', { message: 'x' }), /promotes an existing post/);
+    await assert.rejects(A.editCreative(ws, 'ad1', { message: 'New' }), /live/);
+    await assert.rejects(A.editCreative(ws, 'ad1', { link: 'nope' }, { confirmedLive: true }), /full web address/);
+    const r = await A.editCreative(ws, 'ad1', { message: 'New text', cta: 'SIGN_UP', headline: 'New head' }, { confirmedLive: true });
+    assert.deepStrictEqual([r.oldCreativeId, r.newCreativeId, cur], ['cr1', 'cr2', 'cr2']);
+    const made = JSON.parse(calls.find((x) => /adcreatives/.test(x.u)).body.object_story_spec).link_data; assert.deepStrictEqual([made.message, made.name, made.image_hash, made.call_to_action.type, made.call_to_action.value.link], ['New text', 'New head', 'H1', 'SIGN_UP', 'https://a.com']);
+    const log = A.audit(ws)[0]; assert.strictEqual(log.action, 'creative'); assert.strictEqual(log.before.message, 'Old text'); assert.strictEqual(log.after.creativeId, 'cr2');
+    await assert.rejects(A.revert(ws, log.id), /live/); await A.revert(ws, log.id, { confirmedLive: true }); assert.strictEqual(cur, 'cr1'); assert.strictEqual(S.auditEntry(log.id).reverted, true);
+  });
+
   await t('AI campaign draft: parses, clamps to the budget ceiling, drops unknown values', async () => {
     const reply = '{"name":"Kingsville Referral","objective":"OUTCOME_WEIRD","dailyBudget":9999,"locations":["Kingsville, TX"],"radiusMiles":12,"ageMin":15,"ageMax":70,"headline":"' + 'x'.repeat(60) + '","message":"Hi","description":"d","cta":"BOGUS","special":"NONE","notes":"n"}';
     const r = await ai.campaignDraft({ key: 'k', brief: 'Referral promo in Kingsville', cap: 100, ctas: ['LEARN_MORE', 'SIGN_UP'] }, async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Here you go: ' + reply }] }) }));

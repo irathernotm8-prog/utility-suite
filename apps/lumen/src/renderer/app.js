@@ -454,6 +454,7 @@
       <p class="sub" style="font-size:12px">Changes go straight to Meta and are logged under Activity, where most can be undone. Daily budgets are limited to ${cm(t.cap)} (change in Settings). New campaigns are always created paused.</p>`;
     $('#adsBody').onclick = (e) => {
       const tw = e.target.closest('[data-tw]'); if (tw) { const id = tw.dataset.tw; a.open.has(id) ? a.open.delete(id) : a.open.add(id); return renderAds(); }
+      const an = e.target.closest('tr.ar.ad .nt'); if (an) return adEditor(nodeOf(an.closest('tr').dataset.id));
       const mn = e.target.closest('[data-mn]'); if (mn) { e.stopPropagation(); return openMenu(mn, mn.dataset.mn); }
     };
     $('#adsBody').onchange = (e) => { const sw = e.target.closest('[data-sw]'); if (sw) toggleStatus(sw.dataset.sw, sw.checked, sw); };
@@ -472,7 +473,7 @@
 
   let openMenuEl = null;
   function openMenu(btn, id) {
-    closeMenu(); const n = nodeOf(id); const items = [['rename', 'Rename']];
+    closeMenu(); const n = nodeOf(id); const items = n.kind === 'ad' ? [['edit', 'Preview & edit'], ['rename', 'Rename']] : [['rename', 'Rename']];
     if (n.dailyBudget !== null && n.dailyBudget !== undefined) items.push(['budget', 'Edit daily budget']);
     if (n.kind !== 'ad') items.push(['end', 'Edit end date']);
     if (n.kind === 'campaign') items.push(['copy', 'Duplicate (paused)']);
@@ -486,6 +487,7 @@
 
   async function menuAction(k, n) {
     const t = st.ads.tree;
+    if (k === 'edit') return adEditor(n);
     if (k === 'open') { const acct = t.account.id.replace('act_', ''); return lumen.open(`https://adsmanager.facebook.com/adsmanager/manage/${n.kind === 'campaign' ? 'campaigns' : n.kind === 'adset' ? 'adsets' : 'ads'}?act=${acct}&selected_${n.kind === 'campaign' ? 'campaign' : n.kind === 'adset' ? 'adset' : 'ad'}_ids=${n.id}`); }
     if (k === 'rename') { const r = await dialog({ title: 'Rename', fields: [{ name: 'name', label: 'Name', value: n.name }], confirm: 'Save' }); if (r && r.name.trim() && r.name.trim() !== n.name) await run(() => lumen.adsChange(st.ws, n.id, { name: r.name.trim() }), 'Renamed'); return; }
     if (k === 'budget') {
@@ -510,16 +512,86 @@
   const summ = (o) => !o ? '' : Object.entries(o).map(([k, v]) => `${({ status: 'Status', name: 'Name', dailyBudget: 'Daily budget', endTime: 'End' })[k] || k}: ${k === 'dailyBudget' && v !== null ? cm(v) : k === 'endTime' ? (v ? new Date(v).toLocaleDateString() : 'none') : v === null ? 'none' : typeof v === 'object' ? '' : v}`).filter(Boolean).join(' · ');
   async function activityTab() {
     const rows = await lumen.adsAudit(st.ws);
-    const label = { update: 'Changed', revert: 'Undone', copy: 'Duplicated', create: 'Created' };
+    const label = { creative: 'Edited ad', update: 'Changed', revert: 'Undone', copy: 'Duplicated', create: 'Created' };
     $('#adsBody').innerHTML = `<div class="card tight">${rows.length ? `<table class="adtable act"><thead><tr><th>When</th><th>What</th><th>Item</th><th>Details</th><th></th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</td>
       <td>${esc(label[r.action] || r.action)} ${r.ok ? '' : '<span class="pill error">failed</span>'}${r.reverted ? '<span class="pill new">undone</span>' : ''}</td><td class="nm"><span class="nt">${esc(r.target_name || '')}</span></td>
-      <td class="det">${r.ok ? (r.action === 'update' || r.action === 'revert' ? `${esc(summ(r.before))} <b>→</b> ${esc(summ(r.after))}` : r.action === 'create' ? 'Campaign, ad set and ad created paused' : r.action === 'copy' ? 'Paused copy created' : '') : `<span class="err">${esc(r.error || '')}</span>`}</td>
-      <td>${r.action === 'update' && r.ok && !r.reverted && r.before ? `<button class="soft" data-undo="${r.id}">Undo</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Nothing yet. Every change Lumen makes to your ads shows up here.</div>'}</div>`;
+      <td class="det">${r.ok ? (r.action === 'creative' || (r.action === 'revert' && r.after && r.after.creativeId) ? crSumm(r) : r.action === 'update' || r.action === 'revert' ? `${esc(summ(r.before))} <b>→</b> ${esc(summ(r.after))}` : r.action === 'create' ? 'Campaign, ad set and ad created paused' : r.action === 'copy' ? 'Paused copy created' : '') : `<span class="err">${esc(r.error || '')}</span>`}</td>
+      <td>${(r.action === 'update' || r.action === 'creative') && r.ok && !r.reverted && r.before ? `<button class="soft" data-undo="${r.id}">Undo</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Nothing yet. Every change Lumen makes to your ads shows up here.</div>'}</div>`;
     $('#adsBody').onclick = async (e) => {
-      const u = e.target.closest('[data-undo]'); if (!u) return; const r = rows.find((x) => x.id === +u.dataset.undo); const on = r.before && r.before.status === 'ACTIVE';
-      const d = await dialog({ title: 'Undo this change?', body: `<p>${esc(r.target_name)}<br>Restore: ${esc(summ(r.before))}</p>${on ? '<p class="warn">This turns it back on and it can start spending again.</p>' : ''}`, confirm: 'Undo', danger: on });
-      if (d) await run(() => lumen.adsRevert(st.ws, r.id, { confirmedActivate: on }), 'Change undone');
+      const u = e.target.closest('[data-undo]'); if (!u) return; const r = rows.find((x) => x.id === +u.dataset.undo); const on = r.before && r.before.status === 'ACTIVE'; const cr = r.action === 'creative';
+      const d = await dialog({ title: 'Undo this change?', body: `<p>${esc(r.target_name)}<br>${cr ? esc(crSumm(r)) : 'Restore: ' + esc(summ(r.before))}</p>${on ? '<p class="warn">This turns it back on and it can start spending again.</p>' : ''}`, confirm: 'Undo', danger: on });
+      if (d) await run(() => lumen.adsRevert(st.ws, r.id, { confirmedActivate: on, confirmedLive: true }), 'Change undone');
     };
+  }
+
+
+  // ----- Preview & edit an existing ad -----
+  const CTA_LABEL = (c) => ({ NO_BUTTON: 'No button' })[c] || String(c || '').replace(/_/g, ' ').toLowerCase().replace(/^./, (x) => x.toUpperCase());
+  const FIELD = { message: 'Text', headline: 'Headline', description: 'Description', link: 'Link', cta: 'Button', image: 'Photo' };
+  const crSumm = (r) => { const a = r.after || {}, b = r.before || {}; const keys = Object.keys(FIELD).filter((k) => k in a); return keys.length ? keys.map((k) => `${FIELD[k]}: “${String(k === 'cta' ? CTA_LABEL(b[k]) : b[k] === undefined ? '' : b[k]).slice(0, 60)}” → “${String(k === 'cta' ? CTA_LABEL(a[k]) : a[k]).slice(0, 60)}”`).join(' · ') : 'Creative restored'; };
+  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, '').toUpperCase(); } catch (_) { return ''; } };
+
+  async function adEditor(n) {
+    const m = $('#modal'); m.hidden = false; const close = () => { m.hidden = true; m.innerHTML = ''; };
+    m.innerHTML = `<div class="sheet adedit" role="dialog" aria-label="Ad"><div class="row between"><h2>${esc(n.name)}</h2><button class="ghost" id="eClose" aria-label="Close">✕</button></div><p class="sub">Loading the ad from Meta…</p></div>`;
+    m.onclick = (e) => { if (e.target === m) close(); };
+    let c; try { c = await lumen.adsCreative(st.ws, n.id); } catch (e) { m.innerHTML = `<div class="sheet"><h2>${esc(n.name)}</h2><div class="note">${esc(e.message)}</div><div class="row end"><button class="ghost" id="eClose">Close</button></div></div>`; $('#eClose', m).onclick = close; return; }
+    const o = st.ads.tree.options, ctas = [...new Set([...(o.ctas || []), c.cta].filter(Boolean))]; if (!ctas.includes('NO_BUTTON')) ctas.push('NO_BUTTON');
+    let newPhoto = null, view = 'feed';
+    const page = (st.boot.workspaces.find((w) => w.id === st.ws) || {}).name || 'Your Page';
+    const live = n.effective === 'ACTIVE';
+    m.innerHTML = `<div class="sheet adedit" role="dialog" aria-label="Ad"><div class="row between"><div><h2>${esc(n.name)}</h2><p class="sub" style="margin:0">${esc(EFF[n.effective] || n.effective || '')} · ${esc(cm(n.metrics.spend))} spent · ${n.metrics.clicks.toLocaleString()} clicks</p></div><button class="ghost" id="eClose" aria-label="Close">✕</button></div>
+      <div class="edcols"><div class="edform">
+        ${c.editable ? '' : `<div class="note">${esc(c.reason)}</div>`}
+        <label>Text</label><textarea id="eMsg" rows="5" maxlength="2000" ${c.editable ? '' : 'disabled'}>${esc(c.message)}</textarea>
+        <label>Headline</label><input id="eHead" maxlength="255" value="${esc(c.headline)}" ${c.editable ? '' : 'disabled'}>
+        <label>Description</label><input id="eDesc" maxlength="255" value="${esc(c.description)}" ${c.editable ? '' : 'disabled'}>
+        <div class="two"><div><label>Website link</label><input id="eLink" value="${esc(c.link)}" ${c.editable ? '' : 'disabled'}></div><div><label>Button</label><select id="eCta" ${c.editable ? '' : 'disabled'}>${ctas.map((x) => `<option value="${esc(x)}" ${(c.cta || 'NO_BUTTON') === x ? 'selected' : ''}>${esc(CTA_LABEL(x))}</option>`).join('')}</select></div></div>
+        ${c.editable ? '<label>Photo</label><div class="row"><button class="soft" type="button" id="ePick">Replace photo…</button><span class="sub" id="ePicked" style="margin:0"></span></div>' : ''}
+        <div class="err" id="eErr"></div>
+        <p class="sub" style="font-size:12px">${c.editable ? 'Saving creates a new version of the creative and sends it back through Meta’s review' + (live ? '; this ad is live, so it may pause delivery briefly. Undo is in Activity.' : '.') : ''}</p>
+        <div class="row"><button class="soft" id="eMeta">Meta’s exact preview ↗</button><button class="soft" id="eAm">Ads Manager ↗</button><span class="grow"></span><button class="ghost" id="eCancel">Close</button>${c.editable ? '<button class="primary" id="eSave" disabled>Save changes</button>' : ''}</div>
+        <div class="row" id="eLinks" style="margin-top:8px"></div></div>
+      <div class="edprev"><div class="seg" id="eView"><button data-v="feed" class="on">Facebook</button><button data-v="ig">Instagram</button></div><div id="ePrev"></div><p class="sub" style="font-size:11px;text-align:center">Approximation of the placement. Use Meta’s exact preview for the real thing.</p></div></div></div>`;
+    const g = (id) => $('#' + id, m);
+    const val = () => ({ message: g('eMsg').value, headline: g('eHead').value, description: g('eDesc').value, link: g('eLink').value.trim(), cta: g('eCta').value });
+    const orig = { message: c.message, headline: c.headline, description: c.description, link: c.link, cta: c.cta || 'NO_BUTTON' };
+    const draw = () => {
+      const v = val(), img = newPhoto ? newPhoto : c.image;
+      const media = img ? `<img src="${esc(img)}" alt="">` : '<div class="pv-noimg">No image available</div>';
+      const cta = v.cta && v.cta !== 'NO_BUTTON' ? `<span class="pv-cta">${esc(CTA_LABEL(v.cta))}</span>` : '';
+      g('ePrev').innerHTML = view === 'feed'
+        ? `<div class="pv fb"><div class="pv-h"><i>${esc(page[0] || 'L')}</i><div><b>${esc(page)}</b><span>Sponsored · 🌐</span></div></div><div class="pv-t">${esc(v.message)}</div>${media}<div class="pv-l"><div><small>${esc(host(v.link))}</small><b>${esc(v.headline)}</b><span>${esc(v.description)}</span></div>${cta}</div></div>`
+        : `<div class="pv ig"><div class="pv-h"><i>${esc(page[0] || 'L')}</i><div><b>${esc(page.toLowerCase().replace(/\s+/g, ''))}</b><span>Sponsored</span></div></div>${media}${cta ? `<div class="pv-igcta">${esc(CTA_LABEL(v.cta))} ›</div>` : ''}<div class="pv-t"><b>${esc(page.toLowerCase().replace(/\s+/g, ''))}</b> ${esc(v.message)}</div></div>`;
+    };
+    const dirty = () => { const v = val(); return newPhoto !== null || Object.keys(orig).some((k) => (v[k] || '') !== (orig[k] || '')); };
+    const upd = () => { draw(); if (c.editable) g('eSave').disabled = !dirty(); };
+    for (const id of ['eMsg', 'eHead', 'eDesc', 'eLink', 'eCta']) g(id).addEventListener('input', upd);
+    g('eCta').addEventListener('change', upd);
+    g('eView').onclick = (e) => { const b = e.target.closest('[data-v]'); if (!b) return; view = b.dataset.v; g('eView').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); draw(); };
+    g('eClose').onclick = close; g('eCancel').onclick = close;
+    g('eAm').onclick = () => menuAction('open', n);
+    g('eMeta').onclick = async () => {
+      const b = g('eMeta'); b.disabled = true; b.textContent = 'Getting links…';
+      try { const l = await lumen.adsPreview(st.ws, n.id); const names = { facebook: 'Facebook desktop', mobile: 'Facebook mobile', instagram: 'Instagram' };
+        g('eLinks').innerHTML = Object.keys(l).length ? Object.entries(l).map(([k, u]) => `<a href="#" data-u="${esc(u)}">${names[k]} ↗</a>`).join(' · ') : '<span class="sub" style="margin:0">Meta did not return a preview for this ad.</span>';
+        g('eLinks').onclick = (e) => { const a = e.target.closest('[data-u]'); if (a) { e.preventDefault(); lumen.open(a.dataset.u); } };
+      } catch (e) { g('eLinks').textContent = e.message.slice(0, 160); }
+      b.disabled = false; b.textContent = 'Meta’s exact preview ↗';
+    };
+    if (c.editable) {
+      g('ePick').onclick = async () => { try { const r = await lumen.pickMedia(); if (r) { newPhoto = (await lumen.mediaThumb(r.path).catch(() => '')) || ''; g('ePicked').textContent = r.name; g('ePick').dataset.path = r.path; upd(); } } catch (e) { toast(e.message); } };
+      g('eSave').onclick = async () => {
+        const v = val(), patch = {}; for (const k of Object.keys(orig)) if ((v[k] || '') !== (orig[k] || '')) patch[k] = v[k];
+        if (g('ePick').dataset.path) patch.mediaPath = g('ePick').dataset.path;
+        const rows = Object.keys(patch).filter((k) => k !== 'mediaPath').map((k) => `<li><b>${FIELD[k]}</b>: ${esc(String(k === 'cta' ? CTA_LABEL(orig[k]) : orig[k] || '').slice(0, 70))} → <b>${esc(String(k === 'cta' ? CTA_LABEL(patch[k]) : patch[k]).slice(0, 70))}</b></li>`).join('') + (patch.mediaPath ? '<li><b>Photo</b>: replaced</li>' : '');
+        const d = await dialog({ title: live ? 'Edit this live ad?' : 'Save changes?', body: `<ul class="chg">${rows}</ul>${live ? '<p class="warn">This ad is delivering now. The new version goes through Meta’s review first.</p>' : ''}`, confirm: 'Save changes', danger: live });
+        if (!d) return; const b = g('eSave'); b.disabled = true; b.textContent = 'Saving…'; g('eErr').textContent = '';
+        try { await lumen.adsEditCreative(st.ws, n.id, patch, { confirmedLive: live }); close(); toast('Ad updated. Meta may review it first.'); await refreshAds(); }
+        catch (e) { g('eErr').textContent = e.message; b.disabled = false; b.textContent = 'Save changes'; }
+      };
+    }
+    draw();
   }
 
   // ----- New campaign wizard -----

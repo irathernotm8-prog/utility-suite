@@ -1,6 +1,6 @@
 // Pixel filters for the photo editor (Blur, Sharpen, Noise, Distort, Stylize, Render galleries).
 // Pure functions over RGBA ImageData-like objects ({ width, height, data }), so they run unchanged in
-// the filter Web Worker. Algorithms follow the descriptions in PhotoCraft's filter crates (MIT/Apache-2.0).
+// the filter Web Worker.
 const PhotoFilters = (() => {
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   const img = (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
@@ -263,7 +263,7 @@ const PhotoFilters = (() => {
     return warp(s, (x, y, o) => {
       const nx = (x - cx) / Rx, ny = (y - cy) / Ry, r = Math.hypot(nx, ny);
       if (r >= 1 || r === 0) { o[0] = x; o[1] = y; return; }
-      // PhotoCraft: source radius moves toward asin(r)·2/π (bulge) or sin(r·π/2) (pinch)
+      // source radius moves toward asin(r)·2/π (bulge) or sin(r·π/2) (pinch)
       const target = A >= 0 ? Math.asin(r) * 2 / Math.PI : Math.sin(r * Math.PI / 2), k = (r + Math.abs(A) * (target - r)) / r;
       o[0] = cx + nx * k * Rx; o[1] = cy + ny * k * Ry;
     });
@@ -479,7 +479,7 @@ const PhotoFilters = (() => {
     for (let i = 0; i < d.length; i += 4) { d[i] = T[0][d[i]]; d[i + 1] = T[1][d[i + 1]]; d[i + 2] = T[2][d[i + 2]]; }
   };
   def('autocontrast', 'Adjust', 'Auto Contrast', [], s => {
-    // PhotoCraft edit_cmds: one black/white point from all channels, 0.1% clip
+    // one black/white point from all channels, 0.1% clip
     const o = copy(s), { pts } = hist3(o.data, 0.001), lo = Math.min(...pts.map(p => p[0])), hi = Math.max(...pts.map(p => p[1]));
     stretch(o.data, [lo, lo, lo], [hi, hi, hi]); return o;
   });
@@ -499,7 +499,7 @@ const PhotoFilters = (() => {
   });
   def('desaturate', 'Adjust', 'Desaturate', [], s => { const o = copy(s), d = o.data; for (let i = 0; i < d.length; i += 4) { const v = (Math.max(d[i], d[i + 1], d[i + 2]) + Math.min(d[i], d[i + 1], d[i + 2])) / 2; d[i] = d[i + 1] = d[i + 2] = v; } return o; });
   def('shadowhighlight', 'Adjust', 'Shadows/Highlights…', [P('shadows', 'Shadows amount', 0, 100, 35, { unit: '%' }), P('stone', 'Shadows tone', 1, 100, 50, { unit: '%' }), P('highlights', 'Highlights amount', 0, 100, 0, { unit: '%' }), P('htone', 'Highlights tone', 1, 100, 50, { unit: '%' }), P('radius', 'Radius', 1, 300, 30, { unit: 'px' }), P('color', 'Color', -100, 100, 20)], (s, p) => {
-    // Photoshop model (PhotoCraft algo/tone/shadows_highlights): a blurred brightness map decides how much each
+    // Photoshop model: a blurred brightness map decides how much each
     // pixel is lifted (shadows) or pulled down (highlights); luma changes, colour difference is kept and boosted.
     const o = copy(s), d = o.data, W = s.width, Hh = s.height, n = W * Hh;
     const B = { width: W, height: Hh, data: new Uint8ClampedArray(n * 4) };

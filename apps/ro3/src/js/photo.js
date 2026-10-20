@@ -1417,7 +1417,7 @@ const PhotoEditor = (() => {
     if (l.mask && l.maskOn) { x.globalCompositeOperation = 'destination-in'; x.drawImage(l.mask, l.x, l.y); }
     return c;
   }
-  /** Info panel: histogram with stats (PhotoCraft's Histogram panel) and colour sampler readouts. */
+  /** Info panel: histogram with stats and colour sampler readouts. */
   function infoPanel() {
     const wrap = h('<div class="ph-adjust info-panel"></div>');
     if (!doc) { wrap.appendChild(h('<p class="hint">Open an image to see its histogram.</p>')); return wrap; }
@@ -2291,7 +2291,7 @@ const PhotoEditor = (() => {
     finally { el.stage.classList.remove('busy'); }
   }
 
-  // ---------- retouching & utility tools ported from PhotoCraft ----------
+  // ---------- retouching & utility tools ----------
   let patchUrl = null, patchKey = null;
   /** Data URL of the current selection's outline, used to preview a Patch / Content-Aware Move drag. */
   function patchOutline() {
@@ -2300,7 +2300,7 @@ const PhotoEditor = (() => {
     patchUrl = c.toDataURL(); patchKey = history.index + ':' + (doc.selection && doc.selection.width); return patchUrl;
   }
   /** Seamless (Poisson) blend: replace `dst` inside mask with `src` but keep dst's boundary colours.
-   *  Solves Δh = 0 inside the mask with h = dst − src on its edge (SOR, ω≈1.7) — PhotoCraft algo/src/poisson.rs. */
+   *  Solves Δh = 0 inside the mask with h = dst − src on its edge (SOR, ω≈1.7). */
   function poissonBlend(dst, src, mask, bbox) {
     const W = dst.width, x0 = Math.max(0, bbox.x - 2), y0 = Math.max(0, bbox.y - 2), x1 = Math.min(W, bbox.x + bbox.w + 2), y1 = Math.min(dst.height, bbox.y + bbox.h + 2);
     const w = x1 - x0, hh = y1 - y0; if (w < 3 || hh < 3) return;
@@ -2380,7 +2380,7 @@ const PhotoEditor = (() => {
       l.text = null; markDirty(l); pushHistory(T.camove.mode === 'move' ? 'Content-aware move' : 'Content-aware extend'); refreshAll();
     });
   }
-  /** Red Eye: find the red pupil nearest the click, flood it, and desaturate/darken it (PhotoCraft algo/src/redeye.rs). */
+  /** Red Eye: find the red pupil nearest the click, flood it, and desaturate/darken it. */
   function redEyeAt(p) {
     const l = active(); if (!editable(l, { pixelsOnly: true })) return;
     commitAdjust();
@@ -2812,7 +2812,7 @@ const PhotoEditor = (() => {
     }
     return { kind: k, x0: p.x, y0: p.y, x1: q.x, y1: q.y };
   }
-  /** Vertices of a polygon / star / triangle inscribed in the drag box (PhotoCraft vector/src/shapes.rs). */
+  /** Vertices of a polygon / star / triangle inscribed in the drag box. */
   function polyPoints(d) {
     const o = T.shape, x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1), w = Math.abs(d.x1 - d.x0), hh = Math.abs(d.y1 - d.y0);
     if (d.kind === 'triangle') return [[x + w / 2, y], [x + w, y + hh], [x, y + hh]];

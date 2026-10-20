@@ -57,7 +57,7 @@ const PhotoCompose = (() => {
     return m;
   }
   function tint(matte, color, alpha) { const c = O.clone(matte), x = O.cx(c); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height); c._alpha = alpha; return c; }
-  /** Bevel & Emboss: height map from blurred alpha, lit from angle/altitude (PhotoCraft compose/src/effects.rs). */
+  /** Bevel & Emboss: height map from blurred alpha, lit from angle/altitude. */
   function bevelMaps(src, e) {
     const w = src.width, h = src.height, size = Math.max(1, e.size), depth = (e.depth || 100) / 100 * (e.direction === 'down' ? -1 : 1);
     const hm = O.mk(w, h), hx = O.cx(hm); hx.filter = `blur(${size / 2}px)`; hx.drawImage(src, 0, 0);
@@ -183,7 +183,7 @@ const PhotoCompose = (() => {
     ctx.drawImage(out, 0, 0); ctx.restore();
   }
 
-  // Blend modes canvas can't do natively (formulas from PhotoCraft color/src/blend.rs).
+  // Blend modes canvas can't do natively (standard Photoshop formulas).
   const burn = (b, s) => b >= 1 ? 1 : s <= 0 ? 0 : 1 - Math.min((1 - b) / s, 1);
   const dodge = (b, s) => b <= 0 ? 0 : s >= 1 ? 1 : Math.min(b / (1 - s), 1);
   const vivid = (b, s) => s <= 0.5 ? burn(b, 2 * s) : dodge(b, 2 * (s - 0.5));

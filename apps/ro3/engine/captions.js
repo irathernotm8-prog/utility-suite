@@ -4,7 +4,6 @@
 // marker = { time, name }          seconds (as in the video project's markers lane).
 //
 // UMD: no require() calls, so the renderer can load this with a plain <script> tag.
-// Parsing logic ported from FilmCraft's captions crate (srt.rs, vtt.rs), MIT/Apache-2.0.
 const Captions = (() => {
   'use strict';
 

@@ -146,4 +146,74 @@ async function createCampaign(cfg, spec, currency, f, readMedia) {
   } catch (e) { e.created = made; throw e; }
 }
 
-module.exports = { fetchTree, update, copyCampaign, geoSearch, createCampaign, targetingFor, toMinor, offsetFor, OBJECTIVES, CTAS, SPECIAL, API_VERSION };
+// ---- Existing ads: read the creative, preview it, and edit it ----
+// Meta creatives are immutable: an edit makes a new creative and points the ad at it (the ad goes back into review).
+const CREATIVE_FIELDS = 'id,name,title,body,object_story_id,object_story_spec,asset_feed_spec,image_url,thumbnail_url,call_to_action_type';
+const PREVIEWS = { facebook: 'DESKTOP_FEED_STANDARD', mobile: 'MOBILE_FEED_STANDARD', instagram: 'INSTAGRAM_STANDARD' };
+
+async function fetchAdCreative(cfg, adId, f) {
+  const r = await call(`${base(cfg)}/${encodeURIComponent(adId)}?${form({ fields: `name,status,effective_status,creative{${CREATIVE_FIELDS}}`, access_token: cfg.token })}`, {}, f);
+  const cr = r.creative || {}, spec = cr.object_story_spec || {}, ld = spec.link_data;
+  let editable = true, reason = '';
+  if (cr.asset_feed_spec) { editable = false; reason = 'This ad uses Meta’s flexible/dynamic creative, which can only be edited in Ads Manager.'; }
+  else if (cr.object_story_id && !ld) { editable = false; reason = 'This ad promotes an existing post, so its text lives on the post. Edit the post, or use Ads Manager.'; }
+  else if (!ld) { editable = false; reason = 'This ad is a video, carousel or other format Lumen can show but not edit yet.'; }
+  else if (ld.child_attachments) { editable = false; reason = 'Carousel ads can only be edited in Ads Manager.'; }
+  const cta = (ld && ld.call_to_action && ld.call_to_action.type) || cr.call_to_action_type || '';
+  return { adId, adName: r.name, creativeId: cr.id, editable, reason, pageId: spec.page_id || '', instagramUserId: spec.instagram_user_id || '',
+    message: (ld && ld.message) || cr.body || '', headline: (ld && ld.name) || cr.title || '', description: (ld && ld.description) || '',
+    link: (ld && ld.link) || '', cta, imageUrl: cr.image_url || cr.thumbnail_url || '', _spec: spec };
+}
+
+// Meta's own rendering of the ad. The body is an iframe tag; we hand back its address to open in a browser.
+async function previewLinks(cfg, adId, f) {
+  const out = {};
+  await Promise.all(Object.entries(PREVIEWS).map(async ([k, fmt]) => {
+    try {
+      const r = await call(`${base(cfg)}/${encodeURIComponent(adId)}/previews?${form({ ad_format: fmt, access_token: cfg.token })}`, {}, f);
+      const m = r.data && r.data[0] && /src="([^"]+)"/.exec(r.data[0].body || '');
+      if (m) out[k] = m[1].replace(/&amp;/g, '&');
+    } catch (_) { /* some placements are not available for every ad */ }
+  }));
+  return out;
+}
+
+// patch: { message, headline, description, link, cta, mediaPath }. Returns the old and new creative ids.
+async function editAdCreative(cfg, adId, patch, f, readMedia) {
+  const cur = await fetchAdCreative(cfg, adId, f);
+  if (!cur.editable) throw new Error(cur.reason);
+  const spec = JSON.parse(JSON.stringify(cur._spec)), ld = spec.link_data, acct = actAccount(cfg.accountId), B = base(cfg), tok = cfg.token;
+  if (patch.message !== undefined) ld.message = patch.message;
+  if (patch.headline !== undefined) ld.name = patch.headline;
+  if (patch.description !== undefined) ld.description = patch.description;
+  if (patch.link !== undefined) { ld.link = patch.link; if (ld.call_to_action && ld.call_to_action.value) ld.call_to_action.value.link = patch.link; }
+  if (patch.cta !== undefined) {
+    if (patch.cta === 'NO_BUTTON') delete ld.call_to_action;
+    else ld.call_to_action = { type: patch.cta, value: { ...((ld.call_to_action && ld.call_to_action.value) || {}), link: ld.link } };
+  }
+  if (patch.mediaPath) {
+    const media = await readMedia(patch.mediaPath); const fd = new FormData(); fd.append('access_token', tok); fd.append('filename', new Blob([media.data], { type: media.type }), media.name);
+    const up = await call(`${B}/${acct}/adimages`, { method: 'POST', body: fd }, f);
+    const hash = up.images && Object.values(up.images)[0] && Object.values(up.images)[0].hash;
+    if (!hash) throw new Error('Meta did not accept the image.');
+    ld.image_hash = hash; delete ld.picture; delete ld.image_crops;
+  }
+  const cr = await call(`${B}/${acct}/adcreatives`, { method: 'POST', body: form({ name: `${(cur.adName || 'Ad').slice(0, 80)} · edited ${new Date().toISOString().slice(0, 10)}`, object_story_spec: spec, access_token: tok }) }, f);
+  await setAdCreative(cfg, adId, cr.id, f);
+  return { oldCreativeId: cur.creativeId, newCreativeId: cr.id };
+}
+async function setAdCreative(cfg, adId, creativeId, f) {
+  const r = await call(`${base(cfg)}/${encodeURIComponent(adId)}`, { method: 'POST', body: form({ creative: { creative_id: creativeId }, access_token: cfg.token }) }, f);
+  if (r.success === false) throw new Error('Meta did not apply the change.');
+}
+
+// Meta serves ad images from its CDN; the app can't load remote images, so fetch a copy as a data URI (small images only).
+async function imageData(url, f) {
+  if (!/^https:\/\/[^/]*(fbcdn\.net|facebook\.com|fbsbx\.com)\//.test(url || '')) return '';
+  const res = await f(url); if (!res.ok) return '';
+  const buf = Buffer.from(await res.arrayBuffer()); if (buf.length > 4e6) return '';
+  return `data:${res.headers.get('content-type') || 'image/jpeg'};base64,${buf.toString('base64')}`;
+}
+
+
+module.exports = { fetchAdCreative, previewLinks, editAdCreative, setAdCreative, imageData, fetchTree, update, copyCampaign, geoSearch, createCampaign, targetingFor, toMinor, offsetFor, OBJECTIVES, CTAS, SPECIAL, API_VERSION };

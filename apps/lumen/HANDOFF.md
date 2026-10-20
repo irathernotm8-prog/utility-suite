@@ -73,3 +73,9 @@ Ad management (approval queue, paused drafts, budget/pause), videos/Reels/Storie
 - All live Meta write calls (campaign/ad set/creative/ad creation payloads, `/copies`, adimages, status/budget updates) are tested only against mocks. Try a throwaway paused campaign first.
 - Zero-decimal currency list (JPY, KRW, VND, CLP, PYG, ISK, UGX) is from memory.
 - UI verified in a mocked browser only, not in Electron on Windows.
+
+## 0.4.1 (preview and edit existing ads)
+- Click an ad (or ⋯ → Preview & edit): Facebook/Instagram mockup that updates as you type; edit text, headline, description, link, button, photo. Meta creatives are immutable, so a save creates a new creative and repoints the ad (back into review). Undo in Activity repoints to the old creative.
+- "Meta's exact preview" uses `/{ad}/previews` and opens the returned URL in the browser (the app CSP blocks iframes).
+- Read-only (with explanation): boosted-post ads, flexible/dynamic creative, carousels, video.
+- Unverified live: creative edit payload (object_story_spec round-trip), `/previews` response shape, image CDN fetch for the mockup.

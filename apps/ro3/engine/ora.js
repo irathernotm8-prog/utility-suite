@@ -4,7 +4,6 @@
 //         layers: [{ name, png: Buffer, x, y, opacity, visible, blend }],   // bottom → top; blend = canvas composite op
 //         merged: Buffer /* png */, thumbnail?: Buffer /* png */ }
 //
-// stack.xml layout and composite-op mapping ported from PhotoCraft's io crate (ora.rs), MIT/Apache-2.0.
 const fs = require('fs');
 const zlib = require('zlib');
 

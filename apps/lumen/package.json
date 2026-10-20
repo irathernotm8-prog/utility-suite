@@ -1,7 +1,7 @@
 {
   "name": "lumen",
   "productName": "Lumen",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Ads, analytics and a posting calendar in one calm place: Meta first (reporting, Facebook and Instagram posting), with optional Google and Salesforce, plus an AI you can ask with or without an API key.",
   "main": "src/main.js",
   "author": "Bilal",
