@@ -4,6 +4,7 @@ const path = require('path');
 const { open, store, iso, addDays } = require('./db');
 const connectors = require('./connectors');
 const ai = require('./ai');
+const gauth = require('./google-auth');
 
 if (process.env.LUMEN_USER_DATA) app.setPath('userData', process.env.LUMEN_USER_DATA);
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -31,6 +32,13 @@ function plainConfig(c) {
   for (const k of secretKeys(c.kind)) if (cfg[k]) cfg[k] = unseal(cfg[k]);
   return cfg;
 }
+// Google connectors share one sign-in; hand them a fresh access token.
+const googleCreds = () => ({ clientId: S.getSetting('google.clientId', ''), clientSecret: getKey('google.clientSecret'), refreshToken: getKey('google.refresh') });
+async function resolveConfig(c) {
+  const cfg = plainConfig(c);
+  if ((connectors.get(c.kind) || {}).google) cfg.accessToken = await gauth.accessToken(googleCreds());
+  return cfg;
+}
 const getKey = (name) => unseal(S.getSetting('secret.' + name, ''));
 
 // ---- sync ----
@@ -40,12 +48,16 @@ async function syncConnection(id, days = 90) {
   const impl = connectors.get(c.kind);
   const until = iso(new Date()), since = addDays(until, -(days - 1));
   try {
-    let rows;
-    if (c.kind === 'demo') rows = impl.generate({ days, end: until });
-    else rows = await impl.sync(plainConfig(c), { since, until });
-    S.upsertFacts(c.workspace_id, c.kind, c.id, rows);
-    S.updateConnection(id, { status: 'ok', last_sync: new Date().toISOString(), last_error: null });
-    return { rows: rows.length };
+    let res;
+    if (c.kind === 'demo') res = impl.generate({ days, end: until });
+    else res = await impl.sync(await resolveConfig(c), { since, until });
+    const out = Array.isArray(res) ? { facts: res } : res || {};
+    let n = 0;
+    if (out.facts) n += S.upsertFacts(c.workspace_id, c.kind, c.id, out.facts);
+    if (out.series) n += S.upsertSeries(c.workspace_id, c.kind, c.id, out.series);
+    for (const sn of out.snapshots || []) { S.upsertSnapshot(c.workspace_id, c.id, sn.key, c.kind, sn.name, sn.payload); n++; }
+    S.updateConnection(id, { status: 'ok', last_sync: new Date().toISOString(), last_error: out.warning || null });
+    return { rows: n, warning: out.warning };
   } catch (e) {
     S.updateConnection(id, { status: 'error', last_error: String(e.message || e) });
     throw e;
@@ -66,6 +78,19 @@ const h = (name, fn) => ipcMain.handle('lumen:' + name, async (_e, ...a) => {
   catch (e) { return { ok: false, error: String(e.message || e) }; }
 });
 
+// A small slice of the analytics sources so questions like "does GA4 agree with Meta?" are answerable.
+function analyticsForAi(ws, from, to) {
+  const out = {}, top = (a, n) => (a || []).slice(0, n).map((x) => ({ name: x.dim, value: Math.round(x.total * 100) / 100 }));
+  const g = S.seriesSummary(ws, 'ga4', from, to);
+  if (Object.keys(g.metrics).length) {
+    out.ga4 = { totals: Object.fromEntries(['sessions', 'engaged_sessions', 'key_events', 'revenue'].filter((m) => g.metrics[m]).map((m) => [m, { now: Math.round(g.metrics[m].total), previous: Math.round(g.metrics[m].previous) }])),
+      sessions_by_channel: top(g.dims.sessions, 8), key_events_by_campaign: top(g.dims.campaign_key_events, 15), sessions_by_campaign: top(g.dims.campaign_sessions, 15) };
+  }
+  const y = S.seriesSummary(ws, 'youtube', from, to);
+  if (Object.keys(y.metrics).length) out.youtube = Object.fromEntries(Object.entries(y.metrics).map(([m, v]) => [m, { now: Math.round(v.total), previous: Math.round(v.previous) }]));
+  return Object.keys(out).length ? out : undefined;
+}
+
 function registerIpc() {
   h('bootstrap', () => {
     const workspaces = S.workspaces();
@@ -74,9 +99,11 @@ function registerIpc() {
     return {
       workspaces, active, theme: S.getSetting('theme', 'system'), model: S.getSetting('model', ai.DEFAULT_MODEL),
       keys: { anthropic: !!getKey('anthropic'), openai: !!getKey('openai') },
+      ai: { provider: S.getSetting('aiProvider', 'anthropic'), cliModel: S.getSetting('cliModel', ''), providers: Object.entries(ai.PROVIDERS).map(([id, p]) => ({ id, label: p.label })) },
+      google: { hasClient: !!(S.getSetting('google.clientId', '') && getKey('google.clientSecret')), signedIn: !!getKey('google.refresh') },
       platform: process.platform,
       connectors: {
-        ready: Object.values(connectors.ready).filter((c) => c.kind !== 'demo').map((c) => ({ kind: c.kind, name: c.name, fields: c.fields })),
+        ready: Object.values(connectors.ready).filter((c) => c.kind !== 'demo').map((c) => ({ kind: c.kind, name: c.name, fields: c.fields, category: c.category || 'ads', google: !!c.google })),
         planned: connectors.planned
       },
       today: iso(new Date())
@@ -105,7 +132,7 @@ function registerIpc() {
     S.updateConnection(id, { label: label || c.label, config: merged, status: 'new' });
   });
   h('connection:remove', (id) => S.removeConnection(id));
-  h('connection:test', async (id) => { const c = S.connection(id); return connectors.get(c.kind).test(plainConfig(c)); });
+  h('connection:test', async (id) => { const c = S.connection(id); return connectors.get(c.kind).test(await resolveConfig(c)); });
   h('connection:sync', (id, days) => syncConnection(id, days || 90));
 
   h('settings:theme', (t) => { S.setSetting('theme', t); applyTheme(t); });
@@ -116,12 +143,38 @@ function registerIpc() {
     return !!value;
   });
 
-  h('ask', (payload) => ai.ask({
-    key: getKey('anthropic'), model: S.getSetting('model', ai.DEFAULT_MODEL),
-    question: String(payload.question || ''), history: payload.history || [],
-    summary: S.summary(payload.ws, payload.from, payload.to),
-    workspace: (S.workspaces().find((w) => w.id === payload.ws) || {}).name || 'Workspace'
+  h('settings:provider', (p) => { if (!ai.PROVIDERS[p]) throw new Error('Unknown AI provider.'); S.setSetting('aiProvider', p); });
+  h('settings:cliModel', (m) => S.setSetting('cliModel', String(m || '').trim()));
+  h('ai:detect', (p) => ai.detect(p));
+  h('ai:test', async () => {
+    const text = await ai.ask({ provider: S.getSetting('aiProvider', 'anthropic'), key: getKey('anthropic'), model: S.getSetting('model', ai.DEFAULT_MODEL), cliModel: S.getSetting('cliModel', ''),
+      question: 'Reply with the single word OK.', summary: { from: '', to: '', span: 0, current: {}, previous: {}, campaigns: [], series: [] }, workspace: 'test' });
+    return text.slice(0, 80);
+  });
+
+  // Google: one sign-in shared by Analytics, Ads and YouTube.
+  h('google:setClient', (id, secret) => { S.setSetting('google.clientId', String(id || '').trim()); if (secret) S.setSetting('secret.google.clientSecret', seal(String(secret).trim())); });
+  h('google:signIn', async () => {
+    const { refreshToken } = await gauth.signIn({ ...googleCreds(), openExternal: (u) => shell.openExternal(u) });
+    S.setSetting('secret.google.refresh', seal(refreshToken));
+    if (win) { win.show(); win.focus(); }
+  });
+  h('google:signOut', () => { S.setSetting('secret.google.refresh', ''); });
+
+  h('analytics', (ws, from, to) => ({
+    ga4: S.seriesSummary(ws, 'ga4', from, to), youtube: S.seriesSummary(ws, 'youtube', from, to),
+    snapshots: S.snapshots(ws).map((x) => ({ source: x.source, key: x.key, name: x.name, fetched_at: x.fetched_at, ...x.payload }))
   }));
+
+  h('ask', (payload) => {
+    const summary = S.summary(payload.ws, payload.from, payload.to);
+    summary.analytics = analyticsForAi(payload.ws, payload.from, payload.to);
+    return ai.ask({
+      provider: S.getSetting('aiProvider', 'anthropic'), key: getKey('anthropic'), model: S.getSetting('model', ai.DEFAULT_MODEL), cliModel: S.getSetting('cliModel', ''),
+      question: String(payload.question || ''), history: payload.history || [], summary,
+      workspace: (S.workspaces().find((w) => w.id === payload.ws) || {}).name || 'Workspace'
+    });
+  });
   h('open', (url) => { if (/^https:\/\//.test(url)) return shell.openExternal(url); });
 }
 

@@ -16,7 +16,9 @@
   </header>
   <nav id="rail">
     <button data-view="overview" class="on"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg><span>Overview</span></button>
+    <button data-view="analytics"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9v9z"/></svg><span>Analytics</span></button>
     <button data-view="connections"><svg viewBox="0 0 24 24"><path d="M9 7V3m6 4V3M7 7h10v4a5 5 0 0 1-10 0V7zm5 9v5" /></svg><span>Sources</span></button>
+    <button data-view="guide"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M9 8h6"/></svg><span>Guide</span></button>
     <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg><span>Settings</span></button>
     <div class="grow"></div>
     <button id="askBtn" class="accent"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span>Ask</span></button>
@@ -30,6 +32,7 @@
 </div>
 <div id="toast" role="status"></div>
 <script src="charts.js"></script>
+<script src="guide.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

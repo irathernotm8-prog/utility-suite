@@ -6,5 +6,8 @@ contextBridge.exposeInMainWorld('lumen', {
   connections: call('connections'), addConnection: call('connection:add'), updateConnection: call('connection:update'),
   removeConnection: call('connection:remove'), testConnection: call('connection:test'), syncConnection: call('connection:sync'),
   setTheme: call('settings:theme'), setModel: call('settings:model'), setKey: call('settings:key'),
+  setProvider: call('settings:provider'), setCliModel: call('settings:cliModel'), detectAi: call('ai:detect'), testAi: call('ai:test'),
+  setGoogleClient: call('google:setClient'), googleSignIn: call('google:signIn'), googleSignOut: call('google:signOut'),
+  analytics: call('analytics'),
   ask: call('ask'), open: call('open')
 });

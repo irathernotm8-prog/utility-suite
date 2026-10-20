@@ -21,3 +21,9 @@ Sources → Add Meta Ads. You need the ad account ID (number after `act_`) and a
 - `src/renderer/` UI (no framework, SVG charts)
 
 Data and keys stay on this computer, in the app's user-data folder.
+
+## Sources
+Meta Ads, Google Ads, GA4, YouTube and Salesforce reports. The in-app Guide has setup steps for each. Google sign-in is shared across its three sources.
+
+## AI
+Settings → AI: Anthropic API key, or the Claude / Codex CLI you are already signed in to (no API key needed).

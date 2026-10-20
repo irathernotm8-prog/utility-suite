@@ -18,11 +18,22 @@ function open(file) {
       spend REAL DEFAULT 0, impressions INTEGER DEFAULT 0, clicks INTEGER DEFAULT 0, conversions REAL DEFAULT 0, revenue REAL DEFAULT 0,
       PRIMARY KEY (workspace_id, source, campaign_id, date));
     CREATE INDEX IF NOT EXISTS facts_ws_date ON facts (workspace_id, date);
+    CREATE TABLE IF NOT EXISTS series (
+      workspace_id TEXT NOT NULL, source TEXT NOT NULL, connection_id TEXT NOT NULL,
+      metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', date TEXT NOT NULL, value REAL DEFAULT 0,
+      PRIMARY KEY (workspace_id, source, metric, dim, date));
+    CREATE INDEX IF NOT EXISTS series_ws_date ON series (workspace_id, source, date);
+    CREATE TABLE IF NOT EXISTS snapshots (
+      workspace_id TEXT NOT NULL, connection_id TEXT NOT NULL, key TEXT NOT NULL, source TEXT NOT NULL,
+      name TEXT NOT NULL, fetched_at TEXT NOT NULL, payload TEXT NOT NULL,
+      PRIMARY KEY (connection_id, key));
     CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT);
   `);
   return db;
 }
 
+// Sources that spend money. Their numbers add up into the Overview; analytics sources (GA4, YouTube, Salesforce) never do.
+const AD_SOURCES = ['demo', 'meta', 'google-ads'];
 const uid = (p) => p + '_' + Math.random().toString(36).slice(2, 10);
 const iso = (d) => d.toISOString().slice(0, 10);
 const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
@@ -43,7 +54,7 @@ function store(db) {
     renameWorkspace(id, name) { run('UPDATE workspaces SET name=? WHERE id=?', name, id); },
     removeWorkspace(id) {
       db.exec('BEGIN');
-      try { run('DELETE FROM facts WHERE workspace_id=?', id); run('DELETE FROM connections WHERE workspace_id=?', id); run('DELETE FROM workspaces WHERE id=?', id); db.exec('COMMIT'); }
+      try { run('DELETE FROM series WHERE workspace_id=?', id); run('DELETE FROM snapshots WHERE workspace_id=?', id); run('DELETE FROM facts WHERE workspace_id=?', id); run('DELETE FROM connections WHERE workspace_id=?', id); run('DELETE FROM workspaces WHERE id=?', id); db.exec('COMMIT'); }
       catch (e) { db.exec('ROLLBACK'); throw e; }
     },
 
@@ -55,7 +66,7 @@ function store(db) {
       const m = { ...c, ...patch };
       run('UPDATE connections SET label=?, config=?, status=?, last_sync=?, last_error=? WHERE id=?', m.label, JSON.stringify(m.config || {}), m.status, m.last_sync || null, m.last_error || null, id);
     },
-    removeConnection(id) { run('DELETE FROM facts WHERE connection_id=?', id); run('DELETE FROM connections WHERE id=?', id); },
+    removeConnection(id) { run('DELETE FROM series WHERE connection_id=?', id); run('DELETE FROM snapshots WHERE connection_id=?', id); run('DELETE FROM facts WHERE connection_id=?', id); run('DELETE FROM connections WHERE id=?', id); },
 
     upsertFacts(ws, source, connectionId, rows) {
       const st = db.prepare(`INSERT INTO facts (workspace_id,source,connection_id,campaign_id,campaign_name,date,spend,impressions,clicks,conversions,revenue)
@@ -70,24 +81,61 @@ function store(db) {
       return rows.length;
     },
 
+    upsertSeries(ws, source, connectionId, rows) {
+      const st = db.prepare(`INSERT INTO series (workspace_id,source,connection_id,metric,dim,date,value) VALUES (?,?,?,?,?,?,?)
+        ON CONFLICT(workspace_id,source,metric,dim,date) DO UPDATE SET value=excluded.value, connection_id=excluded.connection_id`);
+      db.exec('BEGIN');
+      try { for (const r of rows) st.run(ws, source, connectionId, r.metric, String(r.dim ?? ''), r.date, +r.value || 0); db.exec('COMMIT'); }
+      catch (e) { db.exec('ROLLBACK'); throw e; }
+      return rows.length;
+    },
+
+    // Daily totals per metric (zero-filled), the same window one step back for comparison, and a breakdown by dimension.
+    seriesSummary(ws, source, from, to) {
+      const span = daysBetween(from, to) + 1, prevTo = addDays(from, -1), prevFrom = addDays(from, -span);
+      const rows = q('SELECT metric, dim, date, value FROM series WHERE workspace_id=? AND source=? AND date BETWEEN ? AND ?', ws, source, prevFrom, to);
+      const metrics = {}, dims = {};
+      for (const r of rows) {
+        const m = metrics[r.metric] || (metrics[r.metric] = { total: 0, previous: 0, byDate: new Map() });
+        if (r.date >= from) { m.total += r.value; m.byDate.set(r.date, (m.byDate.get(r.date) || 0) + r.value); const d = dims[r.metric] || (dims[r.metric] = new Map()); if (r.dim) d.set(r.dim, (d.get(r.dim) || 0) + r.value); }
+        else m.previous += r.value;
+      }
+      const out = { from, to, span, metrics: {}, dims: {} };
+      for (const [k, m] of Object.entries(metrics)) {
+        const daily = []; for (let i = 0; i < span; i++) { const d = addDays(from, i); daily.push({ date: d, value: m.byDate.get(d) || 0 }); }
+        out.metrics[k] = { total: m.total, previous: m.previous, daily };
+      }
+      for (const [k, d] of Object.entries(dims)) out.dims[k] = [...d.entries()].map(([dim, total]) => ({ dim, total })).sort((a, b) => b.total - a.total);
+      return out;
+    },
+
+    upsertSnapshot(ws, connectionId, key, source, name, payload) {
+      run(`INSERT INTO snapshots (workspace_id,connection_id,key,source,name,fetched_at,payload) VALUES (?,?,?,?,?,?,?)
+        ON CONFLICT(connection_id,key) DO UPDATE SET name=excluded.name, fetched_at=excluded.fetched_at, payload=excluded.payload`,
+        ws, connectionId, key, source, name, new Date().toISOString(), JSON.stringify(payload));
+    },
+    snapshots: (ws, source) => q('SELECT * FROM snapshots WHERE workspace_id=?' + (source ? ' AND source=?' : '') + ' ORDER BY name', ...(source ? [ws, source] : [ws])).map((r) => ({ ...r, payload: JSON.parse(r.payload) })),
+    clearSnapshots(connectionId) { run('DELETE FROM snapshots WHERE connection_id=?', connectionId); },
+
     // Everything the dashboard needs for one window, plus the window just before it for deltas.
-    summary(ws, from, to) {
+    summary(ws, from, to, sources = AD_SOURCES) {
+      const inS = ' AND source IN (' + sources.map(() => '?').join(',') + ')';
       const span = daysBetween(from, to) + 1;
       const prevTo = addDays(from, -1), prevFrom = addDays(from, -span);
       const tot = (a, b) => one(`SELECT COALESCE(SUM(spend),0) spend, COALESCE(SUM(impressions),0) impressions, COALESCE(SUM(clicks),0) clicks,
-        COALESCE(SUM(conversions),0) conversions, COALESCE(SUM(revenue),0) revenue FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ?`, ws, a, b);
+        COALESCE(SUM(conversions),0) conversions, COALESCE(SUM(revenue),0) revenue FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ?${inS}`, ws, a, b, ...sources);
       const daily = q(`SELECT date, SUM(spend) spend, SUM(impressions) impressions, SUM(clicks) clicks, SUM(conversions) conversions, SUM(revenue) revenue
-        FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ? GROUP BY date ORDER BY date`, ws, from, to);
+        FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ?${inS} GROUP BY date ORDER BY date`, ws, from, to, ...sources);
       const byDate = new Map(daily.map((d) => [d.date, d]));
       const series = [];
       for (let i = 0; i < span; i++) { const d = addDays(from, i); series.push(byDate.get(d) || { date: d, spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 }); }
       const campaigns = q(`SELECT source, campaign_id, campaign_name name, SUM(spend) spend, SUM(impressions) impressions, SUM(clicks) clicks, SUM(conversions) conversions, SUM(revenue) revenue
-        FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ? GROUP BY source, campaign_id ORDER BY spend DESC`, ws, from, to);
-      const bySource = q(`SELECT source, SUM(spend) spend, SUM(conversions) conversions FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ? GROUP BY source`, ws, from, to);
-      const last = one('SELECT MAX(date) d FROM facts WHERE workspace_id=?', ws);
+        FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ?${inS} GROUP BY source, campaign_id ORDER BY spend DESC`, ws, from, to, ...sources);
+      const bySource = q(`SELECT source, SUM(spend) spend, SUM(conversions) conversions FROM facts WHERE workspace_id=? AND date BETWEEN ? AND ?${inS} GROUP BY source`, ws, from, to, ...sources);
+      const last = one('SELECT MAX(date) d FROM facts WHERE workspace_id=?' + inS.replace('AND source','AND source'), ws, ...sources);
       return { from, to, span, current: tot(from, to), previous: tot(prevFrom, prevTo), series, campaigns, bySource, latestData: last && last.d };
     }
   };
 }
 
-module.exports = { open, store, iso, addDays, daysBetween };
+module.exports = { open, store, iso, addDays, daysBetween, AD_SOURCES };

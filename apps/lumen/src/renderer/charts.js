@@ -16,12 +16,14 @@
   }
 
   // Two-series daily chart: spend as columns (left axis), conversions as a line (right axis).
-  function daily(box, series, fmt) {
+  function daily(box, series, fmt, opt) {
+    opt = opt || { a: { key: 'spend', label: 'Spend', fmt: fmt.money }, b: { key: 'conversions', label: 'Conversions', fmt: fmt.num } };
+    const A = opt.a, B = opt.b;
     box.innerHTML = '';
     const W = box.clientWidth || 700, H = 250, m = { l: 46, r: 40, t: 10, b: 24 };
     const iw = W - m.l - m.r, ih = H - m.t - m.b, n = series.length;
-    const sMax = nice(Math.max(...series.map((d) => d.spend), 1)), cMax = nice(Math.max(...series.map((d) => d.conversions), 1));
-    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'chart', role: 'img', 'aria-label': 'Daily spend and conversions' });
+    const sMax = nice(Math.max(...series.map((d) => d[A.key]), 1)), cMax = nice(Math.max(...series.map((d) => d[B.key]), 1));
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'chart', role: 'img', 'aria-label': `Daily ${A.label} and ${B.label}` });
     for (let i = 0; i <= 4; i++) {
       const yy = m.t + ih - (i / 4) * ih;
       svg.append(el('line', { x1: m.l, x2: W - m.r, y1: yy, y2: yy, class: 'grid' }));
@@ -31,10 +33,10 @@
     const bw = Math.max(1, Math.min(18, iw / n - 2));
     const cx = (i) => m.l + (n === 1 ? iw / 2 : (i + 0.5) * (iw / n));
     series.forEach((d, i) => {
-      const bh = (d.spend / sMax) * ih;
+      const bh = (d[A.key] / sMax) * ih;
       svg.append(el('rect', { x: cx(i) - bw / 2, y: m.t + ih - bh, width: bw, height: Math.max(bh, 0), rx: Math.min(3, bw / 2), fill: 'var(--c1)', opacity: '.85' }));
     });
-    const line = series.map((d, i) => `${cx(i).toFixed(1)},${(m.t + ih - (d.conversions / cMax) * ih).toFixed(1)}`);
+    const line = series.map((d, i) => `${cx(i).toFixed(1)},${(m.t + ih - (d[B.key] / cMax) * ih).toFixed(1)}`);
     svg.append(el('path', { d: 'M' + line.join(' L'), fill: 'none', stroke: 'var(--c2)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
     const step = Math.max(1, Math.ceil(n / 7));
     series.forEach((d, i) => { if (i % step === 0) { const t = el('text', { x: cx(i), y: H - 6, 'text-anchor': 'middle' }); t.textContent = d.date.slice(5); svg.append(t); } });
@@ -44,7 +46,7 @@
     hit.addEventListener('mousemove', (e) => {
       const r = svg.getBoundingClientRect(); const px = e.clientX - r.left;
       const i = Math.max(0, Math.min(n - 1, Math.floor(((px - m.l) / iw) * n))); const d = series[i];
-      tip.hidden = false; tip.innerHTML = `<b>${d.date}</b><br>Spend ${fmt.money(d.spend)}<br>Conversions ${fmt.num(d.conversions)}`;
+      tip.hidden = false; tip.innerHTML = `<b>${d.date}</b><br>${A.label} ${A.fmt(d[A.key])}<br>${B.label} ${B.fmt(d[B.key])}`;
       tip.style.left = Math.min(W - 150, Math.max(0, cx(i) + 12)) + 'px'; tip.style.top = '8px';
     });
     hit.addEventListener('mouseleave', () => { tip.hidden = true; });

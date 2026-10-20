@@ -1,13 +1,14 @@
 const demo = require('./demo');
 const meta = require('./meta');
+const ga4 = require('./ga4');
+const googleAds = require('./google-ads');
+const youtube = require('./youtube');
+const salesforce = require('./salesforce');
 
-// Connectors still to come are listed so the Connections screen shows the roadmap honestly.
+// Still to come, listed so the Sources screen shows the roadmap honestly.
 const planned = [
-  { kind: 'ga4', name: 'Google Analytics 4', status: 'planned', note: 'Sessions and conversions by campaign, to check Meta against your own tracking.' },
-  { kind: 'google-ads', name: 'Google Ads', status: 'planned', note: 'Search and YouTube video campaigns.' },
-  { kind: 'youtube', name: 'YouTube', status: 'planned', note: 'Channel views, watch time and subscribers.' },
-  { kind: 'salesforce', name: 'Salesforce', status: 'planned', note: 'Reports, dashboards and Marketing Cloud email stats.' }
+  { kind: 'sfmc', name: 'Salesforce Marketing Cloud', status: 'planned', note: 'Email sends, opens and clicks (a separate API from Salesforce reports).' }
 ];
 
-const ready = { demo, meta };
+const ready = { demo, meta, 'google-ads': googleAds, ga4, youtube, salesforce };
 module.exports = { ready, planned, get: (k) => ready[k] };

@@ -3,6 +3,10 @@
 // durable choice; a Graph API Explorer token works for a quick try but expires). Nothing leaves this computer
 // except calls to graph.facebook.com.
 const GRAPH = 'https://graph.facebook.com';
+// Pinned so Meta never falls back to an old app default (that is what triggers the "deprecated version" warning).
+// Bump this when Meta ships a new version; a connection can still override it in its own settings.
+const API_VERSION = 'v26.0';
+const ver = (cfg) => '/' + String(cfg.apiVersion || API_VERSION).trim().replace(/^\/?/, '');
 
 // Which "actions" count as a conversion. Override per connection with the "Result action" field.
 const DEFAULT_RESULTS = ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead', 'purchase', 'offsite_conversion.fb_pixel_purchase', 'complete_registration', 'offsite_conversion.fb_pixel_complete_registration'];
@@ -44,12 +48,12 @@ module.exports = {
     { key: 'accountId', label: 'Ad account ID', placeholder: '1234567890 (the number after act_)' },
     { key: 'token', label: 'Access token', secret: true, placeholder: 'Needs ads_read' },
     { key: 'resultActions', label: 'Result action types (optional)', placeholder: 'lead, purchase — blank uses the usual lead/purchase types' },
-    { key: 'apiVersion', label: 'API version (optional)', placeholder: 'e.g. v23.0 — blank uses your app default' }
+    { key: 'apiVersion', label: 'API version (optional)', placeholder: 'Blank uses ' + API_VERSION }
   ],
 
   async test(cfg, fetchImpl = fetch) {
     if (!cfg.accountId || !cfg.token) throw new Error('Enter the ad account ID and an access token.');
-    const v = cfg.apiVersion ? '/' + cfg.apiVersion.replace(/^\/?/, '') : '';
+    const v = ver(cfg);
     const u = `${GRAPH}${v}/${actAccount(cfg.accountId)}?fields=name,currency,account_status&access_token=${encodeURIComponent(cfg.token)}`;
     const a = await get(u, fetchImpl);
     return { ok: true, detail: `${a.name} · ${a.currency}`, currency: a.currency };
@@ -58,7 +62,7 @@ module.exports = {
   async sync(cfg, { since, until }, fetchImpl = fetch) {
     const types = (cfg.resultActions || '').split(',').map((s) => s.trim()).filter(Boolean);
     const use = types.length ? types : DEFAULT_RESULTS;
-    const v = cfg.apiVersion ? '/' + cfg.apiVersion.replace(/^\/?/, '') : '';
+    const v = ver(cfg);
     const qs = new URLSearchParams({
       level: 'campaign', time_increment: '1', limit: '500', access_token: cfg.token,
       fields: 'campaign_id,campaign_name,spend,impressions,clicks,inline_link_clicks,actions,action_values',
@@ -73,5 +77,6 @@ module.exports = {
     }
     return rows;
   },
-  _test: { toRow, sumActions, actAccount }
+  API_VERSION,
+  _test: { toRow, sumActions, actAccount, ver }
 };

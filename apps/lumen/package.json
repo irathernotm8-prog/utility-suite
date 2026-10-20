@@ -1,8 +1,8 @@
 {
   "name": "lumen",
   "productName": "Lumen",
-  "version": "0.1.0",
-  "description": "Ads and analytics in one calm place: Meta first, with Google, YouTube and Salesforce next, plus an AI you can ask.",
+  "version": "0.2.0",
+  "description": "Ads and analytics in one calm place: Meta and Google Ads, GA4, YouTube and Salesforce, plus an AI you can ask with or without an API key.",
   "main": "src/main.js",
   "author": "Bilal",
   "license": "UNLICENSED",
@@ -20,10 +20,29 @@
   "build": {
     "appId": "com.bilal.lumen",
     "productName": "Lumen",
-    "directories": { "output": "dist" },
-    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
     "asarUnpack": [],
-    "mac": { "target": ["dmg", "zip"], "icon": "build/icon.png", "category": "public.app-category.business" },
-    "win": { "target": ["zip"], "icon": "build/icon.png", "signAndEditExecutable": false }
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    }
   }
 }
