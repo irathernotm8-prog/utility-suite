@@ -1,7 +1,7 @@
 {
   "name": "docket",
   "productName": "Docket",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Takes notes in your Zoom, Teams and Google Meet calls: transcribes on your computer, summarizes, and turns every meeting's action items into one to-do list.",
   "main": "src/main.js",
   "author": "Bilal",
@@ -32,6 +32,6 @@
         "NSAudioCaptureUsageDescription": "Docket records the meeting's audio so it can transcribe the other people on the call."
       }
     },
-    "win": { "target": ["zip"], "icon": "build/icon.png", "signAndEditExecutable": false }
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
   }
 }

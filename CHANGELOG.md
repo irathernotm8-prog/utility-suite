@@ -2,6 +2,11 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-21 04:19 — **Trace 0.1.1** — Windows: shows its own icon instead of the default Electron one
+- 2026-10-21 04:19 — **Lumen 0.5.1** — Windows: shows its own icon instead of the default Electron one
+- 2026-10-21 04:19 — **Kiln 0.1.7** — Windows: shows its own icon instead of the default Electron one
+- 2026-10-21 04:19 — **Docket 0.1.1** — Windows: shows its own icon instead of the default Electron one
+- 2026-10-21 04:19 — **Crate 0.1.1** — Windows: shows its own icon instead of the default Electron one
 - 2026-10-21 04:06 — **Docket 0.1.0** — First release: takes notes in Zoom, Teams, Meet and any other call. Transcribes your mic and the call separately on your computer (Whisper), adds your own notes and marked moments, summarizes with Claude or ChatGPT when you stop, and gathers every meeting's action items into one to-do list. Also: ask questions across meetings, playback from any line, a floating bar, call detection, and transcribing audio or video files.
 - 2026-10-21 02:58 — **Trace 0.1.0** — First release: charts you can trace with a smooth zoom (decisions, org charts, folder plans, workflows), notes on every step, screenshots and annotation, guides, presenting and PDF export
 - 2026-10-20 19:22 — **Kiln 0.1.6** — Forge Neo starts on Mac again (it was being given options only older packages understand)

@@ -1,7 +1,7 @@
 {
   "name": "trace",
   "productName": "Trace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Map out paths, decisions, org charts and folder plans, trace them with a smooth zoom, keep notes on every step, capture screenshots for tutorials, and present or export it all to PDF.",
   "main": "src/main.js",
   "author": "Bilal",
@@ -24,6 +24,6 @@
     "files": ["src/**/*", "build/icon.png", "package.json"],
     "asarUnpack": [],
     "mac": { "target": ["dmg", "zip"], "icon": "build/icon.png", "category": "public.app-category.productivity" },
-    "win": { "target": ["zip"], "icon": "build/icon.png", "signAndEditExecutable": false }
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
   }
 }

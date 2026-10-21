@@ -1,7 +1,7 @@
 {
   "name": "crate",
   "productName": "Crate",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Download music from YouTube and more as MP3s, then tag, edit and organize them into albums before they go to your phone.",
   "main": "src/main.js",
   "author": "Bilal",
@@ -53,8 +53,7 @@
       "target": [
         "zip"
       ],
-      "icon": "build/icon.png",
-      "signAndEditExecutable": false
+      "icon": "build/icon.png"
     }
   }
 }
