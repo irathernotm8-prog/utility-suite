@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:">
+<style>
+  :root{--bg:rgba(20,18,32,.94);--line:rgba(255,255,255,.09);--fg:#ecebf5;--mut:#9a97b0;--acc:#9d8cff}
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:12.5px/1 -apple-system,"Segoe UI Variable","Segoe UI",system-ui,sans-serif;color:var(--fg);user-select:none}
+  .bar{position:absolute;inset:4px;display:flex;align-items:center;gap:6px;padding:0 8px 0 12px;border-radius:16px;background:var(--bg);border:1px solid var(--line);-webkit-app-region:drag;
+       box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .logo{width:18px;height:18px;flex:none}
+  select,button{-webkit-app-region:no-drag;font:inherit;color:inherit}
+  select{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:9px;padding:6px 8px;max-width:150px;outline:none}
+  select option{background:#1c1a2a}
+  .sep{width:1px;height:24px;background:var(--line);margin:0 2px}
+  button{display:flex;align-items:center;gap:6px;border:0;background:transparent;border-radius:9px;padding:7px 9px;cursor:pointer}
+  button:hover{background:rgba(255,255,255,.08)}
+  button.primary{background:linear-gradient(135deg,#8c7bff,#5ec8ff);color:#0c0b18;font-weight:600}
+  button.primary:hover{filter:brightness(1.08)}
+  svg.i{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .count{display:flex;align-items:center;gap:6px;margin-left:auto;-webkit-app-region:no-drag;cursor:pointer;padding:3px 6px 3px 3px;border-radius:9px}
+  .count:hover{background:rgba(255,255,255,.08)}
+  .count img{height:30px;border-radius:5px;display:none;box-shadow:0 0 0 1px var(--line)}
+  .count b{min-width:18px;text-align:center;background:rgba(157,140,255,.2);color:#cfc6ff;border-radius:999px;padding:3px 7px;font-variant-numeric:tabular-nums}
+  .pop{animation:pop .5s ease}
+  @keyframes pop{0%{transform:scale(.6);opacity:.2}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+  .x{color:var(--mut);padding:7px}
+</style></head>
+<body>
+<div class="bar">
+  <svg class="logo" viewBox="0 0 24 24"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b08cff"/><stop offset="1" stop-color="#50dcff"/></linearGradient></defs><path d="M8 5h3v4h7v6" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="2.5" width="7" height="5.5" rx="2" fill="url(#g)"/><rect x="14.5" y="14" width="7" height="5.5" rx="2" fill="url(#g)"/></svg>
+  <select id="target" title="Screenshots go to this project"></select>
+  <div class="sep"></div>
+  <button class="primary" data-m="region" id="bRegion"><svg class="i" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></svg>Region</button>
+  <button data-m="screen" title="Whole screen"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20h8M12 16.5V20"/></svg>Screen</button>
+  <button data-m="repeat" id="bRepeat" title="Same area as last time"><svg class="i" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/></svg>Repeat</button>
+  <div class="count" id="count" title="Open Trace"><img id="thumb" alt=""><b id="n">0</b></div>
+  <button class="x" id="close" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+<script src="bar.js"></script>
+</body></html>

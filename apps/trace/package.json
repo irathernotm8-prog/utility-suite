@@ -1,0 +1,29 @@
+{
+  "name": "trace",
+  "productName": "Trace",
+  "version": "0.1.0",
+  "description": "Map out paths, decisions, org charts and folder plans, trace them with a smooth zoom, keep notes on every step, capture screenshots for tutorials, and present or export it all to PDF.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.trace",
+    "productName": "Trace",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "asarUnpack": [],
+    "mac": { "target": ["dmg", "zip"], "icon": "build/icon.png", "category": "public.app-category.productivity" },
+    "win": { "target": ["zip"], "icon": "build/icon.png", "signAndEditExecutable": false }
+  }
+}

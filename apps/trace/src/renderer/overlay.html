@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:">
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;cursor:crosshair;user-select:none;background:#000;font:13px/1.3 -apple-system,"Segoe UI Variable","Segoe UI",system-ui,sans-serif}
+  #shot{position:fixed;inset:0;width:100vw;height:100vh;object-fit:fill;display:block}
+  #dim{position:fixed;inset:0;background:rgba(8,8,16,.42)}
+  #sel{position:fixed;display:none;outline:1.5px solid #9d8cff;box-shadow:0 0 0 100000px rgba(8,8,16,.42),0 0 24px rgba(140,120,255,.45) inset}
+  #last{position:fixed;display:none;outline:1.5px dashed rgba(157,140,255,.75);pointer-events:none}
+  .h,.v{position:fixed;background:rgba(190,180,255,.55);pointer-events:none}
+  .h{height:1px;left:0;right:0}.v{width:1px;top:0;bottom:0}
+  #size{position:fixed;display:none;padding:3px 7px;border-radius:6px;background:#15131f;color:#fff;font-variant-numeric:tabular-nums;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  #hint{position:fixed;top:18px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:999px;background:rgba(18,16,30,.86);color:#e9e7ff;
+        box-shadow:0 8px 30px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.08);white-space:nowrap}
+  #hint b{color:#b9aeff;font-weight:600}
+</style></head>
+<body>
+<img id="shot" alt="">
+<div id="dim"></div><div id="last"></div><div id="sel"></div>
+<div class="h" id="ch"></div><div class="v" id="cv"></div>
+<div id="size"></div>
+<div id="hint">Drag to capture · <b>Enter</b> whole screen<span id="rk"> · <b>R</b> last area</span> · <b>Esc</b> cancel</div>
+<script src="overlay.js"></script>
+</body></html>

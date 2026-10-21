@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -123,6 +123,14 @@
       "winArch": "x64",
       "exclude": [],
       "movedFrom": "~/Downloads/Utility Package/.build/lumen-source"
+    },
+    {
+      "id": "trace",
+      "name": "Trace",
+      "description": "Map paths, decisions, org charts and folder plans, trace them with a smooth zoom, keep notes, and turn screenshots into guides.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {
