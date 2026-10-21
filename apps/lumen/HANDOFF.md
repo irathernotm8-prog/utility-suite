@@ -84,3 +84,10 @@ Ad management (approval queue, paused drafts, budget/pause), videos/Reels/Storie
 - New section on Overview (shown when a Meta source exists): up to 22 metric tiles with previous-period deltas and sparklines (spend, impressions, reach, frequency, link clicks, CTR, CPC, CPM, results, cost/result, result rate, landing page views, engagement, reactions/comments/shares/saves, video views), a trend chart with pickable bars/line metrics, and breakdown tabs: age×gender heat grid, placement, device, region, time of day, campaigns, ads (sortable, "Copy table" as TSV).
 - Live from Meta Insights (`src/insights.js`, read-only, 60s cache, Refresh button). Needs only ads_read. A failing breakdown degrades to a warning, not an error.
 - Unverified live: breakdown combinations (`publisher_platform,platform_position`, hourly breakdown), action-type names for engagement/landing views, "Results" follows the Meta source's result-actions setting.
+
+## 0.6.0 (Overview: wide layout + more data)
+- Overview uses the full window width (`.wrap.xl`, max 1760px) with a right sidebar that stacks under 1280px: Funnel (impressions → link clicks → landing views → results), Video retention (plays, 25/50/75/95%, ThruPlays), Top ads, Page & Instagram (followers, recent posts with engagement, `src/organic.js`), and After the click (GA4 sessions/key events/revenue + channels, YouTube views/watch hours from synced data).
+- New breakdown tabs: Day of week, Ad sets, Conversions (every Meta action type with count, cost, value), Ad quality (quality/engagement/conversion rankings).
+- Insights now also request unique/outbound clicks and video fields; rankings are a separate query so a failure only warns.
+- Unverified live: organic needs `pages_read_engagement` (+ `instagram_basic`) on the posting token; ranking fields only appear after ~500 impressions; video field names; IG media thumbnails via cdninstagram.
+- Google Ads / Salesforce live detail not expanded; they still feed the existing source totals and Analytics.

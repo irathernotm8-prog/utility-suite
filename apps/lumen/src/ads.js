@@ -209,7 +209,7 @@ async function setAdCreative(cfg, adId, creativeId, f) {
 
 // Meta serves ad images from its CDN; the app can't load remote images, so fetch a copy as a data URI (small images only).
 async function imageData(url, f) {
-  if (!/^https:\/\/[^/]*(fbcdn\.net|facebook\.com|fbsbx\.com)\//.test(url || '')) return '';
+  if (!/^https:\/\/[^/]*(fbcdn\.net|facebook\.com|fbsbx\.com|cdninstagram\.com|instagram\.com)\//.test(url || '')) return '';
   const res = await f(url); if (!res.ok) return '';
   const buf = Buffer.from(await res.arrayBuffer()); if (buf.length > 4e6) return '';
   return `data:${res.headers.get('content-type') || 'image/jpeg'};base64,${buf.toString('base64')}`;

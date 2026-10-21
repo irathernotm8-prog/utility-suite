@@ -214,6 +214,11 @@ function registerIpc() {
   h('ads:tree', async (ws, from, to, force) => ({ ...(await A.tree(ws, { since: from, until: to }, force)), cap: A.cap(), options: { objectives: Object.entries(adsApi.OBJECTIVES).map(([id, o]) => ({ id, label: o.label, needsPixel: !!o.needsPixel })), ctas: adsApi.CTAS, special: adsApi.SPECIAL } }));
   h('ads:change', (ws, id, patch, opts) => A.change(ws, id, patch, { confirmedActivate: !!(opts && opts.confirmedActivate) }));
   h('ads:insights', (ws, from, to, force) => A.insights(ws, { since: from, until: to }, !!force));
+  const orgCache = new Map();
+  h('ads:organic', async (ws, force) => {
+    const hit = orgCache.get(ws); if (!force && hit && Date.now() - hit.at < 120000) return hit.data;
+    const data = await require('./organic').fetchOrganic(cfgFor(ws), fetch, (u) => adsApi.imageData(u, fetch)); orgCache.set(ws, { at: Date.now(), data }); return data;
+  });
   h('ads:creative', (ws, id) => A.creative(ws, id));
   h('ads:preview', (ws, id) => A.preview(ws, id));
   h('ads:editCreative', (ws, id, patch, opts) => A.editCreative(ws, id, patch, { confirmedLive: !!(opts && opts.confirmedLive) }));

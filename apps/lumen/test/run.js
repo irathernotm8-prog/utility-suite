@@ -387,6 +387,21 @@ let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok -', 
     await A.insights(ws, { since: 'a', until: 'b' }); await A.insights(ws, { since: 'a', until: 'b' }); assert.strictEqual(calls, 1); await A.insights(ws, { since: 'a', until: 'b' }, true); assert.strictEqual(calls, 2);
   });
 
+  await t('organic: page followers, recent posts and Instagram; a failing part becomes a warning', async () => {
+    const { fetchOrganic } = require('../src/organic'); const { actionTable } = require('../src/insights');
+    const f = async (url) => { const u = decodeURIComponent(String(url)); const ok = (j) => ({ ok: true, status: 200, json: async () => j });
+      if (/fields=name,access_token,instagram_business_account/.test(u)) return ok({ name: 'Lyte', access_token: 'PT', instagram_business_account: { id: 'ig1', username: 'lytefiber' } });
+      if (/\/published_posts/.test(u)) return ok({ data: [{ id: '1_1', message: 'Hello', created_time: '2026-10-01T00:00:00+0000', permalink_url: 'https://fb/1', full_picture: 'https://scontent.fbcdn.net/x.jpg', shares: { count: 2 }, reactions: { summary: { total_count: 9 } }, comments: { summary: { total_count: 3 } } }] });
+      if (/\/ig1\/media/.test(u)) return { ok: false, status: 400, json: async () => ({ error: { message: 'no instagram_basic' } }) };
+      if (/\/ig1\?/.test(u)) return ok({ username: 'lytefiber', followers_count: 120, follows_count: 5, media_count: 40 });
+      return ok({ name: 'Lyte', fan_count: 500, followers_count: 530, link: 'https://fb/page' }); };
+    const o = await fetchOrganic({ pageId: '111', token: 't' }, f, async () => 'data:image/jpeg;base64,AA');
+    assert.deepStrictEqual([o.page.followers, o.page.fans, o.instagram.followers, o.posts[0].reactions, o.posts[0].comments, o.posts[0].shares, o.posts[0].image], [530, 500, 120, 9, 3, 2, 'data:image/jpeg;base64,AA']);
+    assert.deepStrictEqual(o.igPosts, []); assert.ok(o.warnings.some((w) => /Instagram posts.*instagram_basic/.test(w)));
+    const at = actionTable({ actions: [{ action_type: 'link_click', value: '10' }, { action_type: 'lead', value: '3' }], cost_per_action_type: [{ action_type: 'lead', value: '5.5' }], action_values: [] });
+    assert.deepStrictEqual(at.map((x) => [x.type, x.count, x.cost]), [['link_click', 10, null], ['lead', 3, 5.5]].sort((a, b) => b[1] - a[1]));
+  });
+
   await t('AI campaign draft: parses, clamps to the budget ceiling, drops unknown values', async () => {
     const reply = '{"name":"Kingsville Referral","objective":"OUTCOME_WEIRD","dailyBudget":9999,"locations":["Kingsville, TX"],"radiusMiles":12,"ageMin":15,"ageMax":70,"headline":"' + 'x'.repeat(60) + '","message":"Hi","description":"d","cta":"BOGUS","special":"NONE","notes":"n"}';
     const r = await ai.campaignDraft({ key: 'k', brief: 'Referral promo in Kingsville', cap: 100, ctas: ['LEARN_MORE', 'SIGN_UP'] }, async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Here you go: ' + reply }] }) }));

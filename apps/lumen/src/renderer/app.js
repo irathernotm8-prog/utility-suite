@@ -124,7 +124,7 @@
       ${d.warnings.length ? `<div class="note" style="margin-top:10px">Some parts could not load: ${esc(d.warnings.join(' · ').slice(0, 300))}</div>` : ''}
       <div class="mtiles">${tiles.map((k) => `<div class="mt" title="${esc(MET[k].note || '')}"><div class="l">${MET[k].l}</div><div class="v">${mfmt(k, mval(k, T))}</div>${delta(k)}<div class="sp" data-k="${k}"></div></div>`).join('')}</div>
       <div class="row between" style="margin-top:18px"><h3 style="margin:0">Trend</h3><div class="row"><label class="inl">Bars <select id="dBar">${opts(D.bar)}</select></label><label class="inl">Line <select id="dLine">${opts(D.line)}</select></label></div></div><div id="dChart" class="chartbox"></div>
-      <div class="row between" style="margin-top:18px"><h3 style="margin:0">Breakdowns</h3><div class="seg" id="dTabs">${[['age', 'Age & gender'], ['placement', 'Placement'], ['device', 'Device'], ['region', 'Region'], ['hour', 'Time of day'], ['campaigns', 'Campaigns'], ['ads', 'Ads']].map(([k, l]) => `<button data-t="${k}" class="${D.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div class="row between" style="margin-top:18px"><h3 style="margin:0">Breakdowns</h3><div class="seg" id="dTabs">${[['age', 'Age & gender'], ['placement', 'Placement'], ['device', 'Device'], ['region', 'Region'], ['hour', 'Time of day'], ['weekday', 'Day of week'], ['campaigns', 'Campaigns'], ['adsets', 'Ad sets'], ['ads', 'Ads'], ['actions', 'Conversions'], ['quality', 'Ad quality']].map(([k, l]) => `<button data-t="${k}" class="${D.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
       <div id="dBody"></div></div>`;
     for (const sp of host.querySelectorAll('.sp')) sp.append(Charts.spark(d.daily.map((x) => mval(sp.dataset.k, x) || 0), 'var(--c1)'));
     const chart = () => { const A = D.bar, B = D.line, ser = d.daily.map((x) => ({ date: x.date, a: mval(A, x) || 0, b: mval(B, x) || 0 })); Charts.daily($('#dChart'), ser, fmt, { a: { key: 'a', label: MET[A].l, fmt: (v) => mfmt(A, v) }, b: { key: 'b', label: MET[B].l, fmt: (v) => mfmt(B, v) } }); };
@@ -132,7 +132,7 @@
     $('#dBar').onchange = (e) => { D.bar = e.target.value; chart(); }; $('#dLine').onchange = (e) => { D.line = e.target.value; chart(); };
     $('#deepRefresh').onclick = () => deepDive(true);
     $('#dTabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (!b) return; D.tab = b.dataset.t; D.showAll = false; $('#dTabs').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); drawBody(); };
-    drawBody();
+    drawBody(); drawSideMeta();
   }
 
   function drawBody() {
@@ -150,17 +150,29 @@
         <p class="sub" style="font-size:12px">Darker cells are higher values. Meta only reports age and gender for people who are signed in, so “Unknown” can be a large group.</p>`;
       $('#dMetric').onchange = (e) => { D.metric = e.target.value; drawBody(); }; return;
     }
-    if (tab === 'hour') {
-      const rows = d.hour.map((r) => ({ ...r, h: parseInt(r.key, 10) })).filter((r) => !isNaN(r.h)).sort((a, b) => a.h - b.h);
-      if (!rows.length) { box.innerHTML = '<div class="empty">No time-of-day data for this window.</div>'; return; }
-      const vs = rows.map((r) => mval(D.metric, r) || 0), max = Math.max(...vs, 1e-9), best = vs.indexOf(max);
+    if (tab === 'hour' || tab === 'weekday') {
+      let rows, note = '';
       const hl = (h) => (h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : h - 12 + 'p');
-      box.innerHTML = `<div class="row between" style="margin:10px 0">${picker('dMetric')}<span class="sub" style="margin:0">Peak: ${hl(rows[best].h)} (${mfmt(D.metric, vs[best])}) · hours are in the ad account’s time zone (${esc(d.account.timezone || '')})</span></div>
-        <div class="hours">${rows.map((r, i) => `<div class="hr" title="${hl(r.h)}: ${mfmt(D.metric, vs[i])}"><i style="height:${Math.max(2, (vs[i] / max) * 100)}%"></i><span>${r.h % 3 === 0 ? hl(r.h) : ''}</span></div>`).join('')}</div>`;
+      if (tab === 'hour') { rows = d.hour.map((r) => ({ m: r, h: parseInt(r.key, 10) })).filter((r) => !isNaN(r.h)).sort((a, b) => a.h - b.h).map((r) => ({ label: hl(r.h), show: r.h % 3 === 0, m: r.m })); note = `hours are in the ad account’s time zone (${esc(d.account.timezone || '')})`; }
+      else { const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; const by = names.map(() => []); for (const x of d.daily) by[new Date(x.date + 'T12:00:00Z').getUTCDay()].push(x); rows = [1, 2, 3, 4, 5, 6, 0].map((k) => ({ label: names[k], show: true, m: by[k].length ? sumM(by[k]) : null, days: by[k].length })); note = 'totals for each weekday inside the selected dates'; }
+      rows = rows.filter((r) => r.m); if (!rows.length) { box.innerHTML = '<div class="empty">No data for this window.</div>'; return; }
+      const vs = rows.map((r) => mval(D.metric, r.m) || 0), max = Math.max(...vs, 1e-9), best = vs.indexOf(max);
+      box.innerHTML = `<div class="row between" style="margin:10px 0">${picker('dMetric')}<span class="sub" style="margin:0">Best: ${esc(rows[best].label)} (${mfmt(D.metric, vs[best])}) · ${note}</span></div>
+        <div class="hours ${tab}">${rows.map((r, i) => `<div class="hr" title="${esc(r.label)}: ${mfmt(D.metric, vs[i])}"><b>${tab === 'weekday' ? mfmt(D.metric, vs[i]) : ''}</b><i style="height:${Math.max(2, (vs[i] / max) * 100)}%"></i><span>${r.show ? esc(r.label) : ''}</span></div>`).join('')}</div>`;
       $('#dMetric').onchange = (e) => { D.metric = e.target.value; drawBody(); }; return;
     }
+    if (tab === 'actions') {
+      const rows = d.actions; if (!rows.length) { box.innerHTML = '<div class="empty">Meta reported no conversion actions for this window.</div>'; return; }
+      const max = Math.max(...rows.map((r) => r.count), 1);
+      box.innerHTML = `<p class="sub" style="margin:10px 0">Every action Meta attributes to your ads, not only the ones counted as “Results”. Names are Meta’s own.</p><table class="adtable"><thead><tr><th>Action</th><th>Count</th><th>Cost per action</th><th>Value</th></tr></thead><tbody>${rows.map((r) => `<tr><td class="nm"><span class="nt">${esc(r.type.replace(/^onsite_conversion\./, 'on Meta · ').replace(/^offsite_conversion\.fb_pixel_/, 'pixel · ').replace(/_/g, ' '))}</span><div class="bar slim"><i style="width:${(r.count / max) * 100}%"></i></div></td><td>${Math.round(r.count).toLocaleString()}</td><td>${r.cost === null ? '—' : dm(r.cost)}</td><td>${r.value ? dm(r.value) : '—'}</td></tr>`).join('')}</tbody></table>`; return;
+    }
+    if (tab === 'quality') {
+      const rows = d.rankings; if (!rows.length) { box.innerHTML = '<div class="empty">Meta only ranks ads after about 500 impressions. None of your ads have rankings for this window yet.</div>'; return; }
+      const pill = (v) => { const t = String(v || '').toLowerCase(); if (!t || t === 'unknown') return '<span class="pill new">—</span>'; const cls = t.startsWith('above') ? 'ok' : t.includes('below') ? 'error' : 'new'; return `<span class="pill ${cls}">${esc(t.replace(/^below_average_(\d+)$/, 'below avg · bottom $1%').replace(/_/g, ' ').replace('above average', 'above avg'))}</span>`; };
+      box.innerHTML = `<p class="sub" style="margin:10px 0">How Meta ranks each ad against others competing for the same audience. “Below” on any of the three is the quickest hint for what to fix in the creative.</p><table class="adtable"><thead><tr><th>Ad</th><th>Spend</th><th>Impr.</th><th>Quality</th><th>Engagement</th><th>Conversion</th></tr></thead><tbody>${[...rows].sort((a, b) => b.spend - a.spend).map((r) => `<tr><td class="nm"><span class="nt" title="${esc(r.name)}">${esc(r.name)}</span><span class="tag">${esc(r.campaign || '')}</span></td><td>${dm(r.spend)}</td><td>${r.impressions.toLocaleString()}</td><td>${pill(r.quality)}</td><td>${pill(r.engagement)}</td><td>${pill(r.conversion)}</td></tr>`).join('')}</tbody></table>`; return;
+    }
     const src = tab === 'placement' ? d.placement.map((r) => ({ ...r, name: prettyPlace(r.key) })) : tab === 'device' ? d.device.map((r) => ({ ...r, name: String(r.key).replace(/^./, (c) => c.toUpperCase()) }))
-      : tab === 'region' ? d.region.map((r) => ({ ...r, name: r.key })) : tab === 'campaigns' ? d.campaigns : d.ads;
+      : tab === 'region' ? d.region.map((r) => ({ ...r, name: r.key })) : tab === 'campaigns' ? d.campaigns : tab === 'adsets' ? d.adsets : d.ads;
     const cols = ['spend', 'impressions', 'reach', 'linkClicks', 'ctr', 'cpc', 'cpm', 'results', 'cpr'];
     if (!src.length) { box.innerHTML = '<div class="empty">No data for this window.</div>'; return; }
     const num = (r) => { const v = mval(D.sort.k, r); return v === null || !isFinite(v) ? -1 : v; };
@@ -174,6 +186,53 @@
     box.querySelector('thead').onclick = (e) => { const t = e.target.closest('[data-s]'); if (!t) return; D.sort = { k: t.dataset.s, dir: D.sort.k === t.dataset.s ? -D.sort.dir : -1 }; drawBody(); };
     const all = $('#dAll'); if (all) all.onclick = () => { D.showAll = true; drawBody(); };
     $('#dCopy').onclick = async () => { const tsv = [['Name', ...cols.map((k) => MET[k].l)], ...rows.map((r) => [r.name, ...cols.map((k) => { const v = mval(k, r); return v === null || !isFinite(v) ? '' : +v.toFixed(4); })])].map((x) => x.join('\t')).join('\n'); try { await navigator.clipboard.writeText(tsv); toast('Copied. Paste into a sheet.'); } catch (_) { toast('Copy was blocked.'); } };
+  }
+
+
+  // ---------- Overview sidebar: funnel, video, top ads, Page/Instagram, after the click ----------
+  const sc = (id, title, body, extra = '') => `<div class="card side" id="${id}"><div class="row between"><h2>${title}</h2>${extra}</div>${body}</div>`;
+  function sideInit(conns, from, to) {
+    const side = $('#side'); if (!side) return;
+    const has = (k) => conns.some((c) => c.kind === k);
+    side.innerHTML = `<div id="sFunnel"></div><div id="sVideo"></div><div id="sTop"></div>${has('meta-pages') ? sc('sOrg', 'Page &amp; Instagram', '<p class="sub">Loading…</p>') : ''}${has('ga4') || has('youtube') ? sc('sAfter', 'After the click', '<p class="sub">Loading…</p>') : ''}`;
+    if (has('meta-pages')) organic(false);
+    if (has('ga4') || has('youtube')) afterClick(from, to);
+    drawSideMeta();
+  }
+  function drawSideMeta() {
+    const d = st.deep; if (!d || !$('#sFunnel')) return; const T = d.totals;
+    const steps = [['Impressions', T.impressions], ['Link clicks', T.linkClicks], ['Landing page views', T.landingViews], ['Results', T.results]].filter(([, v], i) => i < 2 || v > 0);
+    const lg = (v) => Math.log10(v + 1), top = lg(steps[0][1]) || 1;
+    $('#sFunnel').innerHTML = steps[0][1] ? sc('sf', 'Funnel', steps.map(([l, v], i) => { const prev = i ? steps[i - 1][1] : null; return `<div class="fn"><div class="row between"><span>${l}</span><b>${Math.round(v).toLocaleString()}</b></div><div class="bar"><i style="width:${Math.max(3, (lg(v) / top) * 100)}%"></i></div>${prev ? `<small>${((v / prev) * 100).toFixed(prev > 1e4 ? 2 : 1)}% of ${steps[i - 1][0].toLowerCase()}</small>` : ''}</div>`; }).join('') + '<p class="sub" style="font-size:11px;margin:8px 0 0">Bars use a log scale so every step stays visible.</p>') : '';
+    $('#sVideo').innerHTML = T.videoViews > 0 || T.thruplays > 0 ? sc('sv', 'Video', (() => { const base = T.videoViews || T.thruplays || 1; const r = [['3-sec plays', T.videoViews], ['25% watched', T.p25], ['50% watched', T.p50], ['75% watched', T.p75], ['95% watched', T.p95], ['ThruPlays', T.thruplays]].filter(([, v]) => v > 0); return r.map(([l, v]) => `<div class="fn"><div class="row between"><span>${l}</span><b>${Math.round(v).toLocaleString()}</b></div><div class="bar"><i style="width:${Math.min(100, (v / base) * 100)}%"></i></div></div>`).join('') + (T.thruplays && T.spend ? `<p class="sub" style="font-size:12px;margin:8px 0 0">${dm(T.spend / T.thruplays)} per ThruPlay</p>` : ''); })()) : '';
+    const ads = [...d.ads].filter((a) => a.spend > 0).sort((a, b) => b.results - a.results || b.spend - a.spend).slice(0, 6), mx = Math.max(...ads.map((a) => a.spend), 1);
+    $('#sTop').innerHTML = ads.length ? sc('st', 'Top ads', ads.map((a) => `<div class="fn"><div class="row between"><span class="nt" title="${esc(a.name)}">${esc(a.name)}</span><b>${Math.round(a.results)} results</b></div><div class="bar"><i style="width:${(a.spend / mx) * 100}%"></i></div><small>${dm(a.spend)} spent · ${a.results ? dm(a.spend / a.results) + ' per result' : 'no results'} · ${a.linkClicks.toLocaleString()} link clicks</small></div>`).join(''), '<span class="sub" style="margin:0">by results</span>') : '';
+  }
+  async function organic(force) {
+    const box = $('#sOrg'); if (!box) return;
+    let o; try { o = await lumen.adsOrganic(st.ws, !!force); } catch (e) { if ($('#sOrg')) $('#sOrg').innerHTML = `<div class="row between"><h2>Page &amp; Instagram</h2></div><div class="note">${esc(e.message.slice(0, 220))}</div><p class="sub" style="font-size:12px">Reading Page posts needs <b>pages_read_engagement</b> on the posting token.</p>`; return; }
+    if (!$('#sOrg')) return;
+    const age = (iso) => { const dd = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 864e5)); return dd === 0 ? 'today' : dd === 1 ? 'yesterday' : dd + ' days ago'; };
+    const post = (p, ig) => `<a class="pp" href="#" data-u="${esc(p.url || '')}">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<span class="ph"></span>'}<span class="pt"><b>${esc((p.text || '(no caption)').slice(0, 90))}</b><small>${age(p.at)} · ${ig ? `${p.likes} likes` : `${p.reactions} reactions`} · ${p.comments} comments${ig ? '' : ` · ${p.shares} shares`}</small></span></a>`;
+    const stat = (l, v) => `<div class="mt"><div class="l">${l}</div><div class="v">${Number(v).toLocaleString()}</div></div>`;
+    box.innerHTML = `<div class="row between"><h2>Page &amp; Instagram</h2><button class="ghost" id="orgRefresh" aria-label="Refresh">↻</button></div>
+      <div class="mtiles two">${stat('Page followers', o.page.followers || o.page.fans || 0)}${o.instagram ? stat('Instagram followers · @' + esc(o.instagram.username), o.instagram.followers) : ''}${o.page.fans && o.page.fans !== o.page.followers ? stat('Page likes', o.page.fans) : ''}${o.instagram ? stat('Instagram posts', o.instagram.media) : ''}</div>
+      ${o.warnings.length ? `<div class="note" style="margin-top:8px">${esc(o.warnings.join(' · ').slice(0, 240))}</div>` : ''}
+      ${o.posts.length ? `<h3>Recent Facebook posts</h3>${o.posts.slice(0, 6).map((p) => post(p, false)).join('')}` : ''}${o.igPosts.length ? `<h3>Recent Instagram posts</h3>${o.igPosts.slice(0, 6).map((p) => post(p, true)).join('')}` : ''}`;
+    box.onclick = (e) => { const a = e.target.closest('[data-u]'); if (a) { e.preventDefault(); if (a.dataset.u) lumen.open(a.dataset.u); } };
+    $('#orgRefresh').onclick = () => { $('#sOrg').querySelector('h2').textContent = 'Refreshing…'; organic(true); };
+  }
+  async function afterClick(from, to) {
+    let a; try { a = await lumen.analytics(st.ws, from, to); } catch (e) { return; } const box = $('#sAfter'); if (!box) return;
+    const rows = [], tile = (l, v, d) => `<div class="mt"><div class="l">${l}</div><div class="v">${v}</div>${d || ''}</div>`;
+    const gm = a.ga4 && a.ga4.metrics || {}, ym = a.youtube && a.youtube.metrics || {};
+    const g = (k, l, f = fmt.num) => gm[k] && rows.push(tile(l, f(gm[k].total), chg(gm[k].total, gm[k].previous)));
+    g('sessions', 'GA4 sessions'); g('engaged_sessions', 'Engaged sessions'); g('key_events', 'Key events'); g('revenue', 'Revenue', fmt.money);
+    if (ym.views) { rows.push(tile('YouTube views', fmt.num(ym.views.total), chg(ym.views.total, ym.views.previous))); if (ym.watch_minutes) rows.push(tile('Watch hours', fmt.num(ym.watch_minutes.total / 60), chg(ym.watch_minutes.total, ym.watch_minutes.previous))); }
+    const ch = (a.ga4 && a.ga4.dims && a.ga4.dims.sessions || []).slice(0, 5), mx = Math.max(...ch.map((x) => x.total), 1);
+    box.innerHTML = `<div class="row between"><h2>After the click</h2><button class="ghost" id="goAn">Analytics →</button></div>${rows.length ? `<div class="mtiles two">${rows.join('')}</div>` : '<p class="sub">No synced GA4 or YouTube data in this window yet.</p>'}
+      ${ch.length ? `<h3>Sessions by channel</h3>${ch.map((x) => `<div class="fn"><div class="row between"><span>${esc(x.dim)}</span><b>${fmt.num(x.total)}</b></div><div class="bar"><i style="width:${(x.total / mx) * 100}%"></i></div></div>`).join('')}` : ''}`;
+    $('#goAn').onclick = () => show('analytics');
   }
 
   async function overview() {
@@ -200,19 +259,21 @@
     const maxSpend = Math.max(...s.bySource.map((b) => b.spend), 1);
     const sources = s.bySource.map((b) => `<div class="src"><span>${esc(b.source === 'demo' ? 'Demo data' : b.source)}</span><b>${fmt.money(b.spend)}</b></div><div class="bar"><i style="width:${(b.spend / maxSpend) * 100}%"></i></div>`).join('') || '<div class="sub">No sources yet.</div>';
 
-    main.innerHTML = `<div class="wrap">
+    main.innerHTML = `<div class="wrap xl">
       <div class="row between"><div><h1>Overview</h1><p class="sub">${esc(from)} → ${esc(to)}${s.latestData ? ' · latest data ' + esc(s.latestData) : ''}</p></div>
         ${rangePicker()}</div>
       ${s.earliestData && from < s.earliestData ? `<div class="note">Synced data starts ${esc(shortDate(s.earliestData))}. To see earlier days, choose more history under Sources and sync again.</div>` : ''}
       ${hasData ? '' : '<div class="note">No data in this window yet. Add a source, or sync an existing one, in Sources.</div>'}
       ${(st.boot.workspaces.find((w) => w.id === st.ws) || {}).demo ? '<div class="note">This is generated demo data so you can see how Lumen looks. Create a new workspace and connect Meta to see your own numbers.</div>' : ''}
+      <div class="ovgrid"><div class="ovmain">
       <div class="kpis">${kp.map((k, i) => `<div class="card kpi"><div class="l">${k.l}</div><div class="v">${k.v}</div>${delta(k)}<div class="sp" data-i="${i}"></div></div>`).join('')}</div>
       <div class="grid2">
         <div class="card"><div class="row between"><h2>Daily spend &amp; conversions</h2><div class="legend"><span><i style="background:var(--c1)"></i>Spend</span><span><i style="background:var(--c2)"></i>Conversions</span></div></div><div class="chartbox" id="chart"></div></div>
         <div class="card"><h2>By source</h2>${sources}</div>
       </div>
       <div id="deep"></div>
-      <div class="card"><h2>Campaigns</h2><div id="tbl"></div></div></div>`;
+      <div class="card"><h2>Campaigns</h2><div id="tbl"></div></div></div>
+      <aside class="ovside" id="side"></aside></div></div>`;
 
     kp.forEach((k, i) => {
       const vals = k.series || s.series.map((d) => d[k.key]);
@@ -221,7 +282,9 @@
     Charts.daily($('#chart'), s.series, fmt);
     drawTable();
     wireRange(overview);
-    if ((await lumen.connections(st.ws)).some((x) => x.kind === 'meta')) deepDive();
+    const conns = await lumen.connections(st.ws); st.conns = conns;
+    if (conns.some((x) => x.kind === 'meta')) deepDive();
+    sideInit(conns, from, to);
   }
 
   function drawTable() {

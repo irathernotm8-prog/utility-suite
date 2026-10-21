@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-21 13:09 — **Lumen 0.6.0** — Wide Overview with sidebar, ad preview and editing, deeper Meta reporting, Page and Instagram stats
+- 2026-10-21 13:08 — **Lumen 0.5.1** — Preview and edit existing ads
 - 2026-10-21 04:19 — **Trace 0.1.1** — Windows: shows its own icon instead of the default Electron one
 - 2026-10-21 04:19 — **Lumen 0.5.1** — Windows: shows its own icon instead of the default Electron one
 - 2026-10-21 04:19 — **Kiln 0.1.7** — Windows: shows its own icon instead of the default Electron one

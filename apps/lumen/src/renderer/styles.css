@@ -179,3 +179,17 @@ tr.ar.ad .nt{cursor:pointer}tr.ar.ad .nt:hover{text-decoration:underline}
 .bar.slim{height:3px;margin-top:4px}
 .heat td .hc{display:block;padding:7px 10px;border-radius:8px;background:linear-gradient(90deg,color-mix(in srgb,var(--c1) 38%,transparent) var(--w),transparent var(--w));min-width:70px}
 .hours{display:flex;gap:4px;align-items:flex-end;height:170px;padding-bottom:20px;margin-top:6px}.hr{flex:1;height:100%;position:relative;display:flex;align-items:flex-end}.hr i{display:block;width:100%;background:var(--c1);border-radius:4px 4px 0 0;opacity:.85}.hr span{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--mute);white-space:nowrap}
+
+/* Wide Overview with a sidebar */
+.wrap.xl{max-width:1760px}
+.ovgrid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+.ovmain{min-width:0}.ovside{display:flex;flex-direction:column;gap:14px;min-width:0}.ovside>div:empty{display:none}
+.ovside .card{margin:0}.card.side h2{margin-bottom:10px}
+@media(max-width:1280px){.ovgrid{grid-template-columns:1fr}.ovside{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}}
+.mtiles.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.fn{margin:0 0 12px}.fn small{color:var(--mute);font-size:11.5px;display:block;margin-top:3px}.fn .nt{max-width:230px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovside h3{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px}
+.pp{display:flex;gap:10px;align-items:center;text-decoration:none;color:inherit;padding:6px 0;border-top:1px solid var(--line,rgba(127,127,127,.15))}.pp:hover .pt b{text-decoration:underline}
+.pp img,.pp .ph{width:46px;height:46px;border-radius:8px;object-fit:cover;background:var(--panel2);flex:none}.pt{min-width:0}.pt b{display:block;font-weight:550;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pt small{color:var(--mute);font-size:11.5px}
+.hours.weekday{height:200px}.hours .hr b{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:550;white-space:nowrap}.hours.weekday{padding-top:18px}
+.deep .seg{flex-wrap:wrap}
