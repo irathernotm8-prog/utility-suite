@@ -7,6 +7,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Assist** | Private, on-device AI chat and reply assistant | `apps/assist` |
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
+| **Docket** | Meeting notes: on-device transcription of Zoom, Teams and Meet calls, AI summaries, one to-do list | `apps/docket` |
 | **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
@@ -41,6 +42,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Onward | `~/Downloads/Onward/Onward Files` (resume, credentials, applications) |
 | Slate | `~/Documents/Slate/Statements` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
+| Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |
 | All apps | their app-data folder (`~/Library/Application Support/<App>`, `%APPDATA%\<App>`) |
 
 ## Commands

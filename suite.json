@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -128,6 +128,14 @@
       "id": "trace",
       "name": "Trace",
       "description": "Map paths, decisions, org charts and folder plans, trace them with a smooth zoom, keep notes, and turn screenshots into guides.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
+    },
+    {
+      "id": "docket",
+      "name": "Docket",
+      "description": "Takes notes in your Zoom, Teams and Meet calls: transcribes on your computer, summarizes, and keeps one to-do list from every meeting.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []

@@ -26,6 +26,7 @@
 | Assist | `apps/assist` | `docs/handoffs/Assist.md` |
 | Crate | `apps/crate` | `docs/handoffs/Crate.md` |
 | Datum | `apps/datum` | `docs/handoffs/Datum.md` |
+| Docket | `apps/docket` | `docs/handoffs/Docket.md` |
 | Fresh Desk | `apps/fresh-desk` (after `./utility adopt fresh-desk`) | `docs/handoffs/Fresh Desk.md` |
 | Kiln | `apps/kiln` | `docs/handoffs/Kiln.md` |
 | Onward | `apps/onward` | `docs/handoffs/Onward.md` |
