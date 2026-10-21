@@ -104,6 +104,7 @@
   const GEN = { female: 'Women', male: 'Men', unknown: 'Unknown' };
   const prettyPlace = (k) => k.split('|').map((x) => x.replace(/_/g, ' ')).map((x) => x.replace(/^./, (c) => c.toUpperCase())).join(' · ');
   const REGION_CAP = 15;
+  const TOPAD = { metric: 'results' };
 
   async function deepDive(force) {
     const host = $('#deep'); if (!host) return;
@@ -189,6 +190,84 @@
   }
 
 
+
+  // ---------- Google Analytics 4 in depth (Overview) ----------
+  const G = { tab: 'channels', basis: 'all', sort: null, bar: 'sessions', line: 'keyEvents', showAll: false, d: null };
+  const GM = {
+    sessions: { l: 'Sessions', t: 'n', v: (m) => m.sessions }, users: { l: 'Users', t: 'n', v: (m) => m.users }, newUsers: { l: 'New users', t: 'n', v: (m) => m.newUsers },
+    newShare: { l: 'New user share', t: 'p', v: (m) => rt(m.newUsers, m.users, 100) }, engaged: { l: 'Engaged sessions', t: 'n', v: (m) => m.engaged },
+    engRate: { l: 'Engagement rate', t: 'p', v: (m) => rt(m.engaged, m.sessions, 100) }, keyEvents: { l: 'Key events', t: 'n', v: (m) => m.keyEvents },
+    keRate: { l: 'Key event rate', t: 'p', v: (m) => rt(m.keyEvents, m.sessions, 100), note: 'Key events per session' }, revenue: { l: 'Revenue', t: 'r', v: (m) => m.revenue },
+    pageviews: { l: 'Page views', t: 'n', v: (m) => m.pageviews }, avgDuration: { l: 'Avg. session', t: 'd', v: (m) => m.avgDuration }, bounceRate: { l: 'Bounce rate', t: 'f', low: 1, v: (m) => m.bounceRate }
+  };
+  const gfmt = (k, v) => v === null || v === undefined || !isFinite(v) ? '—' : GM[k].t === 'p' ? v.toFixed(1) + '%' : GM[k].t === 'f' ? (v * 100).toFixed(1) + '%' : GM[k].t === 'r' ? '$' + (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2)) : GM[k].t === 'd' ? Math.floor(v / 60) + 'm ' + String(Math.round(v % 60)).padStart(2, '0') + 's' : Math.round(v).toLocaleString();
+  const gnorm = (t) => ({ ...t, engaged: t.engaged, users: t.users });
+  const GTILES = ['sessions', 'users', 'newUsers', 'newShare', 'engaged', 'engRate', 'keyEvents', 'keRate', 'revenue', 'pageviews', 'avgDuration', 'bounceRate'];
+  const GPICK = ['sessions', 'users', 'newUsers', 'engaged', 'keyEvents', 'revenue'];
+
+  async function ga4Dive(force) {
+    const host = $('#ga'); if (!host) return; const { from, to } = getRange();
+    host.innerHTML = '<div class="card"><h2>Website traffic (Google Analytics)</h2><p class="sub">Loading from Google Analytics…</p></div>';
+    let d; try { d = G.d = await lumen.ga4Report(st.ws, from, to, !!force); } catch (e) { if ($('#ga')) $('#ga').innerHTML = `<div class="card"><h2>Website traffic (Google Analytics)</h2><div class="note">${esc(e.message)}</div><button class="soft" id="gaRetry">Try again</button></div>`; const r = $('#gaRetry'); if (r) r.onclick = () => ga4Dive(true); return; }
+    if (!$('#ga') || st.view !== 'overview') return; drawGa(); drawSideChannels();
+  }
+
+  function drawGa() {
+    const host = $('#ga'), d = G.d; if (!host || !d) return;
+    const T = gnorm(d.totals), P = gnorm(d.prevTotals), hasPrev = P.sessions > 0;
+    const gv = (k, m) => GM[k].v(m);
+    const delta = (k) => { const a = gv(k, T), b = gv(k, P); if (!hasPrev || !b || a === null || a === undefined) return '<span class="d flat">—</span>'; const pc = ((a - b) / b) * 100; if (Math.abs(pc) < 0.5) return '<span class="d flat">flat</span>'; const up = pc > 0, good = GM[k].low ? !up : up; return `<span class="d ${good ? 'good' : 'bad'}">${up ? '▲' : '▼'} ${Math.abs(pc).toFixed(1)}%</span>`; };
+    const tiles = GTILES.filter((k) => ['sessions', 'users', 'newUsers', 'newShare', 'engaged', 'engRate', 'keyEvents', 'keRate'].includes(k) || (gv(k, T) || 0) > 0);
+    const opts = (sel) => GPICK.map((k) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${GM[k].l}</option>`).join('');
+    const vis = d.visitors.find((x) => x.name === 'new') || {}, ret = d.visitors.find((x) => x.name === 'returning') || {}, vt = (vis.sessions || 0) + (ret.sessions || 0) || 1;
+    const dly = (d.daily || []).map((x) => ({ ...x, users: x.users, engaged: x.engaged, revenue: x.revenue }));
+    host.innerHTML = `<div class="card deep"><div class="row between"><div><h2 style="margin:0">Website traffic · Google Analytics</h2><p class="sub" style="margin:2px 0 0">Property ${esc(d.property)} · compared with ${esc(shortDate(d.previous.since))} – ${esc(shortDate(d.previous.until))}</p></div><button class="soft" id="gaRefresh">Refresh</button></div>
+      ${d.warnings.length ? `<div class="note" style="margin-top:10px">Some parts could not load: ${esc(d.warnings.join(' · ').slice(0, 300))}</div>` : ''}
+      <div class="mtiles">${tiles.map((k) => `<div class="mt" title="${esc(GM[k].note || '')}"><div class="l">${GM[k].l}</div><div class="v">${gfmt(k, gv(k, T))}</div>${delta(k)}<div class="sp" data-k="${k}"></div></div>`).join('')}</div>
+      ${vis.sessions || ret.sessions ? `<div class="nvr"><div><small>New visitors</small><b>${Math.round(vis.sessions || 0).toLocaleString()} sessions</b><span>${(((vis.sessions || 0) / vt) * 100).toFixed(0)}% · ${Math.round(vis.keyEvents || 0)} key events</span></div><div class="nvbar"><i style="width:${((vis.sessions || 0) / vt) * 100}%"></i></div><div><small>Returning visitors</small><b>${Math.round(ret.sessions || 0).toLocaleString()} sessions</b><span>${(((ret.sessions || 0) / vt) * 100).toFixed(0)}% · ${Math.round(ret.keyEvents || 0)} key events</span></div></div>` : ''}
+      <div class="row between" style="margin-top:18px"><h3 style="margin:0">Trend</h3><div class="row"><label class="inl">Bars <select id="gBar">${opts(G.bar)}</select></label><label class="inl">Line <select id="gLine">${opts(G.line)}</select></label></div></div><div id="gChart" class="chartbox"></div>
+      <div class="row between" style="margin-top:18px"><h3 style="margin:0">Breakdowns</h3><div class="row"><div class="seg" id="gBasis"><button data-b="all" class="${G.basis === 'all' ? 'on' : ''}">All traffic</button><button data-b="new" class="${G.basis === 'new' ? 'on' : ''}">New users</button></div></div></div>
+      <div class="seg" id="gTabs" style="margin-top:10px">${[['channels', 'Channels'], ['cities', 'Cities'], ['regions', 'Regions'], ['sources', 'Source / medium'], ['campaigns', 'Campaigns'], ['pages', 'Landing pages'], ['devices', 'Devices'], ['events', 'Key events']].map(([k, l]) => `<button data-t="${k}" class="${G.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div id="gBody"></div></div>`;
+    for (const sp of host.querySelectorAll('.sp')) sp.append(Charts.spark(dly.map((x) => gv(sp.dataset.k, x) || 0), 'var(--c2)'));
+    const chart = () => { const A = G.bar, B = G.line, ser = dly.map((x) => ({ date: x.date, a: gv(A, x) || 0, b: gv(B, x) || 0 })); Charts.daily($('#gChart'), ser, fmt, { a: { key: 'a', label: GM[A].l, fmt: (v) => gfmt(A, v) }, b: { key: 'b', label: GM[B].l, fmt: (v) => gfmt(B, v) } }); };
+    if (dly.length) chart(); else $('#gChart').innerHTML = '<div class="empty">No daily data in this window.</div>';
+    $('#gBar').onchange = (e) => { G.bar = e.target.value; chart(); }; $('#gLine').onchange = (e) => { G.line = e.target.value; chart(); };
+    $('#gaRefresh').onclick = () => ga4Dive(true);
+    $('#gBasis').onclick = (e) => { const b = e.target.closest('[data-b]'); if (!b) return; G.basis = b.dataset.b; G.sort = null; $('#gBasis').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); drawGaBody(); };
+    $('#gTabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (!b) return; G.tab = b.dataset.t; G.sort = null; G.showAll = false; $('#gTabs').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); drawGaBody(); };
+    drawGaBody();
+  }
+
+  function drawGaBody() {
+    const d = G.d, box = $('#gBody'); if (!box) return; const tab = G.tab, nw = G.basis === 'new';
+    const f0 = (v) => Math.round(v || 0).toLocaleString(), pc = (a, b) => (b ? ((a / b) * 100).toFixed(1) + '%' : '—'), usd = (v) => (v ? gfmt('revenue', v) : '—');
+    if (tab === 'events') {
+      const ev = d.keyEventNames, tot = ev.reduce((a, x) => a + x.count, 0) || 1, ch = [...d.channels].sort((a, b) => b.keyEvents - a.keyEvents).filter((c) => c.keyEvents > 0);
+      box.innerHTML = `<p class="sub" style="margin:10px 0">Key events are the actions you marked as conversions in GA4 (leads, sign-ups, purchases…). Event names are GA4’s own.</p>
+        <div class="cols2" style="gap:18px;align-items:start"><div><h3 class="h3">By key event</h3>${ev.length ? `<table class="adtable"><thead><tr><th>Event</th><th>Count</th><th>Share</th><th>Value</th></tr></thead><tbody>${ev.map((x) => `<tr><td class="nm"><span class="nt">${esc(x.name)}</span><div class="bar slim"><i style="width:${(x.count / ev[0].count) * 100}%"></i></div></td><td>${f0(x.count)}</td><td>${pc(x.count, tot)}</td><td>${usd(x.revenue)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No key events in this window. Mark events as key events in GA4 Admin.</div>'}</div>
+        <div><h3 class="h3">By channel</h3>${ch.length ? `<table class="adtable"><thead><tr><th>Channel</th><th>Key events</th><th>Rate</th><th>From new visitors</th></tr></thead><tbody>${ch.map((c) => `<tr><td class="nm"><span class="nt">${esc(c.name)}</span><div class="bar slim"><i style="width:${(c.keyEvents / ch[0].keyEvents) * 100}%"></i></div></td><td>${f0(c.keyEvents)}</td><td>${pc(c.keyEvents, c.sessions)}</td><td>${pc(c.newKeyEvents, c.keyEvents)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No key events.</div>'}</div></div>`;
+      return;
+    }
+    let rows = { channels: d.channels, cities: d.cities.map((c) => ({ ...c, name: c.name + (c.region && c.region !== '(not set)' ? ', ' + c.region : '') })), regions: d.regions.map((c) => ({ ...c, name: c.name + (c.country ? ' · ' + c.country : '') })), sources: d.sources, campaigns: d.campaigns, pages: d.pages, devices: d.devices.map((c) => ({ ...c, name: String(c.name).replace(/^./, (x) => x.toUpperCase()) })) }[tab] || [];
+    rows = rows.filter((r) => r.name && r.name !== '(not set)' && !/^\(not set\)/.test(r.name));
+    const isCh = tab === 'channels';
+    const COLS = nw
+      ? (isCh ? [['newUsers', 'New users', (r) => f0(r.newUsers)], ['nshare', 'Share of new users', (r, t) => pc(r.newUsers, t.newUsers)], ['newSessions', 'New-visitor sessions', (r) => f0(r.newSessions)], ['newKeyEvents', 'Key events (new)', (r) => f0(r.newKeyEvents)], ['nkr', 'Key event rate (new)', (r) => pc(r.newKeyEvents, r.newSessions)], ['returningSessions', 'Returning sessions', (r) => f0(r.returningSessions)], ['sessions', 'All sessions', (r) => f0(r.sessions)]]
+        : [['newUsers', 'New users', (r) => f0(r.newUsers)], ['nshare', 'Share of new users', (r, t) => pc(r.newUsers, t.newUsers)], ['nofusers', 'New % of users', (r) => pc(r.newUsers, r.users)], ['users', 'All users', (r) => f0(r.users)], ['sessions', 'Sessions', (r) => f0(r.sessions)], ['keyEvents', 'Key events (all)', (r) => f0(r.keyEvents)]])
+      : [['sessions', 'Sessions', (r) => f0(r.sessions)], ['users', 'Users', (r) => f0(r.users)], ['newUsers', 'New users', (r) => f0(r.newUsers)], ['nofusers', 'New %', (r) => pc(r.newUsers, r.users)], ['engaged', 'Engaged', (r) => f0(r.engaged)], ['engRate', 'Eng. rate', (r) => pc(r.engaged, r.sessions)], ['keyEvents', 'Key events', (r) => f0(r.keyEvents)], ['keRate', 'Key event rate', (r) => pc(r.keyEvents, r.sessions)], ['revenue', 'Revenue', (r) => usd(r.revenue)]];
+    const sortVal = (r, k) => ({ nshare: r.newUsers, nofusers: rt(r.newUsers, r.users) || 0, engRate: rt(r.engaged, r.sessions) || 0, keRate: rt(r.keyEvents, r.sessions) || 0, nkr: rt(r.newKeyEvents, r.newSessions) || 0 })[k] ?? r[k] ?? 0;
+    const sk = G.sort ? G.sort.k : COLS[0][0], sd = G.sort ? G.sort.dir : -1;
+    rows = [...rows].sort((a, b) => (sk === 'name' ? String(a.name).localeCompare(String(b.name)) * -sd : (sortVal(a, sk) - sortVal(b, sk)) * sd));
+    const total = rows.length, cap = ['cities', 'regions', 'pages', 'sources', 'campaigns'].includes(tab) && !G.showAll && total > 20; if (cap) rows = rows.slice(0, 20);
+    const all = (st.ga4tot = d.totals), mx = Math.max(...rows.map((r) => sortVal(r, COLS[0][0])), 1), T = { newUsers: d.totals.newUsers || 1 };
+    if (!rows.length) { box.innerHTML = `<div class="empty">No ${tab} data in this window.</div>`; return; }
+    box.innerHTML = `<div class="row between" style="margin:10px 0"><span class="sub" style="margin:0">${nw ? 'New users: people on their first visit. Click a column to sort.' : 'Click a column to sort.'}</span><button class="soft" id="gCopy">Copy table</button></div><table class="adtable"><thead><tr><th data-s="name" class="srt">Name</th>${COLS.map(([k, l]) => `<th data-s="${k}" class="srt ${sk === k ? 'on' : ''}">${l}${sk === k ? (sd < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr><td class="nm"><span class="nt" title="${esc(r.name)}">${esc(r.name)}</span><div class="bar slim"><i style="width:${(sortVal(r, COLS[0][0]) / mx) * 100}%"></i></div></td>${COLS.map(([, , f]) => `<td>${f(r, T)}</td>`).join('')}</tr>`).join('')}</tbody></table>${cap ? `<button class="ghost" id="gAll">Show all ${total}</button>` : ''}`;
+    box.querySelector('thead').onclick = (e) => { const t = e.target.closest('[data-s]'); if (!t) return; G.sort = { k: t.dataset.s, dir: sk === t.dataset.s ? -sd : -1 }; drawGaBody(); };
+    const al = $('#gAll'); if (al) al.onclick = () => { G.showAll = true; drawGaBody(); };
+    $('#gCopy').onclick = async () => { const tsv = [['Name', ...COLS.map((c) => c[1])], ...rows.map((r) => [r.name, ...COLS.map(([, , f]) => String(f(r, T)).replace(/,/g, ''))])].map((x) => x.join('\t')).join('\n'); try { await navigator.clipboard.writeText(tsv); toast('Copied. Paste into a sheet.'); } catch (_) { toast('Copy was blocked.'); } };
+  }
+
   // ---------- Overview sidebar: funnel, video, top ads, Page/Instagram, after the click ----------
   const sc = (id, title, body, extra = '') => `<div class="card side" id="${id}"><div class="row between"><h2>${title}</h2>${extra}</div>${body}</div>`;
   function sideInit(conns, from, to) {
@@ -205,8 +284,13 @@
     const lg = (v) => Math.log10(v + 1), top = lg(steps[0][1]) || 1;
     $('#sFunnel').innerHTML = steps[0][1] ? sc('sf', 'Funnel', steps.map(([l, v], i) => { const prev = i ? steps[i - 1][1] : null; return `<div class="fn"><div class="row between"><span>${l}</span><b>${Math.round(v).toLocaleString()}</b></div><div class="bar"><i style="width:${Math.max(3, (lg(v) / top) * 100)}%"></i></div>${prev ? `<small>${((v / prev) * 100).toFixed(prev > 1e4 ? 2 : 1)}% of ${steps[i - 1][0].toLowerCase()}</small>` : ''}</div>`; }).join('') + '<p class="sub" style="font-size:11px;margin:8px 0 0">Bars use a log scale so every step stays visible.</p>') : '';
     $('#sVideo').innerHTML = T.videoViews > 0 || T.thruplays > 0 ? sc('sv', 'Video', (() => { const base = T.videoViews || T.thruplays || 1; const r = [['3-sec plays', T.videoViews], ['25% watched', T.p25], ['50% watched', T.p50], ['75% watched', T.p75], ['95% watched', T.p95], ['ThruPlays', T.thruplays]].filter(([, v]) => v > 0); return r.map(([l, v]) => `<div class="fn"><div class="row between"><span>${l}</span><b>${Math.round(v).toLocaleString()}</b></div><div class="bar"><i style="width:${Math.min(100, (v / base) * 100)}%"></i></div></div>`).join('') + (T.thruplays && T.spend ? `<p class="sub" style="font-size:12px;margin:8px 0 0">${dm(T.spend / T.thruplays)} per ThruPlay</p>` : ''); })()) : '';
-    const ads = [...d.ads].filter((a) => a.spend > 0).sort((a, b) => b.results - a.results || b.spend - a.spend).slice(0, 6), mx = Math.max(...ads.map((a) => a.spend), 1);
-    $('#sTop').innerHTML = ads.length ? sc('st', 'Top ads', ads.map((a) => `<div class="fn"><div class="row between"><span class="nt" title="${esc(a.name)}">${esc(a.name)}</span><b>${Math.round(a.results)} results</b></div><div class="bar"><i style="width:${(a.spend / mx) * 100}%"></i></div><small>${dm(a.spend)} spent · ${a.results ? dm(a.spend / a.results) + ' per result' : 'no results'} · ${a.linkClicks.toLocaleString()} link clicks</small></div>`).join(''), '<span class="sub" style="margin:0">by results</span>') : '';
+    const TM = ['results', 'cpr', 'spend', 'impressions', 'reach', 'frequency', 'linkClicks', 'ctr', 'cpc', 'cpm', 'clicks', 'cpcAll', 'engagement', 'landingViews', 'cpl', 'convRate'];
+    const m = TOPAD.metric, low = !!MET[m].low, minImp = 500;
+    const pool = d.ads.filter((a) => a.spend > 0 && (!low || a.impressions >= minImp) && mval(m, a) !== null && isFinite(mval(m, a)) && (!low || mval(m, a) > 0));
+    const ads = pool.sort((a, b) => (low ? mval(m, a) - mval(m, b) : mval(m, b) - mval(m, a))).slice(0, 8), mx = Math.max(...ads.map((a) => mval(m, a)), 1e-9);
+    $('#sTop').innerHTML = d.ads.length ? sc('st', 'Top ads', (ads.length ? ads.map((a) => { const v = mval(m, a); const w = low ? (1 - (v - mval(m, ads[0])) / (Math.max(...ads.map((x) => mval(m, x))) - mval(m, ads[0]) || 1) * .8) : v / mx; return `<div class="fn"><div class="row between"><span class="nt" title="${esc(a.name)}">${esc(a.name)}</span><b>${mfmt(m, v)}</b></div><div class="bar"><i style="width:${Math.max(4, w * 100)}%"></i></div><small>${dm(a.spend)} spent · ${Math.round(a.results)} results · ${a.linkClicks.toLocaleString()} link clicks · ${mfmt('ctr', mval('ctr', a))} CTR · ${mfmt('cpc', mval('cpc', a))} CPC</small></div>`; }).join('') : '<p class="sub">No ads with enough data for this metric.</p>') + (low ? `<p class="sub" style="font-size:11px;margin:6px 0 0">Lower is better. Ads under ${minImp} impressions are left out.</p>` : ''),
+      `<label class="inl">Rank by <select id="topMetric">${TM.map((k) => `<option value="${k}" ${k === m ? 'selected' : ''}>${MET[k].l}</option>`).join('')}</select></label>`) : '';
+    const tmSel = $('#topMetric'); if (tmSel) tmSel.onchange = (e) => { TOPAD.metric = e.target.value; drawSideMeta(); };
   }
   async function organic(force) {
     const box = $('#sOrg'); if (!box) return;
@@ -222,6 +306,12 @@
     box.onclick = (e) => { const a = e.target.closest('[data-u]'); if (a) { e.preventDefault(); if (a.dataset.u) lumen.open(a.dataset.u); } };
     $('#orgRefresh').onclick = () => { $('#sOrg').querySelector('h2').textContent = 'Refreshing…'; organic(true); };
   }
+  // Channel list in the sidebar: all sessions, with the new-visitor share and key events (live GA4 data once it has loaded).
+  function drawSideChannels() {
+    const box = $('#sChan'), d = G.d; if (!box || !d || !d.channels.length) return;
+    const rows = [...d.channels].sort((a, b) => b.sessions - a.sessions).slice(0, 7), mx = Math.max(...rows.map((r) => r.sessions), 1);
+    box.innerHTML = `<h3>Sessions by channel</h3><div class="legend" style="margin:0 0 8px"><span><i style="background:var(--c2)"></i>New visitors</span><span><i style="background:var(--c1)"></i>Returning</span></div>${rows.map((r) => `<div class="fn"><div class="row between"><span>${esc(r.name)}</span><b>${Math.round(r.sessions).toLocaleString()}</b></div><div class="bar stack" style="width:${Math.max(6, (r.sessions / mx) * 100)}%"><i style="width:${r.sessions ? (r.newSessions / r.sessions) * 100 : 0}%;background:var(--c2)"></i><i style="flex:1;background:var(--c1)"></i></div><small>${Math.round(r.newUsers).toLocaleString()} new users · ${Math.round(r.keyEvents)} key events${r.sessions ? ' · ' + ((r.keyEvents / r.sessions) * 100).toFixed(1) + '% rate' : ''}</small></div>`).join('')}`;
+  }
   async function afterClick(from, to) {
     let a; try { a = await lumen.analytics(st.ws, from, to); } catch (e) { return; } const box = $('#sAfter'); if (!box) return;
     const rows = [], tile = (l, v, d) => `<div class="mt"><div class="l">${l}</div><div class="v">${v}</div>${d || ''}</div>`;
@@ -231,7 +321,8 @@
     if (ym.views) { rows.push(tile('YouTube views', fmt.num(ym.views.total), chg(ym.views.total, ym.views.previous))); if (ym.watch_minutes) rows.push(tile('Watch hours', fmt.num(ym.watch_minutes.total / 60), chg(ym.watch_minutes.total, ym.watch_minutes.previous))); }
     const ch = (a.ga4 && a.ga4.dims && a.ga4.dims.sessions || []).slice(0, 5), mx = Math.max(...ch.map((x) => x.total), 1);
     box.innerHTML = `<div class="row between"><h2>After the click</h2><button class="ghost" id="goAn">Analytics →</button></div>${rows.length ? `<div class="mtiles two">${rows.join('')}</div>` : '<p class="sub">No synced GA4 or YouTube data in this window yet.</p>'}
-      ${ch.length ? `<h3>Sessions by channel</h3>${ch.map((x) => `<div class="fn"><div class="row between"><span>${esc(x.dim)}</span><b>${fmt.num(x.total)}</b></div><div class="bar"><i style="width:${(x.total / mx) * 100}%"></i></div></div>`).join('')}` : ''}`;
+      <div id="sChan">${ch.length ? `<h3>Sessions by channel</h3>${ch.map((x) => `<div class="fn"><div class="row between"><span>${esc(x.dim)}</span><b>${fmt.num(x.total)}</b></div><div class="bar"><i style="width:${(x.total / mx) * 100}%"></i></div></div>`).join('')}` : ''}</div>`;
+    drawSideChannels();
     $('#goAn').onclick = () => show('analytics');
   }
 
@@ -272,6 +363,7 @@
         <div class="card"><h2>By source</h2>${sources}</div>
       </div>
       <div id="deep"></div>
+      <div id="ga"></div>
       <div class="card"><h2>Campaigns</h2><div id="tbl"></div></div></div>
       <aside class="ovside" id="side"></aside></div></div>`;
 
@@ -284,6 +376,7 @@
     wireRange(overview);
     const conns = await lumen.connections(st.ws); st.conns = conns;
     if (conns.some((x) => x.kind === 'meta')) deepDive();
+    if (conns.some((x) => x.kind === 'ga4')) ga4Dive();
     sideInit(conns, from, to);
   }
 

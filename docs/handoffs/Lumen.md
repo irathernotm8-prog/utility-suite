@@ -91,3 +91,10 @@ Ad management (approval queue, paused drafts, budget/pause), videos/Reels/Storie
 - Insights now also request unique/outbound clicks and video fields; rankings are a separate query so a failure only warns.
 - Unverified live: organic needs `pages_read_engagement` (+ `instagram_basic`) on the posting token; ranking fields only appear after ~500 impressions; video field names; IG media thumbnails via cdninstagram.
 - Google Ads / Salesforce live detail not expanded; they still feed the existing source totals and Analytics.
+
+## 0.7.0 (GA4 in depth, top ads by any metric)
+- New Overview section "Website traffic · Google Analytics" (live, `src/ga4live.js`, read-only, 2 min cache): tiles with deltas (sessions, users, new users, new share, engaged, engagement rate, key events, key event rate, revenue, page views, avg session, bounce), trend with pickable metrics, new-vs-returning bar, and tabs for Channels, Cities, Regions, Source/medium, Campaigns, Landing pages, Devices, Key events (by event name and by channel). "All traffic / New users" switch changes the columns; for channels it uses `newVsReturning` to show new-visitor sessions and key events.
+- Sidebar channel list now shows new vs returning sessions, new users and key events per channel.
+- Top ads can be ranked by 16 metrics (clicks, CPC, CTR, CPM, cost/result…); lower-is-better metrics ignore ads under 500 impressions.
+- Live GA4 reports do not depend on Sync. Needs the Google sign-in (analytics.readonly) already used by the GA4 source.
+- Unverified live: GA4 dimension/metric combinations (`city,region`, `sessionDefaultChannelGroup,newVsReturning`, key-event metric filter), revenue shown in $ regardless of property currency.

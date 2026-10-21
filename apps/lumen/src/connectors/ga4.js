@@ -8,7 +8,7 @@ const ymd = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 async function report(cfg, body, fetchImpl) {
   const rows = []; let offset = 0;
   for (let i = 0; i < 50; i++) {
-    const r = await gget(`${BASE}/${prop(cfg.propertyId)}:runReport`, cfg.accessToken, fetchImpl, { method: 'POST', body: { ...body, limit: 100000, offset } });
+    const r = await gget(`${BASE}/${prop(cfg.propertyId)}:runReport`, cfg.accessToken, fetchImpl, { method: 'POST', body: { limit: 100000, ...body, offset } });
     rows.push(...(r.rows || []));
     offset += (r.rows || []).length;
     if (!r.rowCount || offset >= r.rowCount) break;
@@ -17,6 +17,7 @@ async function report(cfg, body, fetchImpl) {
 }
 
 module.exports = {
+  report,
   kind: 'ga4', name: 'Google Analytics 4', category: 'analytics', google: true, status: 'ready',
   fields: [{ key: 'propertyId', label: 'GA4 property ID', placeholder: 'Numbers only, from Admin → Property details' }],
 

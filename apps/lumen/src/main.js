@@ -214,6 +214,12 @@ function registerIpc() {
   h('ads:tree', async (ws, from, to, force) => ({ ...(await A.tree(ws, { since: from, until: to }, force)), cap: A.cap(), options: { objectives: Object.entries(adsApi.OBJECTIVES).map(([id, o]) => ({ id, label: o.label, needsPixel: !!o.needsPixel })), ctas: adsApi.CTAS, special: adsApi.SPECIAL } }));
   h('ads:change', (ws, id, patch, opts) => A.change(ws, id, patch, { confirmedActivate: !!(opts && opts.confirmedActivate) }));
   h('ads:insights', (ws, from, to, force) => A.insights(ws, { since: from, until: to }, !!force));
+  const gaCache = new Map();
+  h('ga4:report', async (ws, from, to, force) => {
+    const c = S.connections(ws).find((x) => x.kind === 'ga4'); if (!c) throw new Error('Connect Google Analytics 4 in Sources first.');
+    const key = from + '|' + to, hit = gaCache.get(ws); if (!force && hit && hit.key === key && Date.now() - hit.at < 120000) return hit.data;
+    const data = await require('./ga4live').fetchGa4(await resolveConfig(c), { since: from, until: to }, fetch); gaCache.set(ws, { key, at: Date.now(), data }); return data;
+  });
   const orgCache = new Map();
   h('ads:organic', async (ws, force) => {
     const hit = orgCache.get(ws); if (!force && hit && Date.now() - hit.at < 120000) return hit.data;

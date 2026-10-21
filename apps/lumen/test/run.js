@@ -402,6 +402,28 @@ let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok -', 
     assert.deepStrictEqual(at.map((x) => [x.type, x.count, x.cost]), [['link_click', 10, null], ['lead', 3, 5.5]].sort((a, b) => b[1] - a[1]));
   });
 
+  await t('ga4 live: totals, previous period, new-vs-returning folded into channels, city table, failing part warns', async () => {
+    const { fetchGa4 } = require('../src/ga4live'); const calls = [];
+    const row = (dims, mets) => ({ dimensionValues: dims.map((value) => ({ value })), metricValues: mets.map((value) => ({ value: String(value) })) });
+    const f = async (url, o) => { const b = JSON.parse(o.body); calls.push(b); const d = (b.dimensions || []).map((x) => x.name).join(','); const m = b.metrics.map((x) => x.name);
+      const ok = (rows) => ({ ok: true, status: 200, json: async () => ({ rows, rowCount: rows.length }) });
+      if (d === '' && b.dateRanges[0].startDate === '2026-09-24') return ok([row([], [800, 600, 300, 500, 20, 0, 1500, 60, 0.4])]);
+      if (d === '') return ok([row([], [1000, 700, 400, 600, 30, 55.5, 1800, 62, 0.35])]);
+      if (d === 'date') return ok([row(['20261002'], [60, 50, 20, 30, 2, 0]), row(['20261001'], [40, 30, 20, 20, 1, 0])]);
+      if (d === 'sessionDefaultChannelGroup') return ok([row(['Paid Social'], [600, 400, 250, 350, 20, 40]), row(['Direct'], [400, 300, 150, 250, 10, 15.5])]);
+      if (d === 'sessionDefaultChannelGroup,newVsReturning') return ok([row(['Paid Social', 'new'], [350, 12, 200]), row(['Paid Social', 'returning'], [250, 8, 150]), row(['Direct', 'new'], [100, 3, 60])]);
+      if (d === 'city,region') return ok([row(['Kingsville', 'Texas'], [300, 200, 120, 180, 9, 10]), row(['Houston', 'Texas'], [200, 150, 90, 100, 5, 0])]);
+      if (d === 'deviceCategory') return { ok: false, status: 403, json: async () => ({ error: { message: 'quota' } }) };
+      if (d === 'eventName') return ok([row(['generate_lead'], [25, 0])]);
+      return ok([]); };
+    const r = await fetchGa4({ propertyId: '123', accessToken: 'a' }, { since: '2026-10-01', until: '2026-10-07' }, f);
+    assert.deepStrictEqual([r.totals.sessions, r.totals.newUsers, r.totals.keyEvents, r.totals.totalRevenue === undefined ? r.totals.revenue : 0, r.prevTotals.sessions], [1000, 400, 30, 55.5, 800]);
+    assert.deepStrictEqual(r.daily.map((d) => [d.date, d.sessions]), [['2026-10-01', 40], ['2026-10-02', 60]]);
+    const ps = r.channels.find((c) => c.name === 'Paid Social'); assert.deepStrictEqual([ps.sessions, ps.newUsers, ps.newSessions, ps.returningSessions, ps.newKeyEvents, ps.keyEvents], [600, 250, 350, 250, 12, 20]);
+    assert.deepStrictEqual([r.cities[0].name, r.cities[0].region, r.cities[0].newUsers, r.cities[0].keyEvents], ['Kingsville', 'Texas', 120, 9]);
+    assert.deepStrictEqual(r.keyEventNames, [{ name: 'generate_lead', count: 25, revenue: 0 }]); assert.deepStrictEqual(r.devices, []); assert.ok(r.warnings.some((w) => /Devices.*quota/.test(w)));
+  });
+
   await t('AI campaign draft: parses, clamps to the budget ceiling, drops unknown values', async () => {
     const reply = '{"name":"Kingsville Referral","objective":"OUTCOME_WEIRD","dailyBudget":9999,"locations":["Kingsville, TX"],"radiusMiles":12,"ageMin":15,"ageMax":70,"headline":"' + 'x'.repeat(60) + '","message":"Hi","description":"d","cta":"BOGUS","special":"NONE","notes":"n"}';
     const r = await ai.campaignDraft({ key: 'k', brief: 'Referral promo in Kingsville', cap: 100, ctas: ['LEARN_MORE', 'SIGN_UP'] }, async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Here you go: ' + reply }] }) }));
