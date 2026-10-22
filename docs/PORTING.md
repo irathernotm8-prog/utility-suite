@@ -28,12 +28,15 @@
 | Datum | `apps/datum` | `docs/handoffs/Datum.md` |
 | Docket | `apps/docket` | `docs/handoffs/Docket.md` |
 | Fresh Desk | `apps/fresh-desk` (after `./utility adopt fresh-desk`) | `docs/handoffs/Fresh Desk.md` |
+| Glean | `apps/glean` | `docs/handoffs/Glean.md` |
 | Kiln | `apps/kiln` | `docs/handoffs/Kiln.md` |
+| Lumen | `apps/lumen` | `docs/handoffs/Lumen.md` |
 | Onward | `apps/onward` | `docs/handoffs/Onward.md` |
 | RO3 | `apps/ro3` | `docs/handoffs/RO3.md` |
 | Relay | `apps/relay` | `docs/handoffs/Relay.md` |
 | Sideby | `apps/sideby` | `docs/handoffs/Sideby.md` |
 | Slate | `apps/slate` | `docs/handoffs/Slate.md` |
+| Trace | `apps/trace` | `docs/handoffs/Trace.md` |
 | Utility Hub | `apps/hub` | maintained in the Utility Package chat (`cd apps/hub && npm test`) |
 
 Old project folders were moved to `~/Downloads/Old app folders (safe to delete)`. `./utility port <id> --from-old` pulls any late edits from there until that folder is trashed.

@@ -1,0 +1,35 @@
+{
+  "name": "glean",
+  "productName": "Glean",
+  "version": "0.1.0",
+  "description": "Collect every photo and video from a page you can see (Instagram, Facebook, Patreon, X and any site) at full size, grouped by post with captions, and keep each account up to date.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.glean",
+    "productName": "Glean",
+    "copyright": "Personal use",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.photography",
+      "darkModeSupport": true
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

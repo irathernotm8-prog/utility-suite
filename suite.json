@@ -139,6 +139,14 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "glean",
+      "name": "Glean",
+      "description": "Collect every photo and video from Instagram, Facebook, Patreon or any page you can see, at full size and grouped by post with captions, then keep each account up to date.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {

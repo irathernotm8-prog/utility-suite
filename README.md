@@ -9,12 +9,15 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
 | **Docket** | Meeting notes: on-device transcription of Zoom, Teams and Meet calls, AI summaries, one to-do list | `apps/docket` |
 | **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
+| **Glean** | Collects every photo and video from Instagram, Facebook, Patreon or any page at full size, grouped by post with captions; keeps each account up to date | `apps/glean` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
+| **Lumen** | Ads and analytics: Meta first, with Google, YouTube and Salesforce, plus an AI you can ask | `apps/lumen` |
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
 | **RO3** | Photo editing, video editing and file conversion | `apps/ro3` |
 | **Relay** | Inboxes, calendars, browser, library and AI | `apps/relay` |
 | **Sideby** | Watch parties with shared playback and room chat | `apps/sideby` |
 | **Slate** | Accounts, retirement, credit and savings in one place | `apps/slate` |
+| **Trace** | Paths, decisions, org charts and folder plans you can trace, with notes and screenshot guides | `apps/trace` |
 | **Utility Hub** | Installs, updates and removes the apps on each computer | `apps/hub` |
 
 ## How it works
@@ -43,6 +46,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Slate | `~/Documents/Slate/Statements` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |
+| Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
 | All apps | their app-data folder (`~/Library/Application Support/<App>`, `%APPDATA%\<App>`) |
 
 ## Commands

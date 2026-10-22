@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-22 14:29 — **Glean 0.1.0** — First release: a signed-in browser that collects every photo and video from Instagram, Facebook, Patreon, X or any site at full size, grouped by post with captions and dates. Auto-scroll, batch links, organized folders with captions.csv, WebP saved as JPG, a library with Check for new, and contact-sheet PDFs for clients.
+- 2026-10-22 14:29 — **Glean 0.1.0** (52 new) — Added to the Utility Package
 - 2026-10-21 13:23 — **Lumen 0.7.0** — GA4 in depth: channels with new vs returning, cities, key events, landing pages; top ads by any metric
 - 2026-10-21 13:09 — **Lumen 0.6.0** — Wide Overview with sidebar, ad preview and editing, deeper Meta reporting, Page and Instagram stats
 - 2026-10-21 13:08 — **Lumen 0.5.1** — Preview and edit existing ads
