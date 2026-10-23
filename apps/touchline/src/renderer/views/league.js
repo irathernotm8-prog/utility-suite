@@ -114,6 +114,7 @@
             <div class="sub">${esc(L.country || '')}${L.country ? '<span class="dot"></span>' : ''}<span>${esc(cur || '')}</span>
               ${champ ? `<span class="dot"></span><span style="color:var(--gold)">${icon('trophy', 14)}</span><b data-go="team:${champ.winner.id}" style="cursor:pointer">${esc(champ.winner.name)}</b>` : ''}</div>
           </div>
+          ${UI.trophyArt(L.id) ? `<img class="hero-trophy" src="${UI.trophyArt(L.id)}" alt="" title="The ${esc(L.name)} trophy">` : ''}
           <div class="actions">
             ${seasons.length > 1 ? `<select class="select" id="season">${seasons.map((s) => `<option ${s === cur ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : ''}
             ${UI.followBtn('leagues', L.id, L.name)}

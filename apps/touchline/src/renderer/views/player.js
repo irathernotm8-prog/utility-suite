@@ -101,7 +101,7 @@
     for (const t of P.trophies) { if (!byTeam.has(t.team)) byTeam.set(t.team, { id: t.teamId, list: [] }); byTeam.get(t.team).list.push(t); }
     const total = P.trophies.reduce((a, t) => a + t.won.length, 0);
     return `<div class="section-head"><h2>${total} title${total === 1 ? '' : 's'}</h2></div>` + [...byTeam.entries()].map(([team, v]) => `<div class="card" style="margin-bottom:12px"><div class="card-head" data-go="team:${v.id}" style="cursor:pointer">${UI.crest(UI.teamLogo(v.id), team)}<h3>${esc(team)}</h3></div>
-      <div class="trophies" style="padding:12px">${v.list.map((t) => `<div class="card trophy" style="background:var(--raise)"><span class="count ${t.won.length ? '' : 'zero'}">${t.won.length}</span><div class="grow"><b>${esc(t.league)}</b><small>${esc(t.won.join(', ') || '')}${t.runnerUp.length ? `${t.won.length ? '<br>' : ''}Runner-up: ${esc(t.runnerUp.join(', '))}` : ''}</small></div></div>`).join('')}</div></div>`).join('');
+      <div class="trophies" style="padding:12px">${v.list.map((t) => `<div class="card trophy ${t.won.length ? '' : 'none'}" style="background:var(--raise)"><div class="plinth">${UI.trophy(t.leagueId)}<span class="count ${t.won.length ? '' : 'zero'}">${t.won.length}</span></div><div class="grow"><b>${esc(t.league)}</b><small>${esc(t.won.join(', ') || '')}${t.runnerUp.length ? `${t.won.length ? '<br>' : ''}Runner-up: ${esc(t.runnerUp.join(', '))}` : ''}</small></div></div>`).join('')}</div></div>`).join('');
   }
 
   Views.player = {

@@ -21,6 +21,7 @@ const DEFAULTS = {
   following: { leagues: DEFAULT_LEAGUES, teams: [], players: [] },
   alerts: { enabled: true, goals: true, kickoff: true, fulltime: true, redCards: false },
   xis: [],
+  widget: { open: false, pinned: true, filter: 'today', bounds: null },
   recent: [],
   window: null
 };

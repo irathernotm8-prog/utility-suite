@@ -37,6 +37,9 @@
     play: '<path d="M7 4.5v15l12.5-7.5z"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
     sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
+    pip: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><rect x="11.5" y="10.5" width="7.5" height="6.5" rx="1.3" fill="currentColor" stroke="none"/>',
+    pin: '<path d="M9 3.5h6l-1 5 3.5 3.5h-11L10 8.5z"/><path d="M12 12v8.5"/>',
+    pinOff: '<path d="M9 3.5h6l-1 5 3.5 3.5h-11L10 8.5z" opacity=".45"/><path d="M12 12v8.5" opacity=".45"/><path d="M4 4l16 16"/>',
     grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>'
   };
   window.icon = (name, size = 18, cls = '') => {

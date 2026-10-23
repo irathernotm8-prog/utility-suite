@@ -14,10 +14,12 @@ images.registerScheme();
 const data = require('./data');
 const store = require('./store');
 const alerts = require('./alerts');
+const widget = require('./widget');
 
 const ICON = path.join(__dirname, '..', 'build', 'icon.png');
 let win = null;
 const send = (ch, d) => { if (win && !win.isDestroyed()) win.webContents.send(ch, d); };
+const broadcast = (ch, d) => { send(ch, d); widget.send(ch, d); };
 
 function chrome(dark) {
   return { color: '#00000000', symbolColor: dark ? '#e6efe9' : '#14231b', height: 52 };
@@ -60,8 +62,16 @@ function register() {
   ipcMain.handle('app:copy', (_e, text) => clipboard.writeText(String(text || '')));
 
   ipcMain.handle('store:get', () => store.publicState());
-  ipcMain.handle('store:set', (_e, patch) => { const s = store.set(patch); if (patch && 'theme' in patch) applyTheme(patch.theme); if (patch && 'alerts' in patch) alerts.start(openMatch); return s; });
-  ipcMain.handle('store:follow', (_e, kind, item) => { const s = store.toggleFollow(kind, item); if (kind === 'teams') alerts.start(openMatch); return s; });
+  ipcMain.handle('store:set', (_e, patch) => { const s = store.set(patch); if (patch && 'theme' in patch) { applyTheme(patch.theme); broadcast('theme', nativeTheme.shouldUseDarkColors); } if (patch && 'alerts' in patch) alerts.start(openMatch); return s; });
+  ipcMain.handle('store:follow', (_e, kind, item) => { const s = store.toggleFollow(kind, item); if (kind === 'teams') alerts.start(openMatch); widget.send('follows', s); return s; });
+
+  ipcMain.handle('widget:toggle', () => { const on = widget.toggle(); send('widget', on); return on; });
+  ipcMain.handle('widget:close', () => { widget.close(); send('widget', false); });
+  ipcMain.handle('widget:state', () => ({ ...widget.state(), open: widget.isOpen() }));
+  ipcMain.handle('widget:pin', (_e, on) => widget.pin(on));
+  ipcMain.handle('widget:set', (_e, patch) => { Object.assign(widget.state(), { filter: patch?.filter ?? widget.state().filter }); store.save(); return widget.state(); });
+  ipcMain.handle('widget:open-match', (_e, id) => openMatch(id));
+  ipcMain.handle('widget:open-app', () => { if (!win) createWindow(); win.show(); win.focus(); });
   ipcMain.handle('store:reorder', (_e, kind, ids) => store.reorderFollow(kind, ids));
 
   ipcMain.handle('data:day', wrap((date, opts = {}) => data.matchDay(date, { ...opts, leagueIds: store.get().following.leagues.map((l) => l.id) })));
@@ -83,7 +93,8 @@ function register() {
 function openMatch(id) {
   if (!win) createWindow();
   win.show(); win.focus();
-  send('nav', { route: 'match', id });
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => setTimeout(() => send('nav', { route: 'match', id }), 300));
+  else send('nav', { route: 'match', id });
 }
 
 function buildMenu() {
@@ -99,6 +110,8 @@ function buildMenu() {
       { label: 'Legends', accelerator: 'CmdOrCtrl+4', click: go('legends') },
       { label: 'XI Builder', accelerator: 'CmdOrCtrl+5', click: go('builder') },
       { type: 'separator' },
+      { label: 'Live Widget', accelerator: 'CmdOrCtrl+Shift+L', click: () => { send('widget', widget.toggle()); } },
+      { type: 'separator' },
       { label: 'Back', accelerator: 'CmdOrCtrl+[', click: () => send('menu', 'back') },
       { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: () => send('menu', 'forward') },
       { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => send('menu', 'refresh') },
@@ -110,20 +123,21 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+app.on('second-instance', () => { if (!win) createWindow(); else { if (win.isMinimized()) win.restore(); win.focus(); } });
 app.whenReady().then(() => {
   const ud = app.getPath('userData');
   store.load(ud);
   data.init(ud);
   images.handle(ud);
   applyTheme(store.get().theme);
-  nativeTheme.on('updated', () => { if (win && !IS_MAC) try { win.setTitleBarOverlay(chrome(nativeTheme.shouldUseDarkColors)); } catch {} send('theme', nativeTheme.shouldUseDarkColors); });
+  nativeTheme.on('updated', () => { if (win && !IS_MAC) try { win.setTitleBarOverlay(chrome(nativeTheme.shouldUseDarkColors)); } catch {} broadcast('theme', nativeTheme.shouldUseDarkColors); });
   register();
   buildMenu();
   createWindow();
   alerts.start(openMatch);
+  widget.restore();
   if (process.env.TOUCHLINE_E2E) { try { require('../test/e2e/drive')(win, process.env.TOUCHLINE_E2E); } catch (err) { console.error(err); } }
-  app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
+  app.on('activate', () => { if (!win) createWindow(); });
 });
 app.on('window-all-closed', () => { store.flush(); if (!IS_MAC) app.quit(); });
 app.on('before-quit', () => store.flush());

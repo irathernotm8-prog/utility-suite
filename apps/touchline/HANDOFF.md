@@ -40,7 +40,8 @@ Pull before starting work. Stay inside `apps/touchline`; `tools/`, `suite.json` 
 - **Not yet run on a Mac or Windows.** Check these first:
   1. **Notifications** on macOS: the first alert asks permission. Ad-hoc signed builds may need it allowed in System Settings › Notifications.
   2. **Title bar**: traffic lights at 16,18 with 86px left padding; on Windows the overlay buttons need the 150px right padding and follow the theme (`chrome()` in `main.js`).
-  3. **Times** use the computer's time zone (shown at the bottom of Settings).
+  3. **Live widget**: on macOS it floats over full-screen apps when pinned (`setVisibleOnAllWorkspaces`). Check it can be dragged by its header and resized from the edges on both systems.
+4. **Times** use the computer's time zone (shown at the bottom of Settings).
 
 ## Rules specific to Touchline
 
@@ -52,6 +53,8 @@ Pull before starting work. Stay inside `apps/touchline`; `tools/`, `suite.json` 
 - **Be polite to the free sources.** `http.js` paces FotMob (120 ms) and Wikidata (1.1 s), backs off on 429, and Wikidata gets a descriptive user-agent. Don't add bulk prefetching.
 - **If FotMob starts refusing requests** (401/403 everywhere), the app falls back to ESPN for Matchday and tables. The likely cause is a new required header; look at `http.js → getBuffer` headers.
 - **Legends are the only curated data.** To add one: append to `src/data/legends.json` (id, name, group GK/DEF/MID/FWD, nationality, career, national) and drop a 256px WebP in `src/renderer/legends/`. `clubAliases` maps club names so "Club legends" on team pages finds them.
+- **Trophy art** lives in `src/renderer/trophies/<key>.webp` and is mapped by FotMob competition id in `ui.js → TROPHY`. Map by id, not name (FotMob's "Bundesliga" id 38 is Austria's). Competitions without art get a gold cup icon.
+- **The live widget** is `src/widget.js` (window) and `src/renderer/widget.js` (page). It uses the same `data:day` call and cache as Matchday, so it costs no extra requests while the main window is open. Its state (open, pinned, filter, position) is `widget` in settings.json.
 - No native modules and no runtime npm dependencies, so nothing special for Windows cross-builds.
 
 ## Testing

@@ -88,6 +88,16 @@
   UI.rating = (r) => (r ? `<span class="rating" style="background:${UI.ratingColor(r)}">${Number(r).toFixed(1)}</span>` : '');
   UI.ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
 
+  /* ---------- trophy art (from Football Hub), by FotMob competition id ---------- */
+  const TROPHY = { 47: 'epl', 87: 'laliga', 55: 'seriea', 53: 'ligue1', 54: 'bundesliga', 130: 'mls', 48: 'efl', 57: 'eredivisie',
+    71: 'superlig', 61: 'primeiraliga', 42: 'ucl', 73: 'europa', 10216: 'conference', 132: 'facup', 133: 'eflcup', 247: 'communityshield',
+    112: 'argentina', 268: 'brazil', 536: 'saudi', 64: 'scotland', 77: 'worldcup', 9806: 'nationsleague', 9807: 'nationsleague', 9808: 'nationsleague', 9809: 'nationsleague' };
+  UI.trophyArt = (leagueId) => (TROPHY[Number(leagueId)] ? `trophies/${TROPHY[Number(leagueId)]}.webp` : null);
+  UI.trophy = (leagueId, cls = '') => {
+    const a = UI.trophyArt(leagueId);
+    return a ? `<img class="trophy-art ${cls}" src="${a}" alt="">` : `<span class="trophy-art generic ${cls}">${icon('trophy', 30)}</span>`;
+  };
+
   /* ---------- follows ---------- */
   UI.following = (kind, id) => !!UI.store?.following?.[kind]?.some((x) => Number(x.id) === Number(id));
   UI.followBtn = (kind, id, name, extra = '') => {

@@ -10,6 +10,8 @@ module.exports = function drive(win, outDir) {
   win.webContents.on('console-message', (e) => { const m = e.message ?? e; const lvl = e.level ?? ''; if (/error|warn/i.test(String(lvl)) || /Error/.test(String(m))) errors.push(String(m)); });
   const js = (code) => win.webContents.executeJavaScript(code, true);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shotWin = async (w, name) => { const img = await w.webContents.capturePage(); fs.writeFileSync(path.join(outDir, `${name}.png`), img.toPNG()); };
+  const widgetWin = () => require('electron').BrowserWindow.getAllWindows().find((x) => x.getTitle() === 'Touchline Live');
   const shot = async (name) => { const img = await win.webContents.capturePage(); fs.writeFileSync(path.join(outDir, `${name}.png`), img.toPNG()); };
   const go = (r, p = []) => js(`App.go(${JSON.stringify(r)}, ${JSON.stringify(p)})`);
   const tab = (seg, v) => js(`(document.querySelector('[data-seg="${seg}"] button[data-v="${v}"]')||{click(){}}).click()`);
@@ -50,6 +52,8 @@ module.exports = function drive(win, outDir) {
     ['33-settings', async () => { await js(`document.querySelector('#overlay').innerHTML=''`); await go('settings'); await wait(1500); }],
     ['34-light-today', async () => { await js(`window.tl.store.set({theme:'light'}).then(s=>{UI.store=s;UI.applyTheme(false)})`); await go('today'); await wait(3000); }],
     ['35-light-match', async () => { await go('match', ['5795477', 'lineups']); await wait(3000); }],
+    ['37-widget-open', async () => { await js(`window.tl.store.set({theme:'dark'}).then(s=>{UI.store=s;UI.applyTheme(true)})`); await js(`window.tl.widget.toggle()`); await wait(5000); }],
+    ['38-widget', async () => { const w = widgetWin(); if (w) await shotWin(w, '38-widget-today'); await w.webContents.executeJavaScript(`document.querySelector('[data-seg="wf"] button[data-v="live"]').click()`); await wait(800); await shotWin(w, '38-widget-live'); await w.webContents.executeJavaScript(`document.querySelector('[data-seg="wf"] button[data-v="mine"]').click()`); await wait(800); await shotWin(w, '38-widget-mine'); await w.webContents.executeJavaScript(`document.querySelector('#w-prev').click()`); await wait(4000); await shotWin(w, '38-widget-yesterday'); await w.webContents.executeJavaScript(`document.querySelector('[data-seg="wf"] button[data-v="today"]').click()`); await wait(800); await shotWin(w, '38-widget-yesterday-all'); }],
     ['36-light-player', async () => { await go('player', ['737066']); await wait(2500); await js(`window.tl.store.set({theme:'dark'})`); }]
   ];
   (async () => {

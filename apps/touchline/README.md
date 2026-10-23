@@ -13,6 +13,8 @@ Football scores, tables, match stats, squads and player histories for every leag
 - **Legends**: the 169-player Football Hub Hall of Fame with its sepia/gold photos, filterable by position and nation, each with club career, international record and Wikidata appearances/goals.
 - **XI Builder**: eight formations; pick from search (anyone, current or past), a squad, or the legends; save as many XIs as you like; copy as text.
 - **Following**: your teams (form, last and next match), players and competitions.
+- **Live widget** (⌘⇧L / Ctrl+Shift+L, or the picture-in-picture button in the title bar): a small floating window with the day's scores for your competitions and teams. Live matches first, goal flashes, All / Live / My teams filters, day arrows, pin on top. Click a match to open it in Touchline. It remembers its spot and reopens on launch.
+- **Trophy art**: the Football Hub trophy images in team trophy cabinets (with a shelf of the club's major wins), player trophies and competition headers.
 - **Alerts**: notifications for kick-off, goals, red cards and full-time for teams you follow.
 - **Search** (⌘K / Ctrl K or /): players, teams, competitions and legends.
 - **Offline**: everything you open is saved. If the network drops, Touchline shows the saved copy and says when it's from. If FotMob is down, Matchday and tables come from ESPN instead.
@@ -43,6 +45,7 @@ src/main.js            window, menu, IPC (data:*, store:*, app:*)
 src/preload.js         window.tl bridge (the window has no Node or network)
 src/store.js           settings.json: theme, follows, alerts, saved XIs
 src/alerts.js          match notifications for followed teams
+src/widget.js          the live widget window (bounds, pin, reopen on launch)
 src/data/http.js       requests: timeouts, retries, per-host pacing, gzip
 src/data/cache.js      disk cache with lifetimes and offline fallback
 src/data/normalize.js  FotMob payloads → Touchline shapes (pure; tested)
@@ -53,7 +56,8 @@ src/data/images.js     tl-img:// protocol: crests and photos cached on disk
 src/data/legends.json  Hall of Fame (names, positions, careers, club aliases)
 src/renderer/          index.html, styles.css, ui.js (helpers), charts.js (SVG),
                        app.js (shell, router, clicks), palette.js (search),
-                       views/*.js (one file per page), legends/*.webp, fonts/
+                       views/*.js (one file per page), widget.html + widget.js,
+                       legends/*.webp, trophies/*.webp, fonts/
 build/icon.png         app icon (build/make-icon.py regenerates it)
 test/run.js            npm test: normalizers, cache, Wikidata shaping, legends
 test/fixtures/         saved FotMob responses (gzipped)

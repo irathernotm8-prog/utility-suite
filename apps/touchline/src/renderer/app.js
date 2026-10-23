@@ -69,6 +69,7 @@
         <button class="tb-search" id="open-search">${icon('search', 15)}<span>Search players, teams, competitions</span><kbd>${plat === 'mac' ? '⌘K' : 'Ctrl K'}</kbd></button>
         <div class="tb-spacer"></div>
         <button class="tb-status" id="tb-status" hidden></button>
+        <button class="tb-btn" id="tb-widget" title="Live widget (${plat === 'mac' ? '⌘⇧L' : 'Ctrl+Shift+L'})">${icon('pip', 18)}</button>
         <button class="tb-btn" id="tb-refresh" title="Refresh">${icon('refresh', 17)}</button>
         <button class="tb-btn" data-go="settings" title="Settings">${icon('settings', 18)}</button>
       </header>
@@ -77,6 +78,10 @@
     $('#nav-back').onclick = back;
     $('#nav-fwd').onclick = forward;
     $('#tb-refresh').onclick = refresh;
+    const wb = $('#tb-widget');
+    wb.onclick = async () => wb.classList.toggle('on', await window.tl.widget.toggle());
+    window.tl.widget.state().then((s) => wb.classList.toggle('on', !!s.open));
+    window.tl.widget.onChange((on) => wb.classList.toggle('on', !!on));
     $('#open-search').onclick = () => Palette.open();
     renderRail();
   }

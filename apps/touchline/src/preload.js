@@ -7,6 +7,7 @@ const on = (ch) => (fn) => { const h = (_e, d) => fn(d); ipcRenderer.on(ch, h); 
 
 contextBridge.exposeInMainWorld('tl', {
   app: { info: call('app:info'), openExternal: call('app:open-external'), copy: call('app:copy'), onNav: on('nav'), onMenu: on('menu'), onTheme: on('theme') },
+  widget: { toggle: call('widget:toggle'), close: call('widget:close'), state: call('widget:state'), pin: call('widget:pin'), set: call('widget:set'), openMatch: call('widget:open-match'), openApp: call('widget:open-app'), onChange: on('widget'), onFollows: on('follows') },
   store: { get: call('store:get'), set: call('store:set'), follow: call('store:follow'), reorder: call('store:reorder') },
   data: {
     day: call('data:day'), match: call('data:match'), catalog: call('data:catalog'), league: call('data:league'), leaders: call('data:leaders'),

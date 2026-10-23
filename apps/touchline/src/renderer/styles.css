@@ -79,6 +79,7 @@ a:hover { text-decoration: underline; }
 .nav-arrows { display: flex; gap: 2px; }
 .tb-btn { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--ink-2); }
 .tb-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.tb-btn.on { color: var(--accent); background: var(--accent-soft); }
 .tb-search { flex: 0 1 420px; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line); color: var(--mute); cursor: text; margin-left: 6px; }
 .tb-search:hover { border-color: var(--line-2); }
 .tb-search span { flex: 1; text-align: left; }
@@ -405,8 +406,23 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .sq .inj { color: var(--live); font-size: 11px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sq .nm small { white-space: nowrap; overflow: hidden; }
 .trophies { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.trophy { padding: 14px 16px; display: flex; gap: 14px; align-items: flex-start; }
-.trophy .count { font: 700 30px/1 var(--display); color: var(--gold); min-width: 34px; }
+.trophy { padding: 14px 16px; display: flex; gap: 14px; align-items: center; }
+.trophy .plinth { position: relative; flex: none; width: 58px; height: 70px; display: grid; place-items: end center; }
+.trophy .plinth .trophy-art { max-width: 50px; max-height: 64px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .45)); }
+.trophy.none .plinth .trophy-art { filter: grayscale(1) opacity(.35); }
+.trophy .count { position: absolute; right: -4px; bottom: -4px; min-width: 24px; height: 22px; padding: 0 6px; border-radius: 99px; display: grid; place-items: center; font: 700 12.5px var(--display); color: #1d1503; background: var(--gold); box-shadow: 0 0 0 2px var(--panel); }
+.trophy .count.zero { color: var(--ink-2); background: var(--line-2); }
+.trophy-art.generic { display: grid; place-items: center; width: 46px; height: 58px; color: var(--gold); opacity: .8; }
+.trophy-art.generic .ic { width: 40px; height: 40px; }
+.cabinet { display: flex; gap: 6px; overflow-x: auto; padding: 22px 22px 0; margin-bottom: 16px; border-radius: 18px; border: 1px solid var(--line);
+  background: radial-gradient(80% 120% at 50% 0%, color-mix(in srgb, var(--gold) 14%, transparent), transparent 70%), linear-gradient(180deg, var(--panel), var(--bg)); scrollbar-width: thin; }
+.shelf-item { flex: none; width: 112px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding-bottom: 14px; cursor: pointer; position: relative; }
+.shelf-item::after { content: ""; position: absolute; left: -3px; right: -3px; bottom: 0; height: 8px; border-radius: 2px; background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 40%, var(--raise)), var(--raise)); }
+.shelf-item .trophy-art { height: 96px; max-width: 96px; object-fit: contain; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .5)); transition: transform .15s ease; }
+.shelf-item:hover .trophy-art { transform: translateY(-3px); }
+.shelf-item b { font: 700 18px var(--display); color: var(--gold); line-height: 1; margin-top: 4px; }
+.shelf-item small { font-size: 11px; color: var(--mute); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; margin-bottom: 6px; }
+.hero-trophy { height: 104px; max-width: 110px; object-fit: contain; filter: drop-shadow(0 10px 14px rgba(0, 0, 0, .5)); margin: -8px 4px -8px 0; }
 .trophy .count.zero { color: var(--mute); }
 .trophy b { display: block; }
 .trophy small { color: var(--mute); font-size: 11.5px; display: block; margin-top: 3px; line-height: 1.5; }
@@ -504,3 +520,51 @@ svg.chart .gridline { stroke: var(--line); }
 #toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 80; align-items: center; }
 .toast { background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-weight: 600; font-size: 13px; box-shadow: var(--shadow); animation: fade .15s ease; }
 .fade-in { animation: fade .18s ease; }
+
+/* ================= live widget ================= */
+body.widget { background: var(--bg); }
+body.widget #w { display: flex; flex-direction: column; height: 100vh; }
+.w-head { flex: none; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 6px 0 12px; -webkit-app-region: drag; border-bottom: 1px solid var(--line); background: var(--panel); }
+.w-head button, .w-head .seg { -webkit-app-region: no-drag; }
+.w-head img.logo { width: 18px; height: 18px; border-radius: 5px; }
+.w-head .ttl { font: 700 13.5px var(--display); display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.w-head .ttl .n { font: 700 10.5px var(--ui); color: var(--live); display: inline-flex; align-items: center; gap: 4px; }
+.w-head .icon-btn { width: 26px; height: 26px; border-radius: 7px; }
+.w-head .icon-btn.on { color: var(--accent); }
+.w-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.w-bar .seg { padding: 2px; border-radius: 8px; }
+.w-bar .seg button { height: 24px; padding: 0 9px; font-size: 11.5px; border-radius: 6px; }
+.w-bar .day { margin-left: auto; display: flex; align-items: center; gap: 2px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+.w-bar .day .icon-btn { width: 22px; height: 22px; }
+.w-body { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
+.w-league { display: flex; align-items: center; gap: 7px; padding: 9px 12px 4px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--mute); cursor: pointer; }
+.w-league:hover { color: var(--ink-2); }
+.w-league .crest { width: 14px; height: 14px; }
+.w-league span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) 46px minmax(0, 1fr); align-items: center; gap: 6px; padding: 5px 10px 5px 12px; font-size: 12.5px; cursor: pointer; border-radius: 8px; margin: 0 4px; }
+.w-row:hover { background: var(--hover); }
+.w-row .t { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.w-row .t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-row .t.h { justify-content: flex-end; text-align: right; }
+.w-row .t.won span { font-weight: 700; }
+.w-row .t.mine span { color: var(--accent); }
+.w-row .crest { width: 16px; height: 16px; }
+.w-row .m { font-size: 10.5px; font-weight: 700; color: var(--mute); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.w-row .m.live { color: var(--live); }
+.w-row .m .live-dot { width: 5px; height: 5px; }
+.w-row .s { text-align: center; font: 700 13px var(--display); border-radius: 6px; padding: 2px 0; background: var(--raise); }
+.w-row .s.live { color: var(--live); background: color-mix(in srgb, var(--live) 14%, transparent); }
+.w-row .s.pre { background: none; font: 600 11px var(--ui); color: var(--ink-2); }
+.w-row .s.off { background: none; font: 600 10px var(--ui); color: var(--mute); }
+.w-row .red { width: 6px; height: 9px; border-radius: 1.5px; background: var(--live); flex: none; }
+.w-row.flash { animation: goal 1.2s ease 0s 5; }
+@keyframes goal { 50% { background: color-mix(in srgb, var(--accent) 22%, transparent); } }
+.w-sub { padding: 10px 12px 2px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+.w-empty { padding: 26px 16px 10px; text-align: center; color: var(--mute); font-size: 12.5px; }
+.w-empty b { display: block; color: var(--ink-2); font-size: 13px; margin-bottom: 3px; }
+.w-foot { flex: none; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 12px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--mute); }
+.w-foot .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-foot .icon-btn { width: 22px; height: 22px; }
+.w-foot .icon-btn.spin .ic { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.w-foot .off { color: var(--gold); display: inline-flex; align-items: center; gap: 4px; }
