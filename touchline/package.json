@@ -1,0 +1,28 @@
+{
+  "name": "touchline",
+  "productName": "Touchline",
+  "version": "0.1.0",
+  "description": "Football scores, tables, match stats, squads and player histories for every league and every season.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.touchline",
+    "productName": "Touchline",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "build/icon.png", "package.json", "!src/**/*.md"],
+    "mac": { "target": ["dmg", "zip"], "icon": "build/icon.png", "category": "public.app-category.sports" },
+    "win": { "target": ["zip"], "icon": "build/icon.png", "signAndEditExecutable": false }
+  }
+}

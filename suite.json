@@ -155,6 +155,15 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "touchline",
+      "name": "Touchline",
+      "description": "Football scores, tables, match stats, squads and player histories for every league and every season.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [],
+      "movedFrom": "~/Downloads/Utility Package/touchline"
     }
   ],
   "updates": {
