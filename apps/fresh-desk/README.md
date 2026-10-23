@@ -16,6 +16,7 @@ A fast, no-bloat file explorer for Mac and Windows, with **Tidy** built in. Part
 
 **Do things**
 - New folder / new text file, rename (Return on Mac, F2 everywhere, or slow-click), duplicate, compress / extract zip, copy path.
+- Drag a box over files to select them (start on empty space, or beside a name in list view; hold ⌘/Ctrl to add or remove).
 - Cut / copy / paste, and native drag and drop to and from Finder, Explorer and other apps (hold ⌥/Alt to copy).
 - **Open in Terminal** (⌃\`), open in your code editor, Open With…, Show in Finder/Explorer. Pick the terminal (Terminal, iTerm, Warp, Ghostty, Windows Terminal, PowerShell…) and editor in Settings.
 - Move to Trash / Recycle Bin. Nothing is ever deleted permanently.
@@ -52,7 +53,7 @@ Type a few letters to jump to a file.
 ```bash
 npm install
 npm start
-npm test      # 37 tests: file operations, undo history, Tidy, rules, AI adapters, renderer smoke tests
+npm test      # 39 tests: file operations, undo history, Tidy, rules, AI adapters, renderer smoke tests
 ```
 
 Layout: `main.js` (window, menus, IPC), `preload.js` (the `desk` bridge), `lib/fsops.js` (explorer file operations), `lib/history.js` (one undo history), `lib/launch.js` (terminals, editors, zip), `lib/organizer.js` + `lib/rules.js` + `lib/content*.js` + `lib/ai.js` (Tidy), `renderer/` (UI: `app.js` explorer, `tidy.js` Tidy, `review-model.js` shared plan helpers).

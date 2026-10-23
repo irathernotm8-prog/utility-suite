@@ -52,12 +52,34 @@ test('explorer lists folders first, selects on click, and previews text', async 
   const names = [...d.querySelectorAll('#content .row .nm')].map(n => n.textContent);
   assert.deepEqual(names, ['Clients', 'a-notes.txt', 'b-report.pdf']);
   const row = d.querySelectorAll('#content .row')[1];
-  row.dispatchEvent(new w.MouseEvent('mousedown', {bubbles: true, button: 0}));
+  row.querySelector('.grab').dispatchEvent(new w.MouseEvent('mousedown', {bubbles: true, button: 0}));
   await wait(150);
   assert.ok(row.classList.contains('sel'));
   assert.equal(d.querySelector('.pv-name').textContent, 'a-notes.txt');
   assert.equal(d.querySelector('.pv-text').textContent.trim(), 'hello world');
   assert.match(d.getElementById('statusLeft').textContent, /3 items · 1 selected/);
+});
+
+test('dragging a box over empty space selects every row it touches', async t => {
+  const {w, d} = await setup(t);
+  const scroller = d.querySelector('#content .scroller');
+  scroller.dispatchEvent(new w.MouseEvent('mousedown', {bubbles: true, button: 0, clientX: 400, clientY: 300}));
+  w.dispatchEvent(new w.MouseEvent('mousemove', {clientX: 300, clientY: 40}));
+  assert.ok(d.querySelector('.marquee'), 'box is drawn');
+  w.dispatchEvent(new w.MouseEvent('mousemove', {clientX: 300, clientY: 40}));
+  w.dispatchEvent(new w.MouseEvent('mouseup', {clientX: 300, clientY: 40}));
+  await wait(50);
+  assert.equal(d.querySelector('.marquee'), null);
+  assert.equal(d.querySelectorAll('#content .row.sel').length, 2, 'rows 2 and 3 (y 32–88) are inside the box');
+});
+
+test('a plain click on the blank part of a row still selects it', async t => {
+  const {w, d} = await setup(t);
+  const date = d.querySelectorAll('#content .row')[2].querySelector('.c-date');
+  date.dispatchEvent(new w.MouseEvent('mousedown', {bubbles: true, button: 0, clientX: 600, clientY: 70}));
+  w.dispatchEvent(new w.MouseEvent('mouseup', {clientX: 600, clientY: 70}));
+  await wait(50);
+  assert.ok(d.querySelectorAll('#content .row')[2].classList.contains('sel'));
 });
 
 test('typing in search filters this folder instantly', async t => {

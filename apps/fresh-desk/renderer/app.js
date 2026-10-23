@@ -303,10 +303,9 @@ function renderList(root, t) {
 }
 function listRow(t, e, i, deep) {
   const sel = t.sel.has(e.path);
-  const row = el('div', {class: 'row' + (sel ? ' sel' : '') + (t.cursor === e.path ? ' cursor' : '') + (S.clip?.mode === 'cut' && S.clip.paths.includes(e.path) ? ' cut' : '') + (e.hidden ? ' hidden-file' : ''), dataset: {i}, draggable: 'true', role: 'row', 'aria-selected': String(sel)});
-  const name = el('div', {class: 'c-name'}, iconFor(e, 18));
+  const row = el('div', {class: 'row' + (sel ? ' sel' : '') + (t.cursor === e.path ? ' cursor' : '') + (S.clip?.mode === 'cut' && S.clip.paths.includes(e.path) ? ' cut' : '') + (e.hidden ? ' hidden-file' : ''), dataset: {i}, role: 'row', 'aria-selected': String(sel)});
+  const name = el('div', {class: 'c-name'}, el('span', {class: 'grab', draggable: 'true'}, iconFor(e, 18), S.renaming === e.path ? null : el('span', {class: 'nm', text: e.name})));
   if (S.renaming === e.path) name.append(renameInput(e));
-  else name.append(el('span', {class: 'nm', text: e.name}));
   if (e.isLink) name.append(el('span', {class: 'badge', text: 'alias'}));
   row.append(name,
     el('div', {class: 'c-date', text: when(e.mtime)}),
@@ -326,7 +325,7 @@ function renderGrid(root, t) {
   const tileW = size + 36, tileH = size + 52;
   const layout = () => { const w = scroller.clientWidth - 24 || 800; const cols = Math.max(1, Math.floor(w / tileW)); return {cols, rowsN: Math.ceil(t.items.length / cols)}; };
   const paint = () => {
-    const {cols, rowsN} = layout(); t.gridCols = cols;
+    const {cols, rowsN} = layout(); t.gridCols = cols; t.grid = {cols, tileW, tileH};
     spacer.style.height = `${rowsN * tileH + 24}px`;
     const top = scroller.scrollTop, h = scroller.clientHeight || 600;
     const r0 = Math.max(0, Math.floor(top / tileH) - 2), r1 = Math.min(rowsN, Math.ceil((top + h) / tileH) + 2);
@@ -419,19 +418,16 @@ function bindArea(area, t) {
   area.addEventListener('mousedown', e => {
     if (e.button !== 0 || e.target.closest('input')) return;
     $('content').focus({preventScroll: true});
+    S.dragPaths = null;
     const row = e.target.closest('[data-i]');
-    if (!row) { if (!mod(e) && !e.shiftKey) { t.sel.clear(); t.cursor = null; repaintSelection(); } return; }
-    const entry = t.items[+row.dataset.i];
-    if (e.shiftKey && t.anchor) selectRange(t, t.anchor, entry.path, mod(e));
-    else if (mod(e)) { t.sel.has(entry.path) ? t.sel.delete(entry.path) : t.sel.add(entry.path); t.anchor = entry.path; }
-    else if (!t.sel.has(entry.path)) { t.sel = new Set([entry.path]); t.anchor = entry.path; }
-    else row.dataset.pendingSingle = '1'; // collapse to single on click without drag
-    t.cursor = entry.path;
-    repaintSelection();
+    // Empty space (or, in list view, the part of a row beside the name) starts a selection box.
+    const listBlank = row && S.prefs.view === 'list' && !e.target.closest('.grab');
+    if (!row || listBlank) { startMarquee(e, area, t, listBlank ? row : null); return; }
+    selectFromClick(e, t, row);
   });
   area.addEventListener('click', e => {
     const row = e.target.closest('[data-i]');
-    if (row?.dataset.pendingSingle) { delete row.dataset.pendingSingle; if (!mod(e) && !e.shiftKey) { const entry = t.items[+row.dataset.i]; if (t.sel.size > 1) { t.sel = new Set([entry.path]); t.anchor = entry.path; repaintSelection(); } else if (e.detail === 1 && t.sel.has(entry.path) && Date.now() - (t.lastClick || 0) > 500) slowClickRename(entry); } }
+    if (row?.dataset.pendingSingle) { delete row.dataset.pendingSingle; if (!mod(e) && !e.shiftKey) { const entry = t.items[+row.dataset.i]; if (t.sel.size > 1) { t.sel = new Set([entry.path]); t.anchor = entry.path; repaintSelection(); } else if (e.detail === 1 && e.target.closest('.nm, .tile-name') && t.sel.has(entry.path) && Date.now() - (t.lastClick || 0) > 500) slowClickRename(entry); } }
     t.lastClick = Date.now();
   });
   area.addEventListener('dblclick', e => {
@@ -451,9 +447,84 @@ function bindArea(area, t) {
     e.preventDefault();
     const entry = t.items[+row.dataset.i];
     const paths = t.sel.has(entry.path) ? [...t.sel] : [entry.path];
+    S.dragPaths = paths;
     desk.startDrag(paths);
   });
   dropTarget(area, () => t.path, true);
+}
+function selectFromClick(e, t, row) {
+  const entry = t.items[+row.dataset.i];
+  if (e.shiftKey && t.anchor) selectRange(t, t.anchor, entry.path, mod(e));
+  else if (mod(e)) { t.sel.has(entry.path) ? t.sel.delete(entry.path) : t.sel.add(entry.path); t.anchor = entry.path; }
+  else if (!t.sel.has(entry.path)) { t.sel = new Set([entry.path]); t.anchor = entry.path; }
+  else row.dataset.pendingSingle = '1'; // collapse to single on click without drag
+  t.cursor = entry.path;
+  repaintSelection();
+}
+
+// ---------- selection box (drag on empty space to select everything it touches)
+function startMarquee(e, area, t, rowUnder) {
+  const view = S.prefs.view;
+  const toLocal = (cx, cy) => { const r = area.getBoundingClientRect(); return {x: cx - r.left + area.scrollLeft, y: cy - r.top + area.scrollTop}; };
+  const start = toLocal(e.clientX, e.clientY);
+  const additive = mod(e) ? 'toggle' : e.shiftKey ? 'add' : null;
+  const base = new Set(additive ? t.sel : []);
+  let box = null, moved = false, last = {x: e.clientX, y: e.clientY}, raf = 0, lastHit = null;
+  const hitsFor = r => {
+    const out = [];
+    if (view === 'list') {
+      const i0 = Math.max(0, Math.floor((r.y0 - 4) / ROW_H)), i1 = Math.min(t.items.length - 1, Math.floor((r.y1 - 4) / ROW_H));
+      for (let i = i0; i <= i1; i++) out.push(i);
+    } else if (view === 'grid' && t.grid) {
+      const {cols, tileW, tileH} = t.grid;
+      for (let i = 0; i < t.items.length; i++) {
+        const x = 12 + (i % cols) * tileW, y = 12 + Math.floor(i / cols) * tileH;
+        if (y > r.y1) break;
+        if (x + 8 < r.x1 && x + tileW - 8 > r.x0 && y + 8 < r.y1 && y + tileH - 8 > r.y0) out.push(i);
+      }
+    } else {
+      for (const n of area.querySelectorAll('[data-i]')) {
+        const nr = n.getBoundingClientRect(), a = area.getBoundingClientRect();
+        const y = nr.top - a.top + area.scrollTop;
+        if (y < r.y1 && y + nr.height > r.y0) out.push(+n.dataset.i);
+      }
+    }
+    return out;
+  };
+  const update = () => {
+    const cur = toLocal(last.x, last.y);
+    const r = {x0: Math.min(start.x, cur.x), y0: Math.min(start.y, cur.y), x1: Math.max(start.x, cur.x), y1: Math.max(start.y, cur.y)};
+    if (!box) { box = el('div', {class: 'marquee'}); area.append(box); }
+    Object.assign(box.style, {left: `${r.x0}px`, top: `${r.y0}px`, width: `${r.x1 - r.x0}px`, height: `${r.y1 - r.y0}px`});
+    const hits = hitsFor(r).map(i => t.items[i]?.path).filter(Boolean);
+    const sel = new Set(base);
+    for (const p of hits) { if (additive === 'toggle' && base.has(p)) sel.delete(p); else sel.add(p); }
+    t.sel = sel;
+    if (hits.length) { lastHit = hits[cur.y >= start.y ? hits.length - 1 : 0]; t.cursor = lastHit; }
+    repaintSelection();
+  };
+  // Scroll while the pointer is held past the top or bottom edge.
+  const autoScroll = () => {
+    const r = area.getBoundingClientRect();
+    const dy = last.y < r.top + 10 ? last.y - r.top - 10 : last.y > r.bottom - 10 ? last.y - r.bottom + 10 : 0;
+    if (dy) { area.scrollTop += Math.max(-30, Math.min(30, dy)); update(); }
+    raf = requestAnimationFrame(autoScroll);
+  };
+  const move = ev => {
+    last = {x: ev.clientX, y: ev.clientY};
+    if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 4) return;
+    if (!moved) { moved = true; document.body.classList.add('marqueeing'); raf = requestAnimationFrame(autoScroll); }
+    update();
+  };
+  const up = ev => {
+    removeEventListener('mousemove', move); removeEventListener('mouseup', up);
+    cancelAnimationFrame(raf); box?.remove(); document.body.classList.remove('marqueeing');
+    if (moved) { if (lastHit) t.anchor = lastHit; repaintSelection(); return; }
+    // A plain click: on a row's blank part it selects the row; on empty space it clears.
+    if (rowUnder) selectFromClick(ev, t, rowUnder);
+    else if (!additive) { t.sel.clear(); t.cursor = null; repaintSelection(); }
+  };
+  addEventListener('mousemove', move); addEventListener('mouseup', up);
 }
 function slowClickRename(entry) { clearTimeout(S.slowTimer); S.slowTimer = setTimeout(() => { const t = tab(); if (t.sel.size === 1 && t.sel.has(entry.path) && !S.renaming) startRename(entry.path); }, 650); }
 function selectRange(t, a, b, add) {
@@ -476,7 +547,11 @@ function dropTarget(node, dest, isArea = false) {
     if (!e.dataTransfer.types.includes('Files')) return;
     if (isArea && e.target.closest('[data-i]') && e.target.closest('[data-i]') !== node) { if (e.target.closest('.row, .tile, .crow')?.classList.contains('drop')) return; }
     e.preventDefault(); e.stopPropagation();
-    e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+    // Windows only allows "copy" for drags Fresh Desk starts itself; asking for "move" there makes
+    // Windows refuse the drop. The effect is only the cursor badge — what happens is decided on drop.
+    const allowed = e.dataTransfer.effectAllowed || 'all';
+    const canMove = /^(all|move|copyMove|linkMove|uninitialized)$/.test(allowed);
+    e.dataTransfer.dropEffect = e.altKey || !canMove ? (/copy|all|uninitialized/i.test(allowed) ? 'copy' : 'link') : 'move';
     document.querySelectorAll('.drop').forEach(n => n !== node && n.classList.remove('drop'));
     node.classList.add('drop');
   });
@@ -485,12 +560,18 @@ function dropTarget(node, dest, isArea = false) {
     if (!e.dataTransfer.types.includes('Files')) return;
     e.preventDefault(); e.stopPropagation();
     node.classList.remove('drop');
-    const paths = [...e.dataTransfer.files].map(f => desk.pathForFile(f)).filter(Boolean);
+    let paths = [...e.dataTransfer.files].map(f => desk.pathForFile(f)).filter(Boolean);
+    const internal = S.dragPaths && (!paths.length || paths.every(p => S.dragPaths.includes(p)));
+    if (!paths.length && S.dragPaths) paths = S.dragPaths;
+    S.dragPaths = null;
     const to = dest();
     if (!paths.length || !to) return;
     const sources = paths.filter(p => p !== to && U.dirname(p, sep()) !== to || e.altKey);
     if (!sources.length) return;
-    await transfer(e.altKey ? 'copy' : 'move', sources, to);
+    // Our own drags move (⌥/Alt copies). From other apps: move when they allow it, otherwise copy.
+    const allowed = e.dataTransfer.effectAllowed || 'all';
+    const copy = e.altKey || (!internal && !/^(all|move|copyMove|linkMove|uninitialized)$/.test(allowed));
+    await transfer(copy ? 'copy' : 'move', sources, to);
   });
 }
 
@@ -823,12 +904,15 @@ document.addEventListener('keydown', e => {
     }
   } else {
     const combos = {
-      'C-t': 'newTab', 'C-w': 'closeTab', 'C-S-N': 'newFolder', 'C-A-n': 'newFile', 'C-o': 'open', 'C-d': 'duplicate', 'C-x': 'cut', 'C-c': 'copy', 'C-v': 'paste', 'C-z': 'undo',
-      'C-a': 'selectAll', 'C-f': 'find', 'C-k': 'palette', 'C-l': 'goto', 'C-S-G': 'goto', 'C-1': 'viewList', 'C-2': 'viewGrid', 'C-3': 'viewColumns', 'C-S-P': 'togglePreview', 'C-h': 'toggleHidden',
-      'C-S->': 'toggleHidden', 'C-S-E': 'editor', 'C-A-c': 'copyPath', 'C-S-Y': 'tidy', 'C-,': 'settings', 'C-`': 'terminal', 'C-Tab': 'nextTab', 'C-S-Tab': 'prevTab', 'A-ArrowLeft': 'back', 'A-ArrowRight': 'forward', 'A-ArrowUp': 'up',
-      'F5': 'refresh', 'F2': 'rename', 'Delete': 'trash',
+      'C-t': 'newTab', 'C-w': 'closeTab', 'C-S-n': 'newFolder', 'C-A-n': 'newFile', 'C-o': 'open', 'C-d': 'duplicate', 'C-x': 'cut', 'C-c': 'copy', 'C-v': 'paste', 'C-z': 'undo',
+      'C-a': 'selectAll', 'C-f': 'find', 'C-k': 'palette', 'C-l': 'goto', 'C-S-g': 'goto', 'C-1': 'viewList', 'C-2': 'viewGrid', 'C-3': 'viewColumns', 'C-S-p': 'togglePreview', 'C-h': 'toggleHidden',
+      'C-S-.': 'toggleHidden', 'C-S-e': 'editor', 'C-A-c': 'copyPath', 'C-S-y': 'tidy', 'C-,': 'settings', 'C-`': 'terminal', 'C-Tab': 'nextTab', 'C-S-Tab': 'prevTab', 'A-ArrowLeft': 'back', 'A-ArrowRight': 'forward', 'A-ArrowUp': 'up',
+      'F5': 'refresh', 'F2': 'rename', 'Delete': 'trash', 'C-r': 'refresh',
     };
-    const key = (e.ctrlKey ? 'C-' : '') + (e.altKey ? 'A-' : '') + (e.shiftKey && (e.ctrlKey || e.altKey) ? 'S-' : '') + k;
+    // Match by physical key so Caps Lock, Shift and keyboard layouts don't change the shortcut.
+    const c = e.code || '';
+    const base = c.startsWith('Key') ? c.slice(3).toLowerCase() : c.startsWith('Digit') ? c.slice(5) : ({Period: '.', Comma: ',', Backquote: '`'})[c] || k;
+    const key = (e.ctrlKey ? 'C-' : '') + (e.altKey ? 'A-' : '') + (e.shiftKey && (e.ctrlKey || e.altKey) ? 'S-' : '') + base;
     if (combos[key]) { e.preventDefault(); return command(combos[key]); }
     if (k === 'Backspace' && !M) { e.preventDefault(); return up(); }
   }
