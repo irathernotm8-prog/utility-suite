@@ -22,10 +22,10 @@ Also: a menu-bar (Mac) / tray (Windows) item showing CPU, memory or temperature;
 
 | | Mac | Windows |
 |---|---|---|
-| Processes | `ps` + `top` (memory footprint, same as Activity Monitor) + `lsappinfo` (which apps have windows) | `systeminformation` (CIM) + `Get-Process` (windows, descriptions) |
-| Memory | `vm_stat`, `vm.swapusage`, memory pressure level | `systeminformation` |
+| Processes | `ps` + `top` (memory footprint, same as Activity Monitor) + `lsappinfo` (which apps have windows) | `Win32_Process` (CIM) + `Get-Process` (windows, descriptions) |
+| Memory | `vm_stat`, `vm.swapusage`, memory pressure level | Node + `Win32_PageFileUsage` |
 | GPU | `ioreg` IOAccelerator (no admin) | `nvidia-smi` when present, else GPU Engine counters |
-| Temperatures | `macos-temperature-sensor` (Apple Silicon, optional native module), `powerMonitor` thermal state, `pmset -g therm` | ThermalZoneInformation counters (no admin), `nvidia-smi` |
+| Temperatures | `macos-temperature-sensor` (Apple Silicon, optional native module, run in a child process), `powerMonitor` thermal state, `pmset -g therm` | ThermalZoneInformation counters (no admin), `nvidia-smi` |
 | Battery | `ioreg AppleSmartBattery` | `systeminformation` |
 | Apps | `/Applications`, `~/Applications`, `/System/Applications`; Info.plist; Spotlight (`mdls`) for last used | Uninstall registry keys (HKLM, WOW6432Node, HKCU) + `Get-AppxPackage` |
 | Startup | System Events login items, LaunchAgents/LaunchDaemons, `launchctl enable/disable` | Run keys + StartupApproved (what Task Manager uses), Startup folders, `schtasks` |
@@ -57,7 +57,8 @@ build/make-icon.py     regenerates icon.png and the menu-bar template images
 ## Tests
 
 ```bash
-npm test                         # 21 parser/grouping/focus/checkup checks (Node only)
+npm test                         # 23 parser/grouping/focus/checkup/crash-guard checks (Node only)
+VITALS_PWSH=pwsh node test/ps-runner.js   # the Windows PowerShell runner against a real PowerShell
 test/e2e/run.sh                  # Linux + Xvfb: drives every page, 19 checks, screenshots in test/e2e/out
 VITALS_DEMO=1 test/e2e/run.sh    # same, pretending to be a Mac with sensors, apps, startup items and permissions
 ```

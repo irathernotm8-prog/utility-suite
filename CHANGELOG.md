@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-23 11:29 — **Vitals 0.1.1** — Fixes the crash on launch on Mac (app icons are now read safely) and the empty Overview on Windows (readings no longer wait on PowerShell, and a stuck command can't freeze them). Temperature sensors now run in their own process.
 - 2026-10-23 10:52 — **Touchline 0.1.0** (224 new) — Added to the Utility Package
 - 2026-10-23 09:42 — **Vitals 0.1.0** — First release: a better task manager and system dashboard. Live CPU, memory pressure, GPU, temperatures, network and disk; every app with its helpers grouped, with Quit and Force quit; installed apps with size, last used and uninstall (Mac moves leftovers to the Trash too); startup items you can switch off; which apps can use your camera, microphone, screen and files; time and focus tracking with a focus score; specs; and a Checkup with a PDF report.
 - 2026-10-23 09:42 — **Vitals 0.1.0** (29 new) — Added to the Utility Package

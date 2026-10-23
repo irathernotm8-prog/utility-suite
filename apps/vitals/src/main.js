@@ -8,7 +8,7 @@ const os = require('os');
 if (process.env.VITALS_USER_DATA) app.setPath('userData', process.env.VITALS_USER_DATA);
 if (!app.requestSingleInstanceLock()) { app.exit(0); }
 
-const { Sampler } = require('./sys/metrics');
+const { Sampler, stopTempWorker } = require('./sys/metrics');
 const processes = require('./sys/processes');
 const apps = require('./sys/apps');
 const startup = require('./sys/startup');
@@ -16,7 +16,8 @@ const perms = require('./sys/perms');
 const specs = require('./sys/specs');
 const checkup = require('./sys/checkup');
 const { FocusTracker } = require('./sys/focus');
-const { stopShells } = require('./sys/run');
+const { stopShells, withTimeout, run: runCmd } = require('./sys/run');
+const crypto = require('crypto');
 const { reportHtml } = require('./report');
 
 const isMac = process.platform === 'darwin';
@@ -54,7 +55,7 @@ let procSubs = 0, lastProcs = null, procBusy = false;
 const wantProcs = () => procSubs > 0 && win && win.isVisible();
 async function pushProcs() {
   if (procBusy) return; procBusy = true;
-  try { lastProcs = await processes.snapshot(); send('procs', lastProcs); } catch (_) {} finally { procBusy = false; }
+  try { const p = await withTimeout(processes.snapshot(), 25000, null); if (p) { lastProcs = p; send('procs', lastProcs); } } catch (_) {} finally { procBusy = false; }
 }
 let hotSince = 0, hotNotified = 0;
 function hotWatch(s) {
@@ -99,15 +100,40 @@ async function sizeInBackground() {
   kv.set('appSizes', sizes); sizing = false;
 }
 
-// ---------------------------------------------------------------- icons (one at a time; macOS can crash on bursts of getFileIcon)
+// ---------------------------------------------------------------- icons
+// macOS: app.getFileIcon crashes Electron 44 (a CHECK on a worker thread — the same crash Fresh Desk hit), so on a Mac
+// we read the bundle's .icns with plutil + sips and cache the PNG. Windows uses getFileIcon, which is fine there.
 const iconCache = new Map(); let iconChain = Promise.resolve();
+function macBundle(p) { const i = String(p).indexOf('.app/'); return i >= 0 ? p.slice(0, i + 4) : (/\.app$/i.test(p) ? p : null); }
+async function macAppIcon(appPath) {
+  const st = fs.statSync(appPath);
+  const dir = file('app-icons'); fs.mkdirSync(dir, { recursive: true });
+  const out = path.join(dir, crypto.createHash('sha1').update(`${appPath}|${st.mtimeMs}`).digest('hex') + '.png');
+  if (!fs.existsSync(out)) {
+    const plist = path.join(appPath, 'Contents', 'Info.plist');
+    let name = (await runCmd('/usr/bin/plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', plist], { timeout: 5000 })).stdout.trim();
+    if (!name) return null;
+    if (!/\.icns$/i.test(name)) name += '.icns';
+    const icns = path.join(appPath, 'Contents', 'Resources', name);
+    if (!fs.existsSync(icns)) return null;
+    await runCmd('/usr/bin/sips', ['-s', 'format', 'png', '-Z', '64', icns, '--out', out], { timeout: 10000 });
+  }
+  const img = nativeImage.createFromPath(out);
+  return img.isEmpty() ? null : img.toDataURL();
+}
 function iconFor(p) {
   if (!p) return Promise.resolve(null);
+  if (isMac) { const b = macBundle(p); if (!b) return Promise.resolve(null); p = b; }
   if (iconCache.has(p)) return Promise.resolve(iconCache.get(p));
   const job = iconChain.then(async () => {
     if (iconCache.has(p)) return iconCache.get(p);
     let url = null;
-    try { if (fs.existsSync(p)) { const img = await app.getFileIcon(p, { size: isMac ? 'large' : 'normal' }); if (img && !img.isEmpty()) url = img.resize({ width: 64, height: 64, quality: 'best' }).toDataURL(); } } catch (_) {}
+    try {
+      if (fs.existsSync(p)) {
+        if (isMac) url = await macAppIcon(p);
+        else { const img = await app.getFileIcon(p, { size: 'normal' }); if (img && !img.isEmpty()) url = img.resize({ width: 64, height: 64, quality: 'best' }).toDataURL(); }
+      }
+    } catch (_) {}
     iconCache.set(p, url); return url;
   });
   iconChain = job.catch(() => null);
@@ -250,7 +276,6 @@ app.on('second-instance', showWindow);
 app.whenReady().then(() => {
   nativeTheme.themeSource = settings().theme;
   registerIpc(); menu();
-  try { if (process.platform === 'win32') require('systeminformation').powerShellStart(); } catch (_) {}
   sampler.interval = settings().interval; sampler.start();
   focus.start();
   powerMonitor.on('lock-screen', () => focus.setLocked(true));
@@ -263,5 +288,5 @@ app.whenReady().then(() => {
   if (process.env.VITALS_E2E) require(process.env.VITALS_E2E)({ win, app, sampler, focus, settings, saveSettings, kv });
   app.on('activate', showWindow);
 });
-app.on('before-quit', () => { quitting = true; try { focus.stop(); } catch (_) {} sampler.stop(); stopShells(); try { if (process.platform === 'win32') require('systeminformation').powerShellRelease(); } catch (_) {} });
+app.on('before-quit', () => { quitting = true; try { focus.stop(); } catch (_) {} sampler.stop(); stopShells(); stopTempWorker(); });
 app.on('window-all-closed', () => { if (!settings().keepRunning && !isMac) app.quit(); });

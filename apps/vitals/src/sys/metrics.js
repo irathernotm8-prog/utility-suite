@@ -3,17 +3,39 @@
 'use strict';
 const os = require('os');
 const fs = require('fs');
-const { run, out, ps, psJson, isMac, isWin } = require('./run');
+const { run, out, ps, psJson, isMac, isWin, withTimeout } = require('./run');
 const P = require('./parse');
 
 let si = null; try { si = require('systeminformation'); } catch (_) {}
-let macTemp = null;
-function macTempSensor() {
-  if (macTemp !== null) return macTemp;
-  macTemp = false;
-  if (isMac && process.arch === 'arm64') { try { macTemp = require('macos-temperature-sensor'); macTemp.temperature(); } catch (_) { macTemp = false; } }
-  return macTemp;
+// The native sensor module runs in a child process (see temp-worker.js): if it ever misbehaves, only the child dies.
+const tempWorker = { child: null, fails: 0, pending: null, buf: '' };
+function readMacSensors() {
+  if (!isMac || process.arch !== 'arm64' || tempWorker.fails >= 3) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    if (!tempWorker.child) {
+      try {
+        const { fork } = require('child_process');
+        const c = fork(require('path').join(__dirname, 'temp-worker.js'), [], { stdio: ['pipe', 'pipe', 'ignore', 'ipc'] });
+        c.stdout.setEncoding('utf8');
+        c.stdout.on('data', (d) => {
+          tempWorker.buf += d; let i;
+          while ((i = tempWorker.buf.indexOf('\n')) >= 0) {
+            const line = tempWorker.buf.slice(0, i); tempWorker.buf = tempWorker.buf.slice(i + 1);
+            const p = tempWorker.pending; tempWorker.pending = null;
+            if (p) { clearTimeout(p.timer); try { const j = JSON.parse(line); if (!j.ok) tempWorker.fails = 3; p.resolve(j.ok ? j : null); } catch { p.resolve(null); } }
+          }
+        });
+        c.on('exit', () => { tempWorker.child = null; tempWorker.fails++; const p = tempWorker.pending; tempWorker.pending = null; if (p) { clearTimeout(p.timer); p.resolve(null); } });
+        c.on('error', () => {});
+        tempWorker.child = c;
+      } catch (_) { tempWorker.fails = 3; return resolve(null); }
+    }
+    if (tempWorker.pending) return resolve(null);
+    tempWorker.pending = { resolve, timer: setTimeout(() => { const p = tempWorker.pending; tempWorker.pending = null; if (p) p.resolve(null); }, 4000) };
+    try { tempWorker.child.stdin.write('r\n'); } catch (_) { const p = tempWorker.pending; tempWorker.pending = null; clearTimeout(p.timer); resolve(null); }
+  });
 }
+function stopTempWorker() { try { tempWorker.child && tempWorker.child.kill(); } catch (_) {} tempWorker.child = null; }
 
 // ------------------------------------------------------------------ CPU
 let lastTimes = null;
@@ -53,12 +75,18 @@ async function memSample() {
     return { total, used, app: Math.max(0, used - (mi.Shmem || 0)), wired: mi.Unevictable || 0, compressed: 0, cached, free: avail, available: avail,
       swap: { total: mi.SwapTotal || 0, used: (mi.SwapTotal || 0) - (mi.SwapFree || 0) }, pressure: used / total > .92 ? 'critical' : used / total > .8 ? 'warning' : 'normal', pct: used / total * 100 };
   }
-  // Windows
+  // Windows: instant numbers from Node; the page file is refreshed in the background (winSwap)
   const free = os.freemem(); const used = total - free;
-  let swap = { total: 0, used: 0 }, cached = 0, committed = null, commitLimit = null;
-  if (si) { try { const m = await si.mem(); swap = { total: m.swaptotal, used: m.swapused }; cached = m.buffcache || 0; } catch (_) {} }
-  return { total, used, app: used, wired: 0, compressed: 0, cached, free, available: free, swap, committed, commitLimit,
+  const swap = winSwapCache || { total: 0, used: 0 }, cached = 0;
+  return { total, used, app: used, wired: 0, compressed: 0, cached, free, available: free, swap,
     pressure: used / total > .92 ? 'critical' : used / total > .82 ? 'warning' : 'normal', pct: used / total * 100 };
+}
+
+let winSwapCache = null;
+async function winSwap() {
+  const r = await psJson(`Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue | Select-Object AllocatedBaseSize, CurrentUsage`, { shell: 'slow', timeout: 15000 });
+  if (r.length) winSwapCache = { total: r.reduce((a, x) => a + (+x.AllocatedBaseSize || 0), 0) * 1048576, used: r.reduce((a, x) => a + (+x.CurrentUsage || 0), 0) * 1048576 };
+  return winSwapCache;
 }
 
 // ------------------------------------------------------------------ GPU
@@ -80,7 +108,7 @@ async function gpuSample() {
   }
   const nv = await nvidiaSmi(); if (nv) return nv;
   if (isWin) {
-    const r = await ps(`$e = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*engtype_3D*' }; if ($e) { ($e | Measure-Object -Property UtilizationPercentage -Sum).Sum } else { '' }`, { shell: 'slow', timeout: 8000 });
+    const r = await ps(`$e = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*engtype_3D*' }; if ($e) { ($e | Measure-Object -Property UtilizationPercentage -Sum).Sum } else { '' }`, { shell: 'slow', timeout: 15000 });
     const v = parseFloat(r.stdout); return { util: isNaN(v) ? null : Math.min(100, v) };
   }
   return { util: null };
@@ -89,6 +117,12 @@ async function gpuSample() {
 // ------------------------------------------------------------------ network & disk activity
 let lastNet = null;
 async function netSample() {
+  if (isWin) {
+    const r = await psJson(`Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction SilentlyContinue | Select-Object Name, BytesReceivedPersec, BytesSentPersec`, { shell: 'slow', timeout: 15000 });
+    let rx = 0, tx = 0;
+    for (const x of r) { if (/loopback|isatap|teredo|vEthernet|pseudo|Hyper-V/i.test(x.Name || '')) continue; rx += +x.BytesReceivedPersec || 0; tx += +x.BytesSentPersec || 0; }
+    lastNet = { rx, tx }; return lastNet;
+  }
   if (!si) return { rx: 0, tx: 0 };
   try {
     const stats = await si.networkStats('*');
@@ -102,7 +136,7 @@ async function netSample() {
 let lastDisk = null;
 async function diskSample() {
   if (isWin) {
-    const d = (await psJson(`Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction SilentlyContinue | Select-Object DiskReadBytesPersec, DiskWriteBytesPersec, PercentDiskTime`, { shell: 'slow', timeout: 6000 }))[0];
+    const d = (await psJson(`Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction SilentlyContinue | Select-Object DiskReadBytesPersec, DiskWriteBytesPersec, PercentDiskTime`, { shell: 'slow', timeout: 15000 }))[0];
     if (d) { lastDisk = { read: +d.DiskReadBytesPersec || 0, write: +d.DiskWriteBytesPersec || 0, busy: Math.min(100, +d.PercentDiskTime || 0) }; }
     return lastDisk || { read: 0, write: 0 };
   }
@@ -137,23 +171,19 @@ async function batterySample() {
 async function thermalSample(electronThermal) {
   const r = { cpu: null, gpu: null, soc: null, cores: [], fans: [], state: electronThermal || null, zones: [], speedLimit: null, source: null };
   if (isMac) {
-    const s = macTempSensor();
-    if (s) {
-      try { const t = s.temperature(); r.cpu = t.cpu; r.gpu = t.gpu; r.soc = t.soc > 0 ? t.soc : null; r.cores = t.cpuDieTemps || []; r.source = 'sensors'; } catch (_) {}
-      try { r.fans = (s.fans() || []).map((f) => ({ label: f.label, rpm: f.rpm, min: f.min, max: f.max, pct: f.pwm })); } catch (_) {}
-    }
-    if (r.cpu == null && si) { try { const t = await si.cpuTemperature(); if (t.main > 0) { r.cpu = t.main; r.cores = t.cores || []; r.source = 'sensors'; } } catch (_) {} }
+    const w = await readMacSensors();
+    if (w && w.t) { const t = w.t; r.cpu = t.cpu; r.gpu = t.gpu; r.soc = t.soc > 0 ? t.soc : null; r.cores = t.cpuDieTemps || []; r.source = 'sensors'; }
+    if (w && w.f) r.fans = w.f.map((f) => ({ label: f.label, rpm: f.rpm, min: f.min, max: f.max, pct: f.pwm }));
     const th = P.parsePmsetTherm(await out('pmset', ['-g', 'therm'], { timeout: 3000 })); r.speedLimit = th.speedLimit;
     return r;
   }
   if (isWin) {
     // ThermalZoneInformation is readable without admin (tenths of a kelvin)
-    const z = await psJson(`Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction SilentlyContinue | Select-Object Name, HighPrecisionTemperature, Temperature, PercentPassiveLimit, ThrottleReasons`, { shell: 'slow', timeout: 8000 });
+    const z = await psJson(`Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction SilentlyContinue | Select-Object Name, HighPrecisionTemperature, Temperature, PercentPassiveLimit, ThrottleReasons`, { shell: 'slow', timeout: 15000 });
     r.zones = z.map((x) => ({ name: String(x.Name || '').replace(/^\\_TZ\./, ''), temp: x.HighPrecisionTemperature ? x.HighPrecisionTemperature / 10 - 273.15 : x.Temperature ? x.Temperature - 273.15 : null, limit: x.PercentPassiveLimit, throttle: x.ThrottleReasons }))
       .filter((x) => x.temp != null && x.temp > 5 && x.temp < 130);
     if (r.zones.length) { r.cpu = Math.max(...r.zones.map((x) => x.temp)); r.source = 'acpi'; const lim = Math.min(...r.zones.map((x) => x.limit ?? 100)); r.speedLimit = lim < 100 ? lim : 100; }
     const nv = await nvidiaSmi(); if (nv) { r.gpu = nv.temp; if (nv.fan != null) r.fans.push({ label: 'GPU fan', pct: nv.fan }); }
-    if (r.cpu == null && si) { try { const t = await si.cpuTemperature(); if (t.main > 0) { r.cpu = t.main; r.cores = t.cores || []; r.source = 'wmi'; } } catch (_) {} }
     return r;
   }
   if (si) { try { const t = await si.cpuTemperature(); if (t.main > 0) { r.cpu = t.main; r.cores = (t.cores || []).filter((x) => x > 0); r.source = 'sensors'; } } catch (_) {} }
@@ -188,7 +218,7 @@ class Sampler {
     this.onTick = onTick; this.getThermalState = getThermalState || (() => null); this.historyLen = historyLen;
     this.interval = 2000; this.timer = null; this.running = false; this.last = null; this.n = 0;
     this.history = { cpu: [], mem: [], gpu: [], rx: [], tx: [], read: [], write: [], temp: [], t: [] };
-    this.slow = { battery: null, thermal: null, volumes: null, gpu: null };
+    this.slow = {}; this.jobs = {};
     this.wantFast = true;
   }
   setInterval(ms) { this.interval = Math.max(1000, ms | 0); if (this.running) { this.stop(); this.start(); } }
@@ -200,20 +230,33 @@ class Sampler {
     try { await this.tick(); } catch (e) { /* keep going */ }
     this.timer = setTimeout(() => this.loop(), Math.max(250, this.interval - (Date.now() - t0)));
   }
+  /** Start a background collector if it's due and not already running; its latest result lands in this.slow[key]. */
+  refresh(key, fn, everyTicks, timeoutMs, n) {
+    const st = this.jobs[key] || (this.jobs[key] = { busy: false, last: -1e9 });
+    if (st.busy || (n - st.last < everyTicks && this.slow[key] !== undefined)) return;
+    st.busy = true; st.last = n;
+    withTimeout(fn(), timeoutMs, undefined).then((v) => { if (v !== undefined) this.slow[key] = v; }).finally(() => { st.busy = false; });
+  }
   async tick() {
     const n = this.n++;
     const cpu = cpuSample();
-    const jobs = [memSample(), netSample(), diskSample(), gpuSample().catch(() => ({ util: null }))];
-    if (n % 15 === 0 || !this.slow.battery) jobs.push(batterySample().then((b) => { this.slow.battery = b; }));
-    if (n % 3 === 0 || !this.slow.thermal) jobs.push(thermalSample(this.getThermalState()).then((t) => { this.slow.thermal = t; }));
-    if (n % 30 === 0 || !this.slow.volumes) jobs.push(volumes().then((v) => { this.slow.volumes = v; }));
-    const [mem, net, disk, gpu] = await Promise.all(jobs);
-    const s = { t: Date.now(), cpu, mem, net, disk, gpu, battery: this.slow.battery, thermal: { ...(this.slow.thermal || {}), state: this.getThermalState() || (this.slow.thermal || {}).state }, volumes: this.slow.volumes, uptime: os.uptime() };
+    // Only memory is awaited (it is quick everywhere); everything else updates in the background so one slow or
+    // stuck system command can never stop the readings.
+    const mem = await withTimeout(memSample(), 3000, this.last ? this.last.mem : { total: os.totalmem(), used: os.totalmem() - os.freemem(), free: os.freemem(), pct: (1 - os.freemem() / os.totalmem()) * 100, pressure: 'normal', swap: { total: 0, used: 0 } });
+    this.refresh('net', netSample, 1, 15000, n);
+    this.refresh('disk', diskSample, 1, 15000, n);
+    this.refresh('gpu', () => gpuSample().catch(() => ({ util: null })), 1, 15000, n);
+    this.refresh('battery', batterySample, 15, 20000, n);
+    this.refresh('thermal', () => thermalSample(this.getThermalState()), 3, 20000, n);
+    this.refresh('volumes', volumes, 30, 30000, n);
+    if (isWin) this.refresh('swap', winSwap, 15, 20000, n);
+    const net = this.slow.net || { rx: 0, tx: 0 }, disk = this.slow.disk || { read: 0, write: 0 }, gpu = this.slow.gpu || { util: null };
+    const s = { t: Date.now(), cpu, mem, net, disk, gpu, battery: this.slow.battery || null, thermal: { ...(this.slow.thermal || {}), state: this.getThermalState() || (this.slow.thermal || {}).state || null }, volumes: this.slow.volumes || [], uptime: os.uptime() };
     const H = this.history; const push = (k, v) => { H[k].push(v); if (H[k].length > this.historyLen) H[k].shift(); };
     push('t', s.t); push('cpu', cpu.total); push('mem', mem.pct); push('gpu', gpu.util); push('rx', net.rx); push('tx', net.tx); push('read', disk.read); push('write', disk.write); push('temp', s.thermal.cpu ?? null);
     this.last = s;
-    this.onTick && this.onTick(s);
+    try { this.onTick && this.onTick(s); } catch (_) {}
   }
 }
 
-module.exports = { Sampler, cpuSample, memSample, gpuSample, batterySample, thermalSample, volumes, nvidiaSmi };
+module.exports = { stopTempWorker, Sampler, cpuSample, memSample, gpuSample, batterySample, thermalSample, volumes, nvidiaSmi };

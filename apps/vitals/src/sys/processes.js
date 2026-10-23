@@ -1,6 +1,7 @@
 // The process list, grouped into apps, plus quitting them.
 'use strict';
-const { run, out, ps, isMac, isWin } = require('./run');
+const { run, out, ps, psJson, isMac, isWin } = require('./run');
+const os = require('os');
 const P = require('./parse');
 let si = null; try { si = require('systeminformation'); } catch (_) {}
 
@@ -18,9 +19,29 @@ async function rawProcesses() {
     if (cache.topMem.size) for (const p of list) { const f = cache.topMem.get(p.pid); if (f != null) p.mem = f; }
     return list;
   }
+  if (isWin) return winProcesses();
   if (!si) return [];
   const r = await si.processes();
   return (r.list || []).map((p) => ({ pid: p.pid, ppid: p.parentPid, cpu: p.cpu || 0, mem: (p.memRss || 0) * 1024, user: p.user || '', path: isWin ? (p.path || '') : (p.path ? (p.path + '/' + p.name).replace(/\/\/+/g, '/') : ''), name: p.name, command: p.command || '', started: p.started, state: p.state }));
+}
+
+// Windows: one CIM query in Vitals' own PowerShell; CPU % comes from the change in kernel+user time between snapshots
+// (100% = one full core, like Activity Monitor and ps).
+const winPrev = { t: 0, times: new Map() };
+async function winProcesses() {
+  const rows = await psJson(`Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, WorkingSetSize, KernelModeTime, UserModeTime`, { shell: 'procs', timeout: 20000 });
+  if (!rows.length) return winPrev.list || [];
+  const now = Date.now(); const dt = winPrev.t ? (now - winPrev.t) * 1e4 : 0; // in 100-ns units
+  const times = new Map(); const list = [];
+  for (const r of rows) {
+    const pid = +r.ProcessId; if (!pid) continue;
+    const tm = (+r.KernelModeTime || 0) + (+r.UserModeTime || 0); times.set(pid, tm);
+    const prev = winPrev.times.get(pid);
+    const cpu = dt > 0 && prev != null ? Math.max(0, Math.min(os.cpus().length * 100, (tm - prev) / dt * 100)) : 0;
+    list.push({ pid, ppid: +r.ParentProcessId || 0, name: r.Name || '', path: r.ExecutablePath || '', mem: +r.WorkingSetSize || 0, cpu, user: '' });
+  }
+  winPrev.t = now; winPrev.times = times; winPrev.list = list;
+  return list;
 }
 
 async function refreshContext() {

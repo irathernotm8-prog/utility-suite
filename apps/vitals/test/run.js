@@ -225,4 +225,12 @@ t('report renders', () => {
   const html = reportHtml({ specs: { model: 'MacBook Air', cpu: { name: 'Apple M2', cores: 8, threads: 8 }, memory: { total: 8e9 }, gpus: [], os: { name: 'macOS', version: '26.1' } }, sample: { cpu: { total: 12 }, mem: { used: 5e9, total: 8e9, pressure: 'normal' }, volumes: [] }, checkup: { score: 88, findings: [{ level: 'ok', title: 'Fine', detail: '' }] }, procs: [{ name: '<b>x</b>', mem: 1e9, cpu: 3 }], startup: [], focus: [], version: '0.1.0' });
   assert(html.includes('MacBook Air')); assert(html.includes('&lt;b&gt;x&lt;/b&gt;'));
 });
+t('macOS never calls app.getFileIcon (it crashes Electron 44 on a Mac)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../src/main.js'), 'utf8');
+  const calls = src.split('\n').filter((l) => /app\.getFileIcon\(/.test(l));
+  assert.equal(calls.length, 1); assert(/if \(isMac\) url = await macAppIcon\(p\);\s*$/.test(src.split('\n')[src.split('\n').indexOf(calls[0]) - 1]), 'getFileIcon must sit in the non-Mac branch');
+});
+t('the native temperature module only loads in its worker', () => {
+  for (const f of ['main.js', 'sys/metrics.js']) assert(!/require\('macos-temperature-sensor'\)/.test(fs.readFileSync(path.join(__dirname, '../src', f), 'utf8')), f);
+});
 console.log(`\n${n - failed}/${n} checks passed`); process.exit(failed ? 1 : 0);

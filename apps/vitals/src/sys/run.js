@@ -51,19 +51,26 @@ class PowerShell {
   constructor(name = 'ps') { this.name = name; this.queue = []; this.busy = false; this.child = null; this.buf = ''; this.seq = 0; this.cur = null; }
   start() {
     if (this.child) return;
-    this.child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-InputFormat', 'Text', '-NoExit', '-Command', '-'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    this.child.stdout.setEncoding('utf8');
-    this.child.stdout.on('data', (d) => this.onData(d));
-    this.child.stderr.on('data', () => {});
-    this.child.on('exit', () => { this.child = null; if (this.cur) { this.finish({ ok: false, stdout: this.buf, error: 'PowerShell exited' }); } });
-    this.child.on('error', () => { this.child = null; });
-    this.child.stdin.write('[Console]::OutputEncoding = [Text.Encoding]::UTF8; $ProgressPreference = "SilentlyContinue"; $ErrorActionPreference = "Continue"\n');
+    const c = spawn(process.env.VITALS_PWSH || 'powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-InputFormat', 'Text', '-NoExit', '-Command', '-'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    this.child = c;
+    c.stdout.setEncoding('utf8');
+    // every handler checks it still belongs to the current shell: a shell killed after a timeout must not touch its replacement
+    c.stdout.on('data', (d) => { if (this.child === c) this.onData(d); });
+    c.stderr.on('data', () => {});
+    c.stdin.on('error', () => {});
+    c.on('exit', () => { if (this.child !== c) return; this.child = null; if (this.cur) this.finish({ ok: false, stdout: '', error: 'PowerShell exited' }); });
+    c.on('error', () => { if (this.child !== c) return; this.child = null; if (this.cur) this.finish({ ok: false, stdout: '', error: 'PowerShell unavailable' }); });
+    c.stdin.write('[Console]::OutputEncoding = [Text.Encoding]::UTF8; $ProgressPreference = "SilentlyContinue"; $ErrorActionPreference = "Continue"\n');
   }
   onData(d) {
     if (!this.cur) return;
     this.buf += d;
     const i = this.buf.indexOf(this.cur.marker);
-    if (i >= 0) { const text = this.buf.slice(0, i); this.buf = ''; this.finish({ ok: !/^__VERR__/m.test(text), stdout: text.replace(/^__VERR__.*$/m, '').replace(/\r/g, '') }); }
+    if (i >= 0) {
+      let text = this.buf.slice(0, i); this.buf = '';
+      const b = text.indexOf(this.cur.begin); if (b >= 0) text = text.slice(b + this.cur.begin.length);
+      text = text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ''); this.finish({ ok: !/^__VERR__/m.test(text), stdout: text.replace(/^__VERR__.*$/m, '').replace(/\r/g, '').replace(/^\n/, '') });
+    }
   }
   finish(r) { const c = this.cur; this.cur = null; this.busy = false; if (c) { clearTimeout(c.timer); c.resolve(r); } this.next(); }
   exec(script, { timeout = 20000 } = {}) {
@@ -74,14 +81,15 @@ class PowerShell {
     this.start();
     if (!this.child) { const q = this.queue.shift(); q.resolve({ ok: false, stdout: '', error: 'PowerShell unavailable' }); return this.next(); }
     const job = this.queue.shift(); this.busy = true;
-    const marker = `__VEND_${++this.seq}__`;
+    const marker = `__VEND_${++this.seq}__`; const begin = `__VBEGIN_${this.seq}__`;
     const b64 = Buffer.from(job.script, 'utf8').toString('base64');
-    this.cur = { marker, resolve: job.resolve, timer: setTimeout(() => { this.kill(); }, job.timeout) };
+    this.cur = { marker, begin, resolve: job.resolve, timer: setTimeout(() => { this.kill(); }, job.timeout) };
     this.buf = '';
-    this.child.stdin.write(`try { Invoke-Expression ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}'))) | Out-String -Width 4096 | Write-Output } catch { Write-Output ("__VERR__ " + $_) }; Write-Output '${marker}'\n`);
+    // Write results straight to stdout (no Out-String/host formatting, which can wrap long JSON lines).
+    this.child.stdin.write(`[Console]::Out.WriteLine('${begin}'); try { $__r = Invoke-Expression ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}'))); foreach ($__x in @($__r)) { if ($null -ne $__x) { [Console]::Out.WriteLine([string]$__x) } } } catch { [Console]::Out.WriteLine("__VERR__ " + $_) }; [Console]::Out.WriteLine('${marker}'); [Console]::Out.Flush()\n`);
   }
-  kill() { const c = this.cur; try { this.child && this.child.kill(); } catch (_) {} this.child = null; if (c) { this.cur = null; this.busy = false; clearTimeout(c.timer); c.resolve({ ok: false, stdout: '', error: 'timed out' }); } this.next(); }
-  stop() { this.queue = []; try { this.child && this.child.kill(); } catch (_) {} this.child = null; }
+  kill() { const c = this.cur; const ch = this.child; this.child = null; try { ch && ch.kill(); } catch (_) {} if (c) { this.cur = null; this.busy = false; clearTimeout(c.timer); c.resolve({ ok: false, stdout: '', error: 'timed out' }); } this.next(); }
+  stop() { this.queue = []; const ch = this.child; this.child = null; try { ch && ch.kill(); } catch (_) {} }
 }
 
 const shells = {};
@@ -95,9 +103,14 @@ function ps(script, { shell = 'fast', timeout } = {}) {
 async function psJson(script, opts) {
   const r = await ps(`ConvertTo-Json -Depth 4 -Compress -InputObject @(& { ${script} })`, opts);
   if (!r.ok) return [];
-  const t = r.stdout.trim(); if (!t) return [];
+  const t = (r.stdout.split('\n').find((l) => /^\s*[\[{]/.test(l)) || '').trim(); if (!t) return [];
   try { const v = JSON.parse(t); return Array.isArray(v) ? v : [v]; } catch { return []; }
 }
 function stopShells() { for (const k of Object.keys(shells)) shells[k].stop(); }
 
-module.exports = { run, out, runAdmin, pool, ps, psJson, stopShells, isMac, isWin, PowerShell };
+/** Resolve with fallback if p takes longer than ms (the work keeps going; we just stop waiting). */
+function withTimeout(p, ms, fallback) {
+  let t; return Promise.race([Promise.resolve(p).catch(() => fallback), new Promise((r) => { t = setTimeout(() => r(fallback), ms); })]).finally(() => clearTimeout(t));
+}
+
+module.exports = { withTimeout, run, out, runAdmin, pool, ps, psJson, stopShells, isMac, isWin, PowerShell };
