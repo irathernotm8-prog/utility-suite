@@ -1,0 +1,44 @@
+{
+  "name": "vitals",
+  "productName": "Vitals",
+  "version": "0.1.0",
+  "description": "A better task manager and system dashboard: live CPU, memory, GPU and temperatures, every app and what it uses, uninstalling, startup items, privacy permissions, time and focus tracking, and a one-click checkup.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "systeminformation": "^5.33.16"
+  },
+  "optionalDependencies": {
+    "macos-temperature-sensor": "^2.1.1"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.vitals",
+    "productName": "Vitals",
+    "copyright": "Personal use",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "build/trayTemplate.png", "build/trayTemplate@2x.png", "package.json"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.utilities",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Vitals reads and changes your Login Items through System Events.",
+        "LSUIElement": false
+      }
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

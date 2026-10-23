@@ -147,6 +147,14 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "vitals",
+      "name": "Vitals",
+      "description": "A better task manager and system dashboard: live CPU, memory, GPU and temperatures, every app and what it uses, uninstalling, startup items, privacy permissions, time and focus tracking, and a one-click checkup.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {

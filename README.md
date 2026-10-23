@@ -18,6 +18,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Sideby** | Watch parties with shared playback and room chat | `apps/sideby` |
 | **Slate** | Accounts, retirement, credit and savings in one place | `apps/slate` |
 | **Trace** | Paths, decisions, org charts and folder plans you can trace, with notes and screenshot guides | `apps/trace` |
+| **Vitals** | Task manager and system dashboard: live CPU, memory, GPU and temperatures, apps and uninstalling, startup items, permissions, time and focus, checkup | `apps/vitals` |
 | **Utility Hub** | Installs, updates and removes the apps on each computer | `apps/hub` |
 
 ## How it works
@@ -47,6 +48,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
+| Vitals | its app-data folder (`focus/` holds one small file per day of time tracking) |
 | All apps | their app-data folder (`~/Library/Application Support/<App>`, `%APPDATA%\<App>`) |
 
 ## Commands

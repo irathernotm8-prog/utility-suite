@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Vitals</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="2"/><rect x="3" y="15" width="7.5" height="6" rx="2"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-startup" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M9 12l2 2 4-4.5"/></symbol>
+  <symbol id="i-focus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-therm" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 11v6"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M20.8 11.5A8.8 8.8 0 1 0 12 20.8"/><path d="M3.5 12h4l1.8-3.5 3 7 2-3.5h2.2"/><path d="M17 17l2 2 3.5-4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/></symbol>
+  <symbol id="i-fan" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.6"/><path d="M12 10.4C12 6 13.5 3 16 3.6c2.4.6 1.4 4.6-4 6.8zM13.6 12c4.4 0 7.4 1.5 6.8 4-.6 2.4-4.6 1.4-6.8-4zM12 13.6c0 4.4-1.5 7.4-4 6.8-2.4-.6-1.4-4.6 4-6.8zM10.4 12C6 12 3 10.5 3.6 8c.6-2.4 4.6-1.4 6.8 4z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.8v.1"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10.5l5-3v9l-5-3"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="M8 5v14M4 15l4 4 4-4M16 19V5M12 9l4-4 4 4"/></symbol>
+</svg>
+
+<div id="app">
+  <aside id="side">
+    <div class="side-top"><div class="brand"><span class="brand-mark"></span>Vitals</div></div>
+    <nav class="side-nav" id="nav">
+      <button class="nav-btn on" data-view="overview"><svg class="ic" width="17" height="17"><use href="#i-overview"/></svg><span>Overview</span></button>
+      <button class="nav-btn" data-view="activity"><svg class="ic" width="17" height="17"><use href="#i-activity"/></svg><span>Activity</span><span class="badge" id="nb-activity" hidden></span></button>
+      <button class="nav-btn" data-view="apps"><svg class="ic" width="17" height="17"><use href="#i-apps"/></svg><span>Apps</span><span class="badge" id="nb-apps" hidden></span></button>
+      <button class="nav-btn" data-view="startup"><svg class="ic" width="17" height="17"><use href="#i-startup"/></svg><span>Startup</span><span class="badge" id="nb-startup" hidden></span></button>
+      <button class="nav-btn" data-view="permissions"><svg class="ic" width="17" height="17"><use href="#i-shield"/></svg><span>Permissions</span></button>
+      <div class="side-label">Insight</div>
+      <button class="nav-btn" data-view="focus"><svg class="ic" width="17" height="17"><use href="#i-focus"/></svg><span>Time &amp; Focus</span></button>
+      <button class="nav-btn" data-view="thermals"><svg class="ic" width="17" height="17"><use href="#i-therm"/></svg><span>Thermals &amp; Power</span></button>
+      <button class="nav-btn" data-view="specs"><svg class="ic" width="17" height="17"><use href="#i-chip"/></svg><span id="specs-label">This Mac</span></button>
+      <button class="nav-btn" data-view="checkup"><svg class="ic" width="17" height="17"><use href="#i-pulse"/></svg><span>Checkup</span><span class="badge" id="nb-checkup" hidden></span></button>
+    </nav>
+    <div class="grow"></div>
+    <div class="side-live" id="side-live">
+      <div class="sl-row"><span>CPU</span><canvas class="sl-spark" id="sl-cpu" width="90" height="22"></canvas><b id="sl-cpu-v">–</b></div>
+      <div class="sl-row"><span>Memory</span><canvas class="sl-spark" id="sl-mem" width="90" height="22"></canvas><b id="sl-mem-v">–</b></div>
+      <div class="sl-focus" id="sl-focus"></div>
+    </div>
+    <div class="side-foot">
+      <button class="nav-btn" id="open-settings"><svg class="ic" width="17" height="17"><use href="#i-gear"/></svg><span>Settings</span></button>
+      <button class="icon-btn sm" id="theme-btn" title="Light or dark"><svg class="ic" width="16" height="16"><use href="#i-moon"/></svg></button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <!-- OVERVIEW -->
+    <section class="view on" id="v-overview">
+      <div class="page-bar"><div class="title"><h1 id="ov-title">Overview</h1><span class="muted" id="ov-sub"></span></div><div class="grow"></div>
+        <button class="btn sm" data-go="checkup"><svg class="ic" width="15" height="15"><use href="#i-pulse"/></svg><span id="ov-health">Run checkup</span></button></div>
+      <div class="scroll"><div class="page">
+        <div class="ov-grid">
+          <div class="card gauge-card" data-go="activity:cpu"><div class="card-h"><span>Processor</span><span class="muted small" id="ov-cpu-sub"></span></div>
+            <div class="gauge-row"><canvas class="ring" id="ring-cpu" width="120" height="120"></canvas><div class="gauge-meta"><div class="big" id="ov-cpu">–</div><div class="muted small" id="ov-cpu-split"></div><canvas class="spark" id="sp-cpu" height="44"></canvas></div></div></div>
+          <div class="card gauge-card" data-go="activity:mem"><div class="card-h"><span>Memory</span><span class="pill" id="ov-mem-press"></span></div>
+            <div class="gauge-row"><canvas class="ring" id="ring-mem" width="120" height="120"></canvas><div class="gauge-meta"><div class="big" id="ov-mem">–</div><div class="muted small" id="ov-mem-sub"></div><div class="stackbar" id="ov-mem-bar"></div></div></div></div>
+          <div class="card gauge-card" data-go="thermals"><div class="card-h"><span>Graphics</span><span class="muted small" id="ov-gpu-name"></span></div>
+            <div class="gauge-row"><canvas class="ring" id="ring-gpu" width="120" height="120"></canvas><div class="gauge-meta"><div class="big" id="ov-gpu">–</div><div class="muted small" id="ov-gpu-sub"></div><canvas class="spark" id="sp-gpu" height="44"></canvas></div></div></div>
+          <div class="card gauge-card" data-go="thermals"><div class="card-h"><span>Temperature</span><span class="pill" id="ov-therm-state"></span></div>
+            <div class="gauge-row"><canvas class="ring" id="ring-temp" width="120" height="120"></canvas><div class="gauge-meta"><div class="big" id="ov-temp">–</div><div class="muted small" id="ov-temp-sub"></div><canvas class="spark" id="sp-temp" height="44"></canvas></div></div></div>
+        </div>
+        <div class="ov-grid2">
+          <div class="card"><div class="card-h"><span>Network</span><span class="legend"><i class="lg a"></i>Down <b id="ov-rx">–</b><i class="lg b"></i>Up <b id="ov-tx">–</b></span></div><canvas class="chart" id="ch-net" height="120"></canvas></div>
+          <div class="card"><div class="card-h"><span>Disk activity</span><span class="legend"><i class="lg a"></i>Read <b id="ov-rd">–</b><i class="lg b"></i>Write <b id="ov-wr">–</b></span></div><canvas class="chart" id="ch-disk" height="120"></canvas></div>
+        </div>
+        <div class="ov-grid3">
+          <div class="card"><div class="card-h"><span>Using the most</span><div class="seg" id="ov-top-mode"><button class="on" data-m="mem">Memory</button><button data-m="cpu">CPU</button></div></div><div class="toplist" id="ov-top"></div>
+            <button class="link-btn" data-go="activity">See all activity</button></div>
+          <div class="card"><div class="card-h"><span>Storage</span></div><div id="ov-vols"></div>
+            <div class="card-h mt"><span>Battery</span><span class="muted small" id="ov-bat-sub"></span></div><div id="ov-bat"></div></div>
+          <div class="card"><div class="card-h"><span>Today</span><button class="link-btn" data-go="focus">Time &amp; Focus</button></div><div id="ov-focus"></div></div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section class="view" id="v-activity">
+      <div class="page-bar"><div class="title"><h1>Activity</h1><span class="muted" id="act-sub"></span></div>
+        <div class="search"><svg class="ic" width="15" height="15"><use href="#i-search"/></svg><input id="act-q" placeholder="Search apps and processes"></div>
+        <div class="seg" id="act-kind"><button class="on" data-k="all">All</button><button data-k="app">Apps</button><button data-k="background">Background</button><button data-k="system">System</button></div>
+        <div class="grow"></div>
+        <button class="btn sm" id="act-quit" disabled><svg class="ic" width="15" height="15"><use href="#i-stop"/></svg>Quit</button>
+        <button class="btn sm danger" id="act-force" disabled>Force quit</button>
+      </div>
+      <div class="act-strip" id="act-strip"></div>
+      <div class="table-wrap"><table class="tbl" id="act-tbl"><thead><tr>
+        <th data-s="name" class="col-name">Name</th><th data-s="kind" class="col-kind">Kind</th><th data-s="count" class="num col-n">Processes</th><th data-s="cpu" class="num col-cpu">CPU</th><th data-s="mem" class="num col-mem">Memory</th><th class="col-bar"></th>
+      </tr></thead><tbody id="act-body"></tbody></table></div>
+    </section>
+
+    <!-- APPS -->
+    <section class="view" id="v-apps">
+      <div class="page-bar"><div class="title"><h1>Apps</h1><span class="muted" id="apps-sub"></span></div>
+        <div class="search"><svg class="ic" width="15" height="15"><use href="#i-search"/></svg><input id="apps-q" placeholder="Search installed apps"></div>
+        <div class="seg" id="apps-filter"><button class="on" data-f="all">All</button><button data-f="unused">Not used lately</button><button data-f="big">Largest</button><button data-f="system">System</button></div>
+        <div class="grow"></div>
+        <button class="icon-btn" id="apps-refresh" title="Refresh"><svg class="ic" width="16" height="16"><use href="#i-reload"/></svg></button>
+      </div>
+      <div class="table-wrap"><table class="tbl" id="apps-tbl"><thead><tr>
+        <th data-s="name" class="col-name">Name</th><th data-s="version" class="col-ver">Version</th><th data-s="size" class="num col-size">Size</th><th data-s="lastUsed" class="col-date">Last used</th><th data-s="installed" class="col-date">Installed</th><th class="col-act"></th>
+      </tr></thead><tbody id="apps-body"></tbody></table><div class="empty" id="apps-empty" hidden></div></div>
+    </section>
+
+    <!-- STARTUP -->
+    <section class="view" id="v-startup">
+      <div class="page-bar"><div class="title"><h1>Startup &amp; background</h1><span class="muted" id="st-sub"></span></div>
+        <div class="search"><svg class="ic" width="15" height="15"><use href="#i-search"/></svg><input id="st-q" placeholder="Search"></div>
+        <div class="seg" id="st-filter"><button class="on" data-f="all">All</button><button data-f="on">On</button><button data-f="off">Off</button><button data-f="broken">Broken</button></div>
+        <label class="chk"><input type="checkbox" id="st-apple"> <span id="st-apple-l">Show Apple’s</span></label>
+        <div class="grow"></div>
+        <button class="btn sm" id="st-os"><svg class="ic" width="15" height="15"><use href="#i-ext"/></svg><span id="st-os-l">Login Items settings</span></button>
+        <button class="icon-btn" id="st-refresh" title="Refresh"><svg class="ic" width="16" height="16"><use href="#i-reload"/></svg></button>
+      </div>
+      <div class="banner" id="st-banner" hidden></div>
+      <div class="scroll"><div class="page narrow" id="st-list"></div></div>
+    </section>
+
+    <!-- PERMISSIONS -->
+    <section class="view" id="v-permissions">
+      <div class="page-bar"><div class="title"><h1>Permissions</h1><span class="muted" id="pm-sub"></span></div>
+        <div class="search"><svg class="ic" width="15" height="15"><use href="#i-search"/></svg><input id="pm-q" placeholder="Search apps"></div>
+        <div class="seg" id="pm-by"><button class="on" data-b="perm">By permission</button><button data-b="app">By app</button></div>
+        <div class="grow"></div>
+        <button class="icon-btn" id="pm-refresh" title="Refresh"><svg class="ic" width="16" height="16"><use href="#i-reload"/></svg></button>
+      </div>
+      <div class="scroll"><div class="page narrow" id="pm-list"></div></div>
+    </section>
+
+    <!-- FOCUS -->
+    <section class="view" id="v-focus">
+      <div class="page-bar"><div class="title"><h1>Time &amp; Focus</h1><span class="muted" id="fx-sub"></span></div>
+        <div class="seg" id="fx-range"><button class="on" data-d="1">Today</button><button data-d="7">7 days</button><button data-d="30">30 days</button></div>
+        <div class="grow"></div>
+        <button class="btn sm" id="fx-pause"><svg class="ic" width="15" height="15"><use href="#i-pause"/></svg><span>Pause tracking</span></button>
+      </div>
+      <div class="scroll"><div class="page" id="fx-page"></div></div>
+    </section>
+
+    <!-- THERMALS -->
+    <section class="view" id="v-thermals">
+      <div class="page-bar"><div class="title"><h1>Thermals &amp; Power</h1><span class="muted" id="th-sub"></span></div><div class="grow"></div></div>
+      <div class="scroll"><div class="page" id="th-page"></div></div>
+    </section>
+
+    <!-- SPECS -->
+    <section class="view" id="v-specs">
+      <div class="page-bar"><div class="title"><h1 id="sp-title">This Mac</h1></div><div class="grow"></div>
+        <button class="btn sm" id="sp-copy">Copy specs</button></div>
+      <div class="scroll"><div class="page" id="sp-page"><div class="loading">Reading hardware…</div></div></div>
+    </section>
+
+    <!-- CHECKUP -->
+    <section class="view" id="v-checkup">
+      <div class="page-bar"><div class="title"><h1>Checkup</h1><span class="muted" id="ck-sub"></span></div><div class="grow"></div>
+        <button class="btn sm" id="ck-run"><svg class="ic" width="15" height="15"><use href="#i-reload"/></svg>Run again</button>
+        <button class="btn sm primary" id="ck-report"><svg class="ic" width="15" height="15"><use href="#i-doc"/></svg>Save report</button></div>
+      <div class="scroll"><div class="page narrow" id="ck-page"><div class="loading">Checking…</div></div></div>
+    </section>
+  </main>
+</div>
+
+<div class="drawer" id="drawer" hidden><div class="drawer-in" id="drawer-in"></div></div>
+<div class="modal-back" id="modal" hidden><div class="modal" id="modal-in"></div></div>
+<div class="tip" id="tip" hidden></div>
+<div class="toasts" id="toasts"></div>
+
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

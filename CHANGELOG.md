@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-23 09:42 — **Vitals 0.1.0** — First release: a better task manager and system dashboard. Live CPU, memory pressure, GPU, temperatures, network and disk; every app with its helpers grouped, with Quit and Force quit; installed apps with size, last used and uninstall (Mac moves leftovers to the Trash too); startup items you can switch off; which apps can use your camera, microphone, screen and files; time and focus tracking with a focus score; specs; and a Checkup with a PDF report.
+- 2026-10-23 09:42 — **Vitals 0.1.0** (29 new) — Added to the Utility Package
 - 2026-10-22 14:29 — **Glean 0.1.0** — First release: a signed-in browser that collects every photo and video from Instagram, Facebook, Patreon, X or any site at full size, grouped by post with captions and dates. Auto-scroll, batch links, organized folders with captions.csv, WebP saved as JPG, a library with Check for new, and contact-sheet PDFs for clients.
 - 2026-10-22 14:29 — **Glean 0.1.0** (52 new) — Added to the Utility Package
 - 2026-10-21 13:23 — **Lumen 0.7.0** — GA4 in depth: channels with new vs returning, cities, key events, landing pages; top ads by any metric

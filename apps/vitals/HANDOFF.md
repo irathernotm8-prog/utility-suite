@@ -1,0 +1,43 @@
+# Vitals: handoff for the Vitals chat
+
+Vitals is the Utility Package's system app: a better task manager (apps with their helpers grouped, CPU, memory, quit/force quit), a live dashboard (CPU, memory pressure, GPU, temperatures, network, disk, battery), installed apps with uninstall, startup items, privacy permissions, time and focus tracking, specs, and a Checkup with a PDF report. It lives in `apps/vitals` inside `~/Downloads/Utility Package`. `apps/vitals/README.md` has the feature list, where each number comes from on Mac and Windows, and the code map.
+
+## Working on it
+
+```bash
+cd ~/Downloads/Utility\ Package/apps/vitals
+npm install
+npm start
+npm test
+```
+
+To ship a change, bump `version` in `package.json`, then from the Utility Package folder:
+
+```bash
+./utility note vitals "what changed"
+./utility publish
+```
+
+Pull before starting work. Stay inside `apps/vitals`; `tools/`, `suite.json` and `apps/hub` belong to the Utility Package chat.
+
+## State at first release (0.1.0)
+
+- Built and tested on Linux (Electron 44 under Xvfb). `npm test` runs 21 Node checks on fixtures of real tool output: `vm_stat`, `ps`, `top`, `lsappinfo`, `ioreg` (GPU and battery), `mdls`, `launchctl`, TCC rows, Windows `reg query` (uninstall keys, StartupApproved, ConsentStore), process grouping on both systems, the focus tracker and the checkup.
+- `test/e2e/run.sh` drives every page in the real window (19 checks). `VITALS_DEMO=1` fakes a Mac with sensors, battery, apps, startup items and permissions so those pages can be checked too.
+- **Not yet run on a real Mac or Windows PC.** Check these first:
+  1. **Mac temperatures.** They come from the optional native module `macos-temperature-sensor` (Apple Silicon). It compiles during `npm install`, which needs the Xcode command line tools. If it's missing, Vitals still runs and shows thermal pressure (`powerMonitor.getCurrentThermalState()`) instead of degrees. MacBook Air has no fans, so the Fans card says so.
+  2. **Permissions on Mac** need Full Disk Access for Vitals (the page walks you through it). Reading uses `sqlite3` on both TCC databases; Remove uses `tccutil reset`, falling back to an admin prompt for system-level ones.
+  3. **Login items** use System Events, so the first visit to Startup asks to allow automation. Newer apps' background items (SMAppService) can only be switched off in System Settings › Login Items; the page links there.
+  4. **Activity memory on Mac** is the footprint from `top` (matches Activity Monitor), refreshed every ~6 s; RSS fills in until then.
+  5. **Windows** polls through two shared PowerShell processes (`fast` and `slow` in `src/sys/run.js`). If anything looks stuck, that's the place to look. Processes come from `systeminformation` with `powerShellStart()`.
+  6. **Windows uninstall** starts the app's own uninstaller (MsiExec `/I` becomes `/X`), then polls the registry every 3 s and removes the row when it's gone.
+  7. **Windows startup toggles** write the same StartupApproved bytes Task Manager does; HKLM items and scheduled tasks show a UAC prompt.
+
+## Rules specific to Vitals
+
+- **The window never runs commands.** Everything goes through `window.vitals.call(...)` → `ipcMain` handlers in `main.js`, which call `src/sys/*`.
+- **Parsers stay pure** in `src/sys/parse.js` with a fixture test in `test/run.js`. Add a fixture whenever a tool's output changes.
+- **Time tracking stores only the app and the seconds**, never window titles, in `userData/focus/YYYY-MM-DD.json`. It runs while the window is closed (`keepRunning`, on by default) and pauses on lock, sleep and idle.
+- **Icons are read one at a time** (`iconFor` in `main.js`); bursts of `getFileIcon` crashed Fresh Desk on macOS.
+- **Destructive actions always confirm**, and Mac uninstalls go to the Trash, never straight to deletion.
+- Native module: `macos-temperature-sensor` is an `optionalDependency` with `os: darwin, cpu: arm64`, so Windows cross-builds (`npm ci --os=win32`) skip it. Everything else is plain JS (`systeminformation`).
