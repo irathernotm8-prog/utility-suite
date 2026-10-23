@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Scene</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-scenes" viewBox="0 0 24 24"><rect x="3" y="4" width="11" height="16" rx="2.2"/><rect x="16" y="4" width="5" height="7" rx="1.6"/><rect x="16" y="13" width="5" height="7" rx="1.6"/></symbol>
+  <symbol id="i-desktop" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2.2"/><path d="M8 21h8M12 17v4"/><rect x="5.5" y="7" width="6" height="7" rx="1"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8.5"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v2.5M11 3v3M14 3.5v2.5"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7.5 9.5l3 2.5-3 2.5M12.5 15h4"/></symbol>
+  <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M7 3.5h10M7 20.5h10M8 3.5v3l4 5.5 4-5.5v-3M8 20.5v-3l4-5.5 4 5.5v3"/></symbol>
+  <symbol id="i-display" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M9 20h6"/></symbol>
+  <symbol id="i-app" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M9 12h6M12 9v6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></symbol>
+  <symbol id="i-target2" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.1M10 10h.1M13.5 10h.1M17 10h.1M7.5 14h9"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 19.5h14"/></symbol>
+  <symbol id="i-front" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <!-- scene glyphs -->
+  <symbol id="g-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3 12.5h18"/></symbol>
+  <symbol id="g-gamepad" viewBox="0 0 24 24"><path d="M7.5 7h9a4.5 4.5 0 0 1 4.4 5.4l-.9 4.4a2.3 2.3 0 0 1-4 1L14 15.5h-4L8 17.8a2.3 2.3 0 0 1-4-1l-.9-4.4A4.5 4.5 0 0 1 7.5 7z"/><path d="M8 10v3M6.5 11.5h3M15.5 10.5h.1M17.5 12.5h.1"/></symbol>
+  <symbol id="g-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5l3.8 2.8-1.5 4.4H9.7l-1.5-4.4zM12 3v4.5M15.8 10.3l4.7-1.6M14.3 14.7l2.8 4M9.7 14.7l-2.8 4M8.2 10.3L3.5 8.7"/></symbol>
+  <symbol id="g-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></symbol>
+  <symbol id="g-brush" viewBox="0 0 24 24"><path d="M14.5 4.5l5 5-7.5 7.5-5-5z"/><path d="M7 12l-2.2 2.2a3 3 0 0 0 0 4.2 3 3 0 0 0 4.2 0L11 16"/></symbol>
+  <symbol id="g-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+  <symbol id="g-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M18.5 16l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+  <symbol id="g-moon" viewBox="0 0 24 24"><path d="M20 13.5A8 8 0 1 1 10.5 4a6.2 6.2 0 0 0 9.5 9.5z"/></symbol>
+  <symbol id="g-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+  <symbol id="g-coffee" viewBox="0 0 24 24"><path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v2.5M11 3v3M14 3.5v2.5"/></symbol>
+  <symbol id="g-code" viewBox="0 0 24 24"><path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5M13.5 5l-3 14"/></symbol>
+  <symbol id="g-home" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19z"/><path d="M10 20.5v-6h4v6"/></symbol>
+  <symbol id="g-chart" viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></symbol>
+  <symbol id="g-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+  <symbol id="g-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2z"/><path d="M4 20a2 2 0 0 0 2 2h13v-4"/></symbol>
+  <symbol id="g-tv" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12.5" rx="2.2"/><path d="M8.5 2.5L12 6l3.5-3.5M8 21.5h8"/></symbol>
+</svg>
+
+<div id="app">
+  <aside id="side">
+    <div class="side-top"><div class="brand"><span class="brand-mark"></span>Scene</div></div>
+    <nav class="side-nav" id="nav">
+      <button class="nav-btn on" data-view="scenes"><svg class="ic" width="17" height="17"><use href="#i-scenes"/></svg><span>Scenes</span></button>
+      <button class="nav-btn" data-view="desktop"><svg class="ic" width="17" height="17"><use href="#i-desktop"/></svg><span>Desktop</span></button>
+      <button class="nav-btn" data-view="automations"><svg class="ic" width="17" height="17"><use href="#i-bolt"/></svg><span>Automations</span><span class="badge" id="nb-auto" hidden></span></button>
+      <button class="nav-btn" data-view="history"><svg class="ic" width="17" height="17"><use href="#i-clock"/></svg><span>History</span></button>
+    </nav>
+    <div class="side-label"><span>Your scenes</span><button class="icon-btn xs" id="side-new" title="New scene"><svg class="ic" width="14" height="14"><use href="#i-plus"/></svg></button></div>
+    <div class="side-scenes" id="side-scenes"></div>
+    <div class="now" id="now"></div>
+    <div class="side-foot">
+      <button class="nav-btn" id="open-settings"><svg class="ic" width="17" height="17"><use href="#i-gear"/></svg><span>Settings</span></button>
+      <button class="icon-btn" id="theme-btn" title="Light or dark"><svg class="ic" width="17" height="17"><use href="#i-moon"/></svg></button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <!-- Scenes -->
+    <section class="view on" id="v-scenes">
+      <div class="page-bar">
+        <div class="title"><h1>Scenes</h1><span class="muted" id="sc-sub"></span></div>
+        <div class="grow"></div>
+        <button class="btn" id="sc-capture"><svg class="ic" width="16" height="16"><use href="#i-camera"/></svg>Save current layout</button>
+        <button class="btn primary" id="sc-new"><svg class="ic" width="16" height="16"><use href="#i-plus"/></svg>New scene</button>
+      </div>
+      <div class="banner" id="ax-banner" hidden>
+        <svg class="ic" width="20" height="20"><use href="#i-lock"/></svg>
+        <div class="grow"><b>Scene needs Accessibility access to read and move windows</b><span class="muted">Apps still open without it. Turn Scene on in System Settings › Privacy &amp; Security › Accessibility.</span></div>
+        <button class="btn sm" id="ax-open">Open Settings</button><button class="btn sm ghost" id="ax-check">Check again</button>
+      </div>
+      <div class="scroll"><div class="page" id="sc-page"></div></div>
+    </section>
+
+    <!-- Editor -->
+    <section class="view" id="v-editor">
+      <div class="page-bar">
+        <button class="icon-btn" id="ed-back" title="All scenes"><svg class="ic" width="18" height="18"><use href="#i-back"/></svg></button>
+        <button class="gl-btn" id="ed-glyph" title="Colour and symbol"><svg class="ic" width="18" height="18"><use href="#g-spark"/></svg></button>
+        <input class="name-in" id="ed-name" spellcheck="false" maxlength="40">
+        <button class="hk" id="ed-hotkey" title="A keyboard shortcut that switches to this scene from anywhere"><svg class="ic" width="14" height="14"><use href="#i-keyboard"/></svg><span>Add shortcut</span></button>
+        <div class="grow"></div>
+        <span class="saved" id="ed-saved"></span>
+        <button class="btn" id="ed-update" title="Take the window positions from your screen right now"><svg class="ic" width="16" height="16"><use href="#i-camera"/></svg>Update from screen</button>
+        <button class="btn primary" id="ed-go"><svg class="ic" width="15" height="15"><use href="#i-play"/></svg>Switch now</button>
+        <button class="icon-btn" id="ed-more" title="More"><svg class="ic" width="18" height="18"><use href="#i-dots"/></svg></button>
+      </div>
+      <div class="ed">
+        <div class="ed-left">
+          <div class="ed-tools" id="ed-tools"></div>
+          <div class="canvas-wrap" id="ed-canvas-wrap"><div class="lc edit" id="ed-canvas"></div><div class="canvas-hint" id="ed-hint">Drag windows to place them. Drag an edge or corner to resize. Double-click to fill the screen.</div></div>
+        </div>
+        <div class="ed-right">
+          <div class="tabs" id="ed-tabs">
+            <button data-tab="apps" class="on">Apps <span class="badge" id="tb-apps"></span></button>
+            <button data-tab="open">Open</button>
+            <button data-tab="system">System</button>
+            <button data-tab="actions">Actions</button>
+            <button data-tab="triggers">Triggers <span class="badge" id="tb-trig" hidden></span></button>
+          </div>
+          <div class="tab-body" id="ed-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Desktop -->
+    <section class="view" id="v-desktop">
+      <div class="page-bar">
+        <div class="title"><h1>Desktop</h1><span class="muted" id="dk-sub">What’s on your screens right now</span></div>
+        <div class="grow"></div>
+        <button class="btn" id="dk-refresh"><svg class="ic" width="16" height="16"><use href="#i-reload"/></svg>Refresh</button>
+        <button class="btn" id="dk-save"><svg class="ic" width="16" height="16"><use href="#i-camera"/></svg>Save as scene</button>
+      </div>
+      <div class="banner" id="ax-banner2" hidden>
+        <svg class="ic" width="20" height="20"><use href="#i-lock"/></svg>
+        <div class="grow"><b>Scene can’t see your windows yet</b><span class="muted">Give it Accessibility access in System Settings › Privacy &amp; Security.</span></div>
+        <button class="btn sm" data-ax-open>Open Settings</button>
+      </div>
+      <div class="desk">
+        <div class="ed-left" style="border-right:0">
+          <div class="ed-tools" id="dk-tools"></div>
+          <div class="canvas-wrap"><div class="lc edit" id="dk-canvas"></div><div class="canvas-hint">Drag a window here and it moves on your screen. Click one to snap it.</div></div>
+        </div>
+        <div class="desk-list" id="dk-list"></div>
+      </div>
+    </section>
+
+    <!-- Automations -->
+    <section class="view" id="v-automations">
+      <div class="page-bar">
+        <div class="title"><h1>Automations</h1><span class="muted">Switch scenes on their own</span></div>
+        <div class="grow"></div>
+        <span class="small muted">Automations</span><button class="switch" id="au-toggle"></button>
+      </div>
+      <div class="scroll"><div class="page" id="au-page" style="max-width:1000px"></div></div>
+    </section>
+
+    <!-- History -->
+    <section class="view" id="v-history">
+      <div class="page-bar">
+        <div class="title"><h1>History</h1><span class="muted">Every switch and how it went</span></div>
+        <div class="grow"></div>
+        <button class="btn ghost sm" id="hi-clear">Clear</button>
+      </div>
+      <div class="scroll"><div class="page" id="hi-page" style="max-width:1000px"></div></div>
+    </section>
+  </main>
+</div>
+<div class="toasts" id="toasts"></div>
+<script src="canvas.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

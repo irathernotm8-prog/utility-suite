@@ -164,6 +164,14 @@
       "winArch": "x64",
       "exclude": [],
       "movedFrom": "~/Downloads/Utility Package/touchline"
+    },
+    {
+      "id": "scene",
+      "name": "Scene",
+      "description": "Save and switch whole setups in one click: the apps, where every window sits on which display, the sites and files that open with them, volume, appearance and wallpaper, for work, gaming, match day or anything else.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {

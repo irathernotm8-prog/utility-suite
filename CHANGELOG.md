@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-23 14:51 — **Scene 0.1.0** — First release: save and switch whole setups. Each scene remembers the apps, where every window sits on which display, links and files to open, and whether other apps stay, hide or quit, plus volume, light or dark, wallpaper and keeping the screen awake. Edit layouts by dragging windows on a drawing of your displays, start from templates (Work, Gaming, Match day, Deep work, Create, Movie night) or from what is on screen, switch with a shortcut, the quick switcher or the menu bar, or automatically when a monitor is plugged in, at a time of day or when an app opens. Restore previous puts everything back.
+- 2026-10-23 14:51 — **Scene 0.1.0** (28 new) — Added to the Utility Package
 - 2026-10-23 16:52 — **Fresh Desk 1.0.2** — Drag a box to select several files at once; drag and drop now works on Windows, and Windows shortcuts like Ctrl+Z work regardless of Caps Lock or keyboard layout
 - 2026-10-23 11:29 — **Vitals 0.1.1** — Fixes the crash on launch on Mac (app icons are now read safely) and the empty Overview on Windows (readings no longer wait on PowerShell, and a stuck command can't freeze them). Temperature sensors now run in their own process.
 - 2026-10-23 10:52 — **Touchline 0.1.0** (224 new) — Added to the Utility Package

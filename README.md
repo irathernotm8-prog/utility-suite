@@ -15,10 +15,12 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
 | **RO3** | Photo editing, video editing and file conversion | `apps/ro3` |
 | **Relay** | Inboxes, calendars, browser, library and AI | `apps/relay` |
+| **Scene** | Workspace layouts: save and switch apps, window positions on each display, links, volume, appearance and wallpaper for work, gaming or match day | `apps/scene` |
 | **Sideby** | Watch parties with shared playback and room chat | `apps/sideby` |
 | **Slate** | Accounts, retirement, credit and savings in one place | `apps/slate` |
 | **Trace** | Paths, decisions, org charts and folder plans you can trace, with notes and screenshot guides | `apps/trace` |
 | **Vitals** | Task manager and system dashboard: live CPU, memory, GPU and temperatures, apps and uninstalling, startup items, permissions, time and focus, checkup | `apps/vitals` |
+| **Touchline** | Football scores, tables, match stats, squads and player histories for every league and season | `apps/touchline` |
 | **Utility Hub** | Installs, updates and removes the apps on each computer | `apps/hub` |
 
 ## How it works

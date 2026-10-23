@@ -1,0 +1,37 @@
+{
+  "name": "scene",
+  "productName": "Scene",
+  "version": "0.1.0",
+  "description": "Save and switch whole setups in one click: the apps, where every window sits on which display, the sites and files that open, volume, appearance and wallpaper, for work, gaming, match day or anything else.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.scene",
+    "productName": "Scene",
+    "copyright": "Personal use",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "build/trayTemplate.png", "build/trayTemplate@2x.png", "package.json"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Scene uses System Events to read, move and resize windows, and to change appearance and wallpaper when you switch scenes."
+      }
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

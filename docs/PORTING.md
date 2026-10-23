@@ -34,9 +34,11 @@
 | Onward | `apps/onward` | `docs/handoffs/Onward.md` |
 | RO3 | `apps/ro3` | `docs/handoffs/RO3.md` |
 | Relay | `apps/relay` | `docs/handoffs/Relay.md` |
+| Scene | `apps/scene` | `docs/handoffs/Scene.md` |
 | Sideby | `apps/sideby` | `docs/handoffs/Sideby.md` |
 | Slate | `apps/slate` | `docs/handoffs/Slate.md` |
 | Trace | `apps/trace` | `docs/handoffs/Trace.md` |
+| Vitals | `apps/vitals` | `docs/handoffs/Vitals.md` (native module: optional `macos-temperature-sensor`, Mac arm64 only; Windows cross-builds skip it) |
 | Utility Hub | `apps/hub` | maintained in the Utility Package chat (`cd apps/hub && npm test`) |
 
 Old project folders were moved to `~/Downloads/Old app folders (safe to delete)`. `./utility port <id> --from-old` pulls any late edits from there until that folder is trashed.
