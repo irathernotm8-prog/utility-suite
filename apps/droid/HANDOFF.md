@@ -30,7 +30,8 @@ Pull before starting work. Stay inside `apps/droid`; `tools/`, `suite.json` and 
   3. **Windows** needs Windows Hypervisor Platform turned on (Windows Features). Android versions › Hardware acceleration › Check runs `emulator -accel-check`; failures to start are translated by `explainFailure()` in `core/emulator.js`.
   4. **Discovery file**: the emulator writes `pid_<pid>.ini` (gRPC port + token). Droid reads the path from the emulator's "Advertising in:" log line and falls back to the known folders in `discoveryDirs()`; it matches by `port.serial`, because on Windows the PID is the qemu child's.
   5. **adb auth**: Google Play images need adb keys. Droid leaves `~/.android` alone (only `ANDROID_AVD_HOME` is redirected), so the emulator and adb share the usual key.
-  6. **Retina**: the window asks for frames at the canvas's device-pixel size (capped at the device resolution). If scrolling feels heavy on a big device, the place to tune is `layout()` in `renderer/device.js`.
+  6. **Sharpness and size (0.1.1)**: the phone window is fixed-size. `layout()` in `renderer/device.js` draws the screen so one screen pixel shows exactly `V.n` device pixels (`STEPS`), on whole pixels, and asks the emulator for full-resolution frames, which WebGL2 shrinks once with mipmaps. If big devices (1440p, tablets) feel heavy, request frames at `2 × canvas` size instead of full resolution there.
+  7. **Clicks (0.1.1)**: nothing with `-webkit-app-region: drag` may overlap the screen canvas: macOS can swallow clicks under a drag region even where a child says no-drag. The window drags by four bezel strips (`#grab`) and the toolbar. Input goes down one ordered `streamInputEvent` stream (unary calls could arrive out of order and lose taps); errors surface as a toast instead of failing silently.
 
 ## Rules specific to Droid
 

@@ -1,7 +1,7 @@
 {
   "name": "droid",
   "productName": "Droid",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Virtual Android phones and tablets on your Mac or PC: build devices from Pixel, Galaxy, tablet or island-style frames, pick the Android version, screen, memory, cores, storage, network and location, run several side by side, drag in APKs and files, and find apps from F-Droid, Google Play or APK sites.",
   "main": "src/main.js",
   "author": "Bilal",

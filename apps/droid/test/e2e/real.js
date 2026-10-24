@@ -49,6 +49,14 @@ module.exports = async (D) => {
   // keyboard: Esc -> Back
   await js(view().win, "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))");
   await sleep(2500);
+  {
+    const { Adb } = require('../../src/core/adb');
+    const a0 = new Adb(path.join(process.env.DROID_SDK, 'platform-tools', 'adb'));
+    const q = await a0.shell(D.runner.session(dev.id).serial, 'dumpsys input').catch(() => '');
+    const recent = (q.split('RecentQueue')[1] || '').slice(0, 6000);
+    check('touches reach Android (input dispatcher saw MotionEvents)', /MotionEvent/.test(recent) && /ACTION_DOWN|action=0x0|action=DOWN/i.test(recent), (recent.match(/MotionEvent[^\n]{0,80}/) || [''])[0]);
+    check('keys reach Android (Back key seen)', /KEYCODE_BACK|keyCode=4\b/.test(recent));
+  }
 
   // drag and drop: an APK and a text file
   const sess = D.runner.session(dev.id);

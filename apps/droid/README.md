@@ -13,7 +13,7 @@ Droid runs Google's own Android Emulator (the one inside Android Studio) and wra
   - **Hardware:** 1080p / 1440p (1200p / 1600p for tablets) or any custom resolution, density (auto or picked), RAM 2–16 GB, 2/4/6/8 cores, storage 32–256 GB or custom, graphics (auto / hardware / software), Quick Boot, sound, shared clipboard, microphone. Options the computer can't spare are greyed out.
   - **Network:** Internet, Isolated (no network at all), or an HTTP proxy.
   - **Location:** Actual (approximate, from the internet connection), Simulated (a city, standing still, walking or driving), or Pick on map (search or click, OpenStreetMap).
-- **Phone window**: the frame with the live screen, mouse as touch, keyboard typing, scroll wheel, Option/Alt-drag pinch, right-click = Back, clickable side buttons, rotate, back/home/recents, screenshot (saved to Pictures/Droid and copied), screen recording, sound, shared clipboard, keep on top.
+- **Phone window**: a fixed-size window (no free resizing) that draws the phone at an exact size: Actual pixels when it fits, otherwise 80%, 67%, 50%… of the device's pixels (Size button, or ⌘+ / ⌘−). Frames arrive at full resolution and are scaled once on the GPU, so text stays sharp. The frame with the live screen, mouse as touch, keyboard typing, scroll wheel, Option/Alt-drag pinch, right-click = Back, clickable side buttons, rotate, back/home/recents, screenshot (saved to Pictures/Droid and copied), screen recording, sound, shared clipboard, keep on top.
   - **Drag and drop:** drop APK / APKM / XAPK / APKS onto the screen to install (splits for other processors are skipped, OBB game data is copied); drop any other file to put it in the device's Downloads.
   - **Files panel:** browse the device's storage, drag files out to the desktop, save, delete, add files, new folder.
   - **Apps panel:** installed apps with open and uninstall, install from the library, open the Play Store.
@@ -47,7 +47,7 @@ Droid (Electron)
 ```
 
 - Apple Silicon Macs run **arm64** Android images natively (Hypervisor.framework). Windows PCs run **x86_64** images with Windows Hypervisor Platform (WHPX) or the AEHD driver.
-- The emulator runs with its own window hidden (`-qt-hide-window`); frames come over gRPC as RGB and are drawn with WebGL (2D canvas fallback). Touches are sent in the panel's natural orientation; rotated frames are mapped back (checked against a real emulator).
+- The emulator runs with its own window hidden (`-qt-hide-window`); frames come over gRPC at full resolution as RGB and are drawn with WebGL2 (mipmapped downscale; WebGL1 / 2D fallback). Input (touch, keys, wheel) goes down one ordered `streamInputEvent` stream, as in Android Studio. Touches are sent in the panel's natural orientation; rotated frames are mapped back (checked against a real emulator).
 - Droid keeps its AVDs in `<data>/avd` (`ANDROID_AVD_HOME`), so they never mix with Android Studio's.
 
 ## Where things live

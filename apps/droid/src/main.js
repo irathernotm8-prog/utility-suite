@@ -120,9 +120,10 @@ function openDeviceWindow(id) {
   const ui = readJson(path.join(DATA, 'windows.json'), {});
   const size = fitSize(dev, false);
   const saved = ui[id];
+  // Fixed-size window: the phone is drawn at an exact size (see device.js), never stretched.
   const win = new BrowserWindow({
-    width: saved?.width || size.width, height: saved?.height || size.height, x: saved?.x, y: saved?.y,
-    minWidth: 220, minHeight: 260, frame: false, transparent: true, hasShadow: true, resizable: true, show: false,
+    width: size.width, height: size.height, x: saved?.x, y: saved?.y, useContentSize: true,
+    frame: false, transparent: true, hasShadow: true, resizable: false, maximizable: false, fullscreenable: false, show: false,
     title: dev.name, backgroundColor: '#00000000', roundedCorners: false,
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false, backgroundThrottling: false },
@@ -130,9 +131,10 @@ function openDeviceWindow(id) {
   const view = { id, win, stream: null, want: null, inFlight: false, pending: null, audio: null, last: null, clip: null, clipText: null };
   views.set(id, view);
   win.loadFile(path.join(__dirname, 'renderer', 'device.html'), { query: { id } });
-  win.once('ready-to-show', () => win.show());
-  const remember = () => { if (win.isDestroyed()) return; const b = win.getBounds(); const u = readJson(path.join(DATA, 'windows.json'), {}); u[id] = b; writeJson(path.join(DATA, 'windows.json'), u); };
-  win.on('moved', remember); win.on('resized', remember);
+  // shown on the first view:fit, once the renderer has worked out its exact size (with a fallback)
+  setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.show(); }, 2500);
+  const remember = () => { if (win.isDestroyed()) return; const b = win.getBounds(); const u = readJson(path.join(DATA, 'windows.json'), {}); u[id] = { ...(u[id] || {}), x: b.x, y: b.y }; writeJson(path.join(DATA, 'windows.json'), u); };
+  win.on('moved', remember);
   win.on('minimize', () => pauseStream(view));
   win.on('restore', () => restartStream(view));
   win.on('focus', () => pushClipboard(view));
@@ -143,7 +145,18 @@ function openDeviceWindow(id) {
 }
 
 // ───────────────────────── screen streaming to a device window
-function client(id) { return runner.session(id)?.client || null; }
+function client(id) {
+  const c = runner.session(id)?.client || null;
+  if (c && !c.onInputError) {
+    let last = 0;
+    c.onInputError = (err) => {
+      if (Date.now() - last < 30000) return;
+      last = Date.now();
+      broadcast('toast', { kind: 'bad', device: id, title: "The device isn't taking clicks or keys", text: `${err.details || err.message} (code ${err.code})` });
+    };
+  }
+  return c;
+}
 function stopStream(v) { if (v.stream) { v.stream.cancel(); v.stream = null; } }
 function pauseStream(v) { stopStream(v); }
 function restartStream(v) {
@@ -500,11 +513,20 @@ function registerIpc() {
   ipcMain.on('view:text', (e, id, text) => { const c = client(id); c && c.text(text); });
   ipcMain.on('view:fit', (e, id, w, h) => {
     const v = views.get(id); if (!v || v.win.isDestroyed()) return;
-    const wa = screen.getDisplayMatching(v.win.getBounds()).workArea;
-    const s = Math.min(1, (wa.height * 0.92) / h, (wa.width * 0.92) / w);
     const b = v.win.getBounds();
-    const nw = Math.round(w * s), nh = Math.round(h * s);
-    v.win.setBounds({ x: Math.max(wa.x, Math.min(b.x, wa.x + wa.width - nw)), y: Math.max(wa.y, Math.min(b.y, wa.y + wa.height - nh)), width: nw, height: nh }, true);
+    const wa = screen.getDisplayMatching(b).workArea;
+    w = Math.round(w); h = Math.round(h);
+    v.win.setContentSize(w, h);
+    const nb = v.win.getBounds();
+    v.win.setPosition(Math.max(wa.x, Math.min(nb.x, wa.x + wa.width - nb.width)), Math.max(wa.y, Math.min(nb.y, wa.y + wa.height - nb.height)));
+    if (!v.win.isVisible()) v.win.show();
+  });
+  h('view:prefs', (id, patch) => {
+    const f = path.join(DATA, 'windows.json'); const u = readJson(f, {});
+    if (patch) { u[id] = { ...(u[id] || {}), ...patch }; writeJson(f, u); }
+    const v = views.get(id);
+    const d = v ? screen.getDisplayMatching(v.win.getBounds()) : screen.getPrimaryDisplay();
+    return { ...(u[id] || {}), workArea: d.workArea, scaleFactor: d.scaleFactor };
   });
   ipcMain.on('view:win', (e, id, action) => {
     const v = views.get(id); if (!v || v.win.isDestroyed()) return;

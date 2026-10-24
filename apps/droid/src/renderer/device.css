@@ -2,8 +2,11 @@
 html, body { background: transparent; }
 body { opacity: 0; transition: opacity .25s; user-select: none; } body.ready { opacity: 1; }
 #wrap { position: fixed; inset: 0; display: flex; align-items: center; gap: 10px; padding: 12px; }
-#stageBox { position: relative; flex: 1; height: 100%; min-width: 0; -webkit-app-region: drag; }
-#frame { position: absolute; }
+html, body { overflow: hidden; }
+#stageBox { position: relative; flex: none; }
+#grab > div { position: absolute; z-index: 0; -webkit-app-region: drag; }
+#frame { position: absolute; pointer-events: none; }
+#frame .df-btn[data-btn] { pointer-events: auto; }
 #frame .df-btn[data-btn] { -webkit-app-region: no-drag; }
 #screen { position: absolute; z-index: 4; background: #000; outline: none; -webkit-app-region: no-drag; cursor: default; touch-action: none; }
 #screen.pinch { cursor: crosshair; }
@@ -22,7 +25,7 @@ body { opacity: 0; transition: opacity .25s; user-select: none; } body.ready { o
 .drop-card #dropIc { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--acc-grad); color: var(--on-acc); }
 
 /* toolbar */
-#tools { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; border-radius: 16px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--line-2); box-shadow: var(--shadow); -webkit-app-region: drag; max-height: 100%; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+#tools { flex: none; width: 48px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; border-radius: 16px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--line-2); box-shadow: var(--shadow); -webkit-app-region: drag; max-height: 100%; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 #tools::-webkit-scrollbar { display: none; }
 #tools .icon-btn { width: 34px; height: 34px; border-radius: 10px; -webkit-app-region: no-drag; color: var(--fg-2); }
 #tools .icon-btn:hover { color: var(--fg); background: var(--panel-3); }
@@ -33,7 +36,7 @@ body { opacity: 0; transition: opacity .25s; user-select: none; } body.ready { o
 #tools .close:hover { background: var(--bad) !important; color: #fff !important; }
 
 /* side panel */
-#panel { flex: none; width: 320px; height: 100%; border-radius: 16px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; -webkit-app-region: no-drag; }
+#panel { flex: none; width: 320px; height: 100%; max-height: calc(100vh - 24px); border-radius: 16px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; -webkit-app-region: no-drag; }
 .p-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
 .p-head b { flex: 1; font-size: 14px; } .p-head .icon-btn { -webkit-app-region: no-drag; }
 .p-body { flex: 1; overflow: auto; padding: 12px 14px; }

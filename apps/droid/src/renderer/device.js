@@ -10,7 +10,7 @@ const ID = new URLSearchParams(location.search).get('id');
 const MAC = window.droid.platform === 'darwin';
 
 let CITIES = [];
-const V = { dev: null, styles: null, state: 'starting', rotation: 'PORTRAIT', L: null, gl: null, latest: null, gotFrame: false, panel: null, audio: true, rec: false, onTop: false, filesDir: '/sdcard/', startedAt: Date.now(), z: 0, dl: null, err: null };
+const V = { n: null, prefs: null, dev: null, styles: null, state: 'starting', rotation: 'PORTRAIT', L: null, gl: null, latest: null, gotFrame: false, panel: null, audio: true, rec: false, onTop: false, filesDir: '/sdcard/', startedAt: Date.now(), z: 0, dl: null, err: null };
 
 // ───────────────────────── boot
 async function boot() {
@@ -24,8 +24,10 @@ async function boot() {
   V.audio = V.dev.options.audio;
   document.title = V.dev.name;
   document.body.classList.add(`a-${V.dev.accent}`);
+  V.prefs = await call('view:prefs', ID).catch(() => ({}));
   buildTools();
   V.gl = makeRenderer($('#screen'));
+  V.n = pickSize(V.prefs.n);
   layout();
   renderOverlay();
   bindInput();
@@ -38,55 +40,89 @@ async function boot() {
   window.droid.on('toast', (t) => { if (t.device === ID) toast(t); });
   window.droid.on('files:changed', (f) => { if (f.id === ID && V.panel === 'files') renderPanel(); });
   window.droid.on('apps:changed', (f) => { if (f.id === ID && V.panel === 'apps') renderPanel(); });
-  window.droid.on('devices:changed', async () => { const h = await call('view:hello', ID).catch(() => null); if (h) { const resize = h.device.screen.w !== V.dev.screen.w || h.device.screen.h !== V.dev.screen.h || h.device.style !== V.dev.style || h.device.finish !== V.dev.finish; V.dev = h.device; if (resize) layout(); } });
-  new ResizeObserver(() => layout()).observe($('#stageBox'));
+  window.droid.on('devices:changed', async () => { const h = await call('view:hello', ID).catch(() => null); if (h) { const resize = h.device.screen.w !== V.dev.screen.w || h.device.screen.h !== V.dev.screen.h || h.device.style !== V.dev.style || h.device.finish !== V.dev.finish; V.dev = h.device; if (resize) { V.n = pickSize(V.n); layout(); } } });
+  matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', async () => { V.prefs = await call('view:prefs', ID).catch(() => V.prefs); V.n = pickSize(V.n); layout(); });
   setInterval(() => { if (!V.gotFrame) renderOverlay(); }, 1000);
   document.body.classList.add('ready');
   $('#screen').focus();
 }
 
 // ───────────────────────── layout
+// The phone is drawn at a fixed size where one screen pixel shows exactly V.n device pixels
+// (1 = actual pixels, 2 = half, ...), so the picture is never stretched by the window. The window
+// is not resizable; Size (toolbar, or ⌘+ / ⌘−) switches between the sizes that fit the display.
+const STEPS = [1, 1.25, 1.5, 2, 2.5, 3, 4];
+const TOOLW = 48, PAD = 12, GAP = 10, PANELW = 320;
+function natFrame() {
+  const nf = Frames.layoutFrame(V.dev.style, V.dev.screen.w, V.dev.screen.h, V.rotation, { w: 1e5, h: 1e5 });
+  return { w: nf.frame.w / nf.k, h: nf.frame.h / nf.k };
+}
+function windowFor(n) {
+  const k = 1 / (n * (window.devicePixelRatio || 1));
+  const f = natFrame();
+  const th = $('#tools').scrollHeight || 700;
+  return { k, fw: f.w * k, fh: f.h * k, w: PAD * 2 + f.w * k + GAP + TOOLW + (V.panel ? GAP + PANELW : 0), h: PAD * 2 + Math.max(f.h * k, th, V.panel ? 520 : 0) };
+}
+function fits(n) {
+  const wa = V.prefs?.workArea || { width: screen.availWidth, height: screen.availHeight };
+  const s = windowFor(n);
+  return s.w <= wa.width * 0.97 && s.h <= wa.height * 0.97;
+}
+function sizes() { const ok = STEPS.filter(fits); return ok.length ? ok : [STEPS[STEPS.length - 1]]; }
+function pickSize(want) { const ok = sizes(); return want && ok.includes(want) ? want : ok[0]; }
+function sizeLabel(n) { return n === 1 ? 'Actual pixels (100%)' : `${Math.round(100 / n)}%`; }
+
 function layout() {
-  const box = $('#stageBox').getBoundingClientRect();
-  if (!box.width || !box.height || !V.dev) return;
-  const fr = $('#frame');
-  const fin = finishColors();
-  V.L = Frames.renderFrame(fr, { style: V.dev.style, finish: fin, natW: V.dev.screen.w, natH: V.dev.screen.h, rotation: V.rotation, box: { w: box.width, h: box.height }, onButton: hwButton });
-  const fx = (box.width - V.L.frame.w) / 2, fy = (box.height - V.L.frame.h) / 2;
-  fr.style.left = `${fx}px`; fr.style.top = `${fy}px`;
-  const sc = V.L.screen;
-  for (const el of [$('#screen'), $('#overlay'), $('#drop')]) {
-    Object.assign(el.style, { left: `${fx + sc.x}px`, top: `${fy + sc.y}px`, width: `${sc.w}px`, height: `${sc.h}px`, borderRadius: `${sc.r}px` });
-  }
-  const c = $('#screen');
+  if (!V.dev) return;
   const dpr = window.devicePixelRatio || 1;
+  if (!fits(V.n)) V.n = pickSize(V.n);
+  const S = windowFor(V.n);
+  const box = $('#stageBox');
+  box.style.width = `${S.fw}px`; box.style.height = `${S.fh}px`;
+  const fr = $('#frame');
+  V.L = Frames.renderFrame(fr, { style: V.dev.style, finish: finishColors(), natW: V.dev.screen.w, natH: V.dev.screen.h, rotation: V.rotation, box: { w: S.fw, h: S.fh }, onButton: hwButton });
+  fr.style.left = '0px'; fr.style.top = '0px';
   const turned = V.rotation === 'LANDSCAPE' || V.rotation === 'REVERSE_LANDSCAPE';
   const devW = turned ? V.dev.screen.h : V.dev.screen.w, devH = turned ? V.dev.screen.w : V.dev.screen.h;
-  const pw = Math.min(devW, Math.round(sc.w * dpr)), ph = Math.min(devH, Math.round(sc.h * dpr));
+  // canvas backing pixels = device pixels / n, placed on whole screen pixels: no resampling by the browser
+  const pw = Math.round(devW / V.n), ph = Math.round(devH / V.n);
+  const sc = V.L.screen;
+  const x = Math.round((sc.x + (sc.w - pw / dpr) / 2) * dpr) / dpr, y = Math.round((sc.y + (sc.h - ph / dpr) / 2) * dpr) / dpr;
+  for (const el of [$('#screen'), $('#overlay'), $('#drop')]) {
+    Object.assign(el.style, { left: `${x}px`, top: `${y}px`, width: `${pw / dpr}px`, height: `${ph / dpr}px`, borderRadius: `${sc.r}px` });
+  }
+  const c = $('#screen');
   if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; if (V.latest) draw(V.latest); }
-  send('view:want', ID, { width: pw, height: ph });
+  // drag the window by its bezel; nothing draggable ever overlaps the screen
+  const g = $('#grab'); const sx = x, sy = y, sw = pw / dpr, sh = ph / dpr;
+  const rects = [[0, 0, S.fw, sy], [0, sy + sh, S.fw, S.fh - sy - sh], [0, sy, sx, sh], [sx + sw, sy, S.fw - sx - sw, sh]];
+  g.innerHTML = rects.map(([l, t, w, h]) => `<div style="left:${l}px;top:${t}px;width:${Math.max(0, w)}px;height:${Math.max(0, h)}px"></div>`).join('');
+  // full-resolution frames from the emulator; the GPU scales them down once, smoothly
+  send('view:want', ID, { width: 0, height: 0 });
+  fitWindow();
 }
 function finishColors() { const st = V.styles[V.dev.style] || V.styles.pixel; return st.finishes.find((f) => f.id === V.dev.finish) || st.finishes[0]; }
-
-// Resize the window to hug the frame (after rotating or opening a panel), keeping the current scale.
-function fitWindow(k = V.L && V.L.k) {
-  if (!k) return;
-  const nf = Frames.layoutFrame(V.dev.style, V.dev.screen.w, V.dev.screen.h, V.rotation, { w: 1e5, h: 1e5 });
-  const fw = (nf.frame.w / nf.k) * k, fh = (nf.frame.h / nf.k) * k;
-  const tools = $('#tools');
-  const tw = tools.getBoundingClientRect().width || 48;
-  const th = tools.scrollHeight || 0;   // keep the whole toolbar visible, even for a short landscape frame
-  const w = Math.round(fw + tw + 10 + 24 + (V.panel ? 330 : 0));
-  const h = Math.round(Math.max(fh, th, V.panel ? 520 : 0) + 24);
-  send('view:fit', ID, w, h);
+function fitWindow() { const S = windowFor(V.n); send('view:fit', ID, Math.ceil(S.w), Math.ceil(S.h)); }
+function setSize(n) { V.n = pickSize(n); call('view:prefs', ID, { n: V.n }).catch(() => {}); layout(); }
+function stepSize(dir) { const ok = sizes(); const i = ok.indexOf(V.n); setSize(ok[Math.max(0, Math.min(ok.length - 1, i - dir))]); }
+function sizeMenu(anchor) {
+  document.querySelectorAll('.menu').forEach((m) => m.remove());
+  const m = document.createElement('div'); m.className = 'menu';
+  m.innerHTML = `<div class="menu-label">Window size</div>${sizes().map((n) => `<button data-n="${n}">${n === V.n ? icon('check', 15) : '<span style="width:15px"></span>'}<span class="grow">${sizeLabel(n)}</span></button>`).join('')}<hr><div class="menu-label" style="text-transform:none;letter-spacing:0;font-weight:500">${MAC ? '⌘+ / ⌘−' : 'Ctrl + / Ctrl −'} also changes it</div>`;
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  m.style.left = `${Math.max(8, r.left - m.offsetWidth - 8)}px`; m.style.top = `${Math.max(8, Math.min(r.top, innerHeight - m.offsetHeight - 8))}px`;
+  m.onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) { m.remove(); setSize(+b.dataset.n); } };
+  setTimeout(() => document.addEventListener('mousedown', function out(e) { if (!m.contains(e.target)) m.remove(); else document.addEventListener('mousedown', out, { once: true }); }, { once: true }), 0);
 }
 
 // ───────────────────────── rendering frames
 function makeRenderer(canvas) {
-  const gl = canvas.getContext('webgl', { alpha: false, antialias: false, depth: false, preserveDrawingBuffer: true });
+  const gl2 = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, preserveDrawingBuffer: true });
+  const gl = gl2 || canvas.getContext('webgl', { alpha: false, antialias: false, depth: false, preserveDrawingBuffer: true });
   if (!gl) return null;
   const vs = 'attribute vec2 p; varying vec2 uv; void main(){ uv = vec2((p.x+1.0)/2.0, 1.0-(p.y+1.0)/2.0); gl_Position = vec4(p,0,1); }';
-  const fs = 'precision mediump float; varying vec2 uv; uniform sampler2D t; void main(){ gl_FragColor = vec4(texture2D(t, uv).rgb, 1.0); }';
+  const fs = 'precision highp float; varying vec2 uv; uniform sampler2D t; void main(){ gl_FragColor = vec4(texture2D(t, uv).rgb, 1.0); }';
   const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
   const prog = gl.createProgram();
   gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog);
@@ -96,13 +132,18 @@ function makeRenderer(canvas) {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  for (const [k, v] of [[gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   let tw = 0, th = 0;
   return {
+    webgl2: !!gl2,
     draw(w, h, data) {
-      if (w !== tw || h !== th) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, w, h, 0, gl.RGB, gl.UNSIGNED_BYTE, data); tw = w; th = h; }
+      if (w !== tw || h !== th) { gl.texImage2D(gl.TEXTURE_2D, 0, gl2 ? gl2.RGB8 : gl.RGB, w, h, 0, gl.RGB, gl.UNSIGNED_BYTE, data); tw = w; th = h; }
       else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGB, gl.UNSIGNED_BYTE, data);
+      // shrinking a full-resolution frame: mipmaps give a clean, even downscale instead of skipped pixels
+      const shrink = gl2 && (w > canvas.width * 1.01 || h > canvas.height * 1.01);
+      if (shrink) gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, shrink ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
@@ -125,7 +166,7 @@ function draw(f) {
 let rafPending = false;
 function onFrame(f) {
   if (!f.data || !f.w) { send('view:ack', ID); return; }
-  if (f.rotation && f.rotation !== V.rotation) { const k = V.L && V.L.k; V.rotation = f.rotation; fitWindow(k); layout(); }
+  if (f.rotation && f.rotation !== V.rotation) { V.rotation = f.rotation; layout(); }
   V.latest = f;
   if (!V.gotFrame) { V.gotFrame = true; V.err = null; renderOverlay(); }
   if (!rafPending) {
@@ -198,10 +239,10 @@ function bindInput() {
     raf = false;
     if (!pending) return;
     const p = pending; pending = null;
-    if (pinch) send('view:touch', ID, touches(p, 1));
-    else send('view:mouse', ID, p.x, p.y, 1);
+    send('view:touch', ID, pinch ? touches(p, 1) : one(p, 1));
   };
   const center = () => ({ x: V.dev.screen.w / 2, y: V.dev.screen.h / 2 });
+  const one = (p, pressure) => [{ x: p.x, y: p.y, identifier: 0, pressure: pressure ? 1 : 0 }];
   const touches = (p, pressure) => { const cc = center(); return [{ x: p.x, y: p.y, identifier: 1, pressure: pressure ? 1 : 0 }, { x: Math.round(2 * cc.x - p.x), y: Math.round(2 * cc.y - p.y), identifier: 2, pressure: pressure ? 1 : 0 }]; };
   c.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
@@ -210,7 +251,7 @@ function bindInput() {
     down = toDev(e);
     pinch = e.altKey ? true : null;
     c.classList.toggle('pinch', !!pinch);
-    if (pinch) send('view:touch', ID, touches(down, 1)); else send('view:mouse', ID, down.x, down.y, 1);
+    send('view:touch', ID, pinch ? touches(down, 1) : one(down, 1));
   });
   c.addEventListener('pointermove', (e) => {
     if (!down) return;
@@ -221,7 +262,7 @@ function bindInput() {
     if (!down) return;
     flush();
     const p = toDev(e);
-    if (pinch) send('view:touch', ID, touches(p, 0)); else send('view:mouse', ID, p.x, p.y, 0);
+    send('view:touch', ID, pinch ? touches(p, 0) : one(p, 0));
     down = null; pinch = null; c.classList.remove('pinch');
   };
   c.addEventListener('pointerup', up);
@@ -245,6 +286,9 @@ function onKey(e) {
     const k = e.key.toLowerCase();
     if (k === 'v') { e.preventDefault(); return paste(); }
     if (k === 's') { e.preventDefault(); return screenshot(); }
+    if (k === '=' || k === '+') { e.preventDefault(); return stepSize(1); }
+    if (k === '-' || k === '_') { e.preventDefault(); return stepSize(-1); }
+    if (k === '0') { e.preventDefault(); return setSize(sizes()[0]); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); return rotate(-1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); return rotate(1); }
     if (e.shiftKey && k === 'h') { e.preventDefault(); return key('GoHome'); }
@@ -299,7 +343,7 @@ function bindDrop() {
 // ───────────────────────── toolbar
 const TOOLS = [
   ['power', 'power', 'Power'], ['volUp', 'volUp', 'Volume up'], ['volDown', 'volDown', 'Volume down'], '-',
-  ['rotL', 'rotL', `Rotate left (${MAC ? '⌘' : 'Ctrl+'}←)`], ['rotR', 'rotR', `Rotate right (${MAC ? '⌘' : 'Ctrl+'}→)`], '-',
+  ['size', 'screen', `Window size (${MAC ? '⌘' : 'Ctrl'}+ / −)`], ['rotL', 'rotL', `Rotate left (${MAC ? '⌘' : 'Ctrl+'}←)`], ['rotR', 'rotR', `Rotate right (${MAC ? '⌘' : 'Ctrl+'}→)`], '-',
   ['back', 'back', 'Back (Esc or right-click)'], ['home', 'home', `Home (${MAC ? '⌘⇧' : 'Ctrl+Shift+'}H)`], ['recents', 'recents', `Recent apps (${MAC ? '⌘⇧' : 'Ctrl+Shift+'}R)`], '-',
   ['shot', 'camera', `Screenshot (${MAC ? '⌘' : 'Ctrl+'}S)`], ['rec', 'record', 'Record the screen'], '-',
   ['files', 'folder', 'Files'], ['apps', 'apps', 'Apps'], ['location', 'pin', 'Location'], ['network', 'wifi', 'Network'], ['more', 'moreV', 'More'], '-',
@@ -312,7 +356,7 @@ function buildTools() {
     const t = b.dataset.t;
     ({
       power: () => key('Power'), volUp: () => key('AudioVolumeUp'), volDown: () => key('AudioVolumeDown'),
-      rotL: () => rotate(-1), rotR: () => rotate(1), back: () => key('GoBack'), home: () => key('GoHome'), recents: () => key('AppSwitch'),
+      size: () => sizeMenu(b), rotL: () => rotate(-1), rotR: () => rotate(1), back: () => key('GoBack'), home: () => key('GoHome'), recents: () => key('AppSwitch'),
       shot: screenshot, rec: record, files: () => togglePanel('files'), apps: () => togglePanel('apps'), location: () => togglePanel('location'), network: () => togglePanel('network'), more: () => togglePanel('more'),
       min: () => send('view:win', ID, 'minimize'), close: () => send('view:win', ID, 'close'),
     })[t]?.();
@@ -322,7 +366,7 @@ function buildTools() {
 }
 function updateTools() {
   const live = V.state === 'running';
-  $$('#tools [data-t]').forEach((b) => { if (!['min', 'close', 'more'].includes(b.dataset.t)) b.disabled = !live && !['location', 'network'].includes(b.dataset.t); b.classList.toggle('on', b.dataset.t === V.panel); });
+  $$('#tools [data-t]').forEach((b) => { if (!['min', 'close', 'more', 'size'].includes(b.dataset.t)) b.disabled = !live && !['location', 'network'].includes(b.dataset.t); b.classList.toggle('on', b.dataset.t === V.panel); });
   const r = $('#tools [data-t="rec"]'); if (r) r.classList.toggle('rec', V.rec);
   const n = $('#tools [data-t="network"]'); if (n && V.dev) n.innerHTML = icon(V.dev.network.mode === 'isolated' ? 'wifiOff' : V.dev.network.mode === 'proxy' ? 'route' : 'wifi', 18);
 }

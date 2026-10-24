@@ -65,18 +65,37 @@ class EmulatorClient {
   screenshotPng() { return this.call('getScreenshot', { format: 'PNG' }, { timeout: 15000 }).then((i) => ({ width: i.format?.width, height: i.format?.height, data: i.image })); }
 
   // ---- input (coordinates are in device pixels, in the display's natural orientation)
-  touch(touches, display = 0) { return this.call('sendTouch', { touches, display }).catch(() => {}); }
-  mouse(x, y, buttons, display = 0) { return this.call('sendMouse', { x: Math.round(x), y: Math.round(y), buttons, display }).catch(() => {}); }
-  key(key, eventType = 'keypress') { return this.call('sendKey', { key, eventType }).catch(() => {}); }
-  text(text) { return this.call('sendKey', { text }).catch(() => {}); }
-  keyCode(code, eventType = 'keypress', codeType = 'Evdev') { return this.call('sendKey', { codeType, eventType, keyCode: code }).catch(() => {}); }
-  wheelEvent(dx, dy, display = 0) {
-    if (!this.ctl.injectWheel) return Promise.resolve(false);
-    if (!this.wheel) {
-      this.wheel = this.ctl.injectWheel(this.meta, () => { this.wheel = null; });
-      this.wheel.on('error', () => { this.wheel = null; });
+  // Everything goes down one ordered stream (streamInputEvent, as Android Studio does), so a release can
+  // never overtake its press. Older emulators without it get the same events one at a time, in order.
+  input(ev) {
+    if (this.inputMode !== 'queue' && this.ctl.streamInputEvent) {
+      if (!this.inStream) {
+        const st = this.ctl.streamInputEvent(this.meta, (err) => {
+          if (this.inStream === st) this.inStream = null;
+          if (err && err.code !== 1 /* cancelled */) {
+            if (err.code === 12 /* unimplemented */ || err.code === 3) this.inputMode = 'queue';
+            this.onInputError && this.onInputError(err);
+          }
+        });
+        st.on('error', () => {});
+        this.inStream = st;
+      }
+      try { this.inStream.write(ev); return; } catch (e) { this.inStream = null; }
     }
-    try { this.wheel.write({ dx: Math.round(dx), dy: Math.round(dy), display }); return Promise.resolve(true); } catch { this.wheel = null; return Promise.resolve(false); }
+    const [kind, body] = Object.entries(ev)[0];
+    const method = { touch_event: 'sendTouch', mouse_event: 'sendMouse', key_event: 'sendKey', wheel_event: null }[kind];
+    if (!method) return;
+    this.queue = (this.queue || Promise.resolve()).then(() => this.call(method, body)).catch((err) => { this.onInputError && this.onInputError(err); });
+  }
+  touch(touches, display = 0) { this.input({ touch_event: { touches, display } }); }
+  mouse(x, y, buttons, display = 0) { this.input({ mouse_event: { x: Math.round(x), y: Math.round(y), buttons, display } }); }
+  key(key, eventType = 'keypress') { this.input({ key_event: { key, eventType } }); }
+  text(text) { this.input({ key_event: { text } }); }
+  wheelEvent(dx, dy, display = 0) {
+    if (this.inputMode !== 'queue' && this.ctl.streamInputEvent) return this.input({ wheel_event: { dx: Math.round(dx), dy: Math.round(dy), display } });
+    if (!this.ctl.injectWheel) return;
+    if (!this.wheel) { this.wheel = this.ctl.injectWheel(this.meta, () => { this.wheel = null; }); this.wheel.on('error', () => { this.wheel = null; }); }
+    try { this.wheel.write({ dx: Math.round(dx), dy: Math.round(dy), display }); } catch { this.wheel = null; }
   }
 
   // ---- device state
@@ -128,6 +147,7 @@ class EmulatorClient {
     for (const s of this.streams) { try { s.cancel(); } catch {} }
     this.streams.clear();
     try { this.wheel && this.wheel.end(); } catch {}
+    try { this.inStream && this.inStream.end(); } catch {}
     try { this.ctl.close(); } catch {}
     try { this.snap && this.snap.close(); } catch {}
   }

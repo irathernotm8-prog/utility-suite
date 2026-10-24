@@ -60,7 +60,8 @@ function draw() {
   if (!screenOn) { fb.fill(0); return; }
   const booting = Date.now() - t0 < BOOT_MS;
   if (booting) { fb.fill(0); const p = ((Date.now() - t0) / BOOT_MS); circle(W / 2, H / 2, 60 * u + 20 * u * Math.sin(p * 12), 61, 220, 132); return; }
-  for (let y = 0; y < H; y++) { const k = y / H; const r = 24 + 40 * k, g = 30 + 90 * (1 - k), b = 60 + 120 * k; rect(0, y, W, y + 1, r, g, b); }
+  if (!draw.bg) { for (let y = 0; y < H; y++) { const k = y / H; rect(0, y, W, y + 1, 24 + 40 * k, 30 + 90 * (1 - k), 60 + 120 * k); } draw.bg = Buffer.from(fb); }
+  draw.bg.copy(fb);
   const d = new Date(); text(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, 40 * u, 26 * u, Math.max(2, 5 * u | 0), 255, 255, 255);
   if (page === 'home') {
     text(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, W / 2 - 150 * u, H * 0.18, Math.max(4, 18 * u | 0), 255, 255, 255);
@@ -91,6 +92,8 @@ function frame(reqW, reqH) {
   if (reqW && reqW < fw) s = Math.min(s, reqW / fw);
   if (reqH && reqH < fh) s = Math.min(s, reqH / fh);
   const ow = Math.max(1, Math.round(fw * s)), oh = Math.max(1, Math.round(fh * s));
+  const rname0 = { 0: 'PORTRAIT', 90: 'LANDSCAPE', 180: 'REVERSE_PORTRAIT', 270: 'REVERSE_LANDSCAPE' }[rot];
+  if (rot === 0 && s === 1) return { w: W, h: H, data: Buffer.from(fb), rotation: rname0 };   // fast path
   const out = Buffer.alloc(ow * oh * 3);
   for (let y = 0; y < oh; y++) for (let x = 0; x < ow; x++) {
     const rx = Math.min(fw - 1, (x / s) | 0), ry = Math.min(fh - 1, (y / s) | 0);
@@ -139,7 +142,7 @@ server.addService(ctl.EmulatorController.service, {
     if (!authed(call)) return call.destroy(new Error('bad token'));
     const req = call.request; streams.add(call);
     const tick = () => { draw(); const f = frame(req.width, req.height); call.write({ format: { format: 'RGB888', width: f.w, height: f.h, rotation: { rotation: f.rotation } }, image: f.data, seq: seq++ }); };
-    tick(); const iv = setInterval(tick, 1000 / 20);
+    tick(); const iv = setInterval(tick, 1000 / 12);
     call.on('cancelled', () => { clearInterval(iv); streams.delete(call); });
     call.on('close', () => clearInterval(iv));
   },
@@ -147,6 +150,15 @@ server.addService(ctl.EmulatorController.service, {
   sendMouse(call, cb) { pointer(call.request.x, call.request.y, call.request.buttons > 0); ok(cb); },
   sendTouch(call, cb) { const t = call.request.touches[0]; if (t) pointer(t.x, t.y, t.pressure > 0); ok(cb); },
   sendKey(call, cb) { lastKey = call.request.key || call.request.text; if (call.request.key === 'GoHome' || call.request.key === 'GoBack') page = 'home'; if (call.request.key === 'Power') screenOn = !screenOn; fs.writeFileSync(path.join(stateDir, 'lastkey'), String(lastKey)); ok(cb); },
+  streamInputEvent(call, cb) {
+    if (!authed(call)) return cb({ code: grpc.status.UNAUTHENTICATED, details: 'bad token' });
+    call.on('data', (ev) => {
+      if (ev.touch_event) { const t = ev.touch_event.touches[0]; if (t) pointer(t.x, t.y, t.pressure > 0); fs.appendFileSync(path.join(stateDir, 'input.log'), `touch ${t && t.x},${t && t.y},${t && t.pressure}\n`); }
+      if (ev.mouse_event) pointer(ev.mouse_event.x, ev.mouse_event.y, ev.mouse_event.buttons > 0);
+      if (ev.key_event) { const k = ev.key_event.key || ev.key_event.text; if (k === 'GoHome' || k === 'GoBack') page = 'home'; if (k === 'Power') screenOn = !screenOn; fs.writeFileSync(path.join(stateDir, 'lastkey'), String(k)); }
+    });
+    call.on('end', () => ok(cb));
+  },
   injectWheel(call, cb) { call.on('data', () => {}); call.on('end', () => ok(cb)); },
   setGps(call, cb) { gps = { lat: call.request.latitude, lng: call.request.longitude }; fs.writeFileSync(path.join(stateDir, 'gps.json'), JSON.stringify(gps)); ok(cb); },
   getGps: (call, cb) => ok(cb, { latitude: gps.lat, longitude: gps.lng }),
