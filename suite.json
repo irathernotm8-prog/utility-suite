@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -201,6 +201,14 @@
       "id": "beam",
       "name": "Beam",
       "description": "AirDrop for Macs, PCs and phones: send files, folders, text and links straight to nearby devices, encrypted end to end and as fast as the network allows.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
+    },
+    {
+      "id": "waypoint",
+      "name": "Waypoint",
+      "description": "Travel planning: trips with interactive day timelines, bookings, documents, budgets and destination research, all offline, handed to your phone or another computer in seconds.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []

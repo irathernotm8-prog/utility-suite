@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'">
+  <title>Waypoint</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Waypoint</b><span>Plan it, carry it</span></div></div>
+      <nav id="navTop">
+        <button data-view="trips"><span class="nav-ic" data-icon="compass"></span>All trips<span class="nav-count" id="tripCount"></span></button>
+      </nav>
+      <div id="tripNav"></div>
+      <div class="side-fill"></div>
+      <div id="sideFoot"></div>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div id="dropShade"><div class="ds-inner"><span data-icon="import" data-size="30"></span><b id="dsTitle">Drop to add</b><span id="dsText"></span></div></div>
+  <div id="sheetHost"></div>
+  <div id="popHost"></div>
+  <div id="toasts"></div>
+  <script src="../core/timeline.js"></script>
+  <script src="../core/places.js"></script>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="trips.js"></script>
+  <script src="overview.js"></script>
+  <script src="timeline.js"></script>
+  <script src="bookings.js"></script>
+  <script src="docs.js"></script>
+  <script src="budget.js"></script>
+  <script src="research.js"></script>
+  <script src="take.js"></script>
+  <script src="settings.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

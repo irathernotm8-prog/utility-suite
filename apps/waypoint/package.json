@@ -1,0 +1,65 @@
+{
+  "name": "waypoint",
+  "productName": "Waypoint",
+  "version": "0.1.0",
+  "description": "Plan whole trips in one place: interactive day timelines, bookings, documents, budgets and destination research, all kept on your computer so every plan works offline, and handed to your phone or another computer in seconds.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "qrcode-generator": "2.0.4"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.waypoint",
+    "productName": "Waypoint",
+    "copyright": "Personal use",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "waypoint",
+        "name": "Waypoint trip",
+        "description": "A Waypoint trip with its documents",
+        "role": "Editor",
+        "icon": "build/icon.png"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.travel",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Waypoint hands your trip plans and documents straight to your phone and other computers on this network."
+      }
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    }
+  }
+}

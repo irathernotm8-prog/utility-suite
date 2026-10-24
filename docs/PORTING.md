@@ -25,6 +25,7 @@
 |---|---|---|
 | Assist | `apps/assist` | `docs/handoffs/Assist.md` |
 | Beam | `apps/beam` | `docs/handoffs/Beam.md` (no native modules; needs Local Network on Mac and Private-network firewall access on Windows) |
+| Waypoint | `apps/waypoint` | `docs/handoffs/Waypoint.md` (no native modules; phone hand-off needs Private-network firewall access on Windows) |
 | Cadence | `apps/cadence` | `docs/handoffs/Cadence.md` (MCP plugin for Claude/Codex; no native modules) |
 | Crate | `apps/crate` | `docs/handoffs/Crate.md` |
 | Datum | `apps/datum` | `docs/handoffs/Datum.md` |
