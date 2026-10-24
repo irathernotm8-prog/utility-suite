@@ -1,0 +1,41 @@
+{
+  "name": "decomp",
+  "productName": "Decomp",
+  "version": "0.1.0",
+  "description": "Take any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, using every core on the computer.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "DECOMP_DEMO=1 electron .",
+    "test": "node test/run.js",
+    "cli": "node src/cli.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "js-beautify": "^1.15.4",
+    "wabt": "^1.0.37"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.decomp",
+    "productName": "Decomp",
+    "copyright": "Personal use",
+    "asar": false,
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "package.json", "node_modules/**/*"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "darkModeSupport": true
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

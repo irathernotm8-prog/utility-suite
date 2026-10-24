@@ -7,6 +7,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Assist** | Private, on-device AI chat and reply assistant | `apps/assist` |
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
+| **Decomp** | Takes any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, on every core | `apps/decomp` |
 | **Docket** | Meeting notes: on-device transcription of Zoom, Teams and Meet calls, AI summaries, one to-do list | `apps/docket` |
 | **Droid** | Virtual Android phones and tablets: pick the look, Android version and hardware, run several at once, drag in apps and files | `apps/droid` |
 | **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
@@ -49,6 +50,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Onward | `~/Downloads/Onward/Onward Files` (resume, credentials, applications) |
 | Slate | `~/Documents/Slate/Statements` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
+| Decomp | its app-data folder: `engines/` (7-Zip, Java, JADX, Vineflower, .NET, ILSpy, Ghidra — up to ~1 GB) and `jobs.json`. Results go to `~/Documents/Decomp`, one folder per job |
 | Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |
 | Droid | its app-data folder: `sdk/` (emulator and Android versions, 1–2 GB each), `avd/` (each device's disk), `apks/` (app library); movable in Android versions › Data folder. Screenshots and recordings go to `~/Pictures/Droid` |
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |

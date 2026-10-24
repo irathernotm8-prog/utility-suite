@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'">
+  <title>Decomp</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Decomp</b><span>Take any app apart</span></div></div>
+      <nav id="nav">
+        <button data-view="home" class="on"><span class="nav-ic" data-icon="open"></span>Open</button>
+        <button data-view="jobs"><span class="nav-ic" data-icon="jobs"></span>Jobs<span class="nav-count" id="jobCount"></span></button>
+        <button data-view="engines"><span class="nav-ic" data-icon="engine"></span>Engines<span class="nav-count" id="engCount"></span></button>
+        <button data-view="settings"><span class="nav-ic" data-icon="gear"></span>Settings</button>
+      </nav>
+      <div class="side-fill"></div>
+      <div id="powerCard" class="power-card"></div>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div id="dropVeil"><div class="veil-box"><span data-icon="layers" data-size="40"></span><b>Drop to take it apart</b><span>Apps, installers, disc images, archives, game packs, firmware — or a whole folder</span></div></div>
+  <div id="sheetHost"></div>
+  <div id="toasts"></div>
+  <script src="icons.js"></script>
+  <script src="viewer.js"></script>
+  <script src="app.js"></script>
+  <script src="views.js"></script>
+  <script src="job.js"></script>
+</body>
+</html>
