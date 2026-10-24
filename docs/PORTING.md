@@ -24,6 +24,7 @@
 | App | Folder | Handoff |
 |---|---|---|
 | Assist | `apps/assist` | `docs/handoffs/Assist.md` |
+| Cadence | `apps/cadence` | `docs/handoffs/Cadence.md` (MCP plugin for Claude/Codex; no native modules) |
 | Crate | `apps/crate` | `docs/handoffs/Crate.md` |
 | Datum | `apps/datum` | `docs/handoffs/Datum.md` |
 | Docket | `apps/docket` | `docs/handoffs/Docket.md` |

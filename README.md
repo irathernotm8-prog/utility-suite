@@ -5,6 +5,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | App | What it is | Lives in |
 |---|---|---|
 | **Assist** | Private, on-device AI chat and reply assistant | `apps/assist` |
+| **Cadence** | Automations on a schedule: pull reports from sites, file them by week, and build slides and reports, with Claude and Codex plugged in | `apps/cadence` |
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
 | **Decomp** | Takes any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, on every core | `apps/decomp` |
@@ -49,6 +50,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Relay | `~/Downloads/Relay/Relay Files` (library and downloads) |
 | Onward | `~/Downloads/Onward/Onward Files` (resume, credentials, applications) |
 | Slate | `~/Documents/Slate/Statements` |
+| Cadence | its app-data folder: `flows/` (one JSON per automation), `runs.json`, `memory.json`, `secrets.json` (encrypted), browser sign-ins, `runs/` (scratch, 14 days). Output goes where each automation says, by default `~/Documents/Cadence/<automation>` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Decomp | its app-data folder: `engines/` (7-Zip, Java, JADX, Vineflower, .NET, ILSpy, Ghidra — up to ~1 GB) and `jobs.json`. Results go to `~/Documents/Decomp`, one folder per job |
 | Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |

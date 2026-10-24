@@ -1,0 +1,63 @@
+{
+  "name": "cadence",
+  "productName": "Cadence",
+  "version": "0.1.0",
+  "description": "Automations that run on your schedule: pull reports from sites, file them in folders named for the week, and turn the data into PowerPoint slides and reports, with Claude and Codex plugged in.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "CADENCE_DEMO=1 electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
+    "pptxgenjs": "^4.0.1"
+  },
+  "build": {
+    "appId": "com.bilal.cadence",
+    "productName": "Cadence",
+    "copyright": "Personal use",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "mcp/**/*",
+      "build/icon.png",
+      "build/trayTemplate.png",
+      "build/trayTemplate@2x.png",
+      "build/tray.png",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "mcp/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "darkModeSupport": true
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.18.0"
+  }
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'">
+  <title>Cadence</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Cadence</b><span>Runs on your schedule</span></div></div>
+      <nav id="nav">
+        <button data-view="flows" class="on"><span class="nav-ic" data-icon="flows"></span>Automations<span class="nav-count" id="flowCount"></span></button>
+        <button data-view="runs"><span class="nav-ic" data-icon="runs"></span>Runs<span class="nav-count" id="runCount"></span></button>
+        <button data-view="templates"><span class="nav-ic" data-icon="templates"></span>Templates</button>
+        <button data-view="connections"><span class="nav-ic" data-icon="plug"></span>Connections<span class="nav-dot" id="aiDot"></span></button>
+        <button data-view="settings"><span class="nav-ic" data-icon="gear"></span>Settings</button>
+      </nav>
+      <div class="side-fill"></div>
+      <div id="nextCard" class="next-card"></div>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div id="sheetHost"></div>
+  <div id="popHost"></div>
+  <div id="toasts"></div>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="fields.js"></script>
+  <script src="flows.js"></script>
+  <script src="editor.js"></script>
+  <script src="runs.js"></script>
+  <script src="more.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

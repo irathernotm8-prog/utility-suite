@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -185,6 +185,14 @@
       "id": "decomp",
       "name": "Decomp",
       "description": "Take any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, using every core on the computer.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
+    },
+    {
+      "id": "cadence",
+      "name": "Cadence",
+      "description": "Automations on your schedule: pull reports from sites with a signed-in browser, file them in folders named for the week, compare with last week and build PowerPoint slides and PDF reports, with Claude and Codex plugged in to build and run them.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []

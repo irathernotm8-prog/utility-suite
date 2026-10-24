@@ -1,0 +1,31 @@
+// Cadence — what Claude and Codex can do through the plugin.
+'use strict';
+
+const INSTRUCTIONS = `Cadence is the user's desktop automation app (Mac/Windows). It runs automations on a schedule, when a file lands in a folder, or on demand: browser steps that sign in and download reports, file and folder steps (e.g. folders named after the week), data steps (read CSV/Excel, filter, group, compare with last run), PowerPoint and PDF output, AI steps and scripts.
+
+How to work with it:
+1. Call cadence_reference once to learn the automation JSON, step types, fields and {{ }} templates.
+2. Call cadence_context to see existing automations, browser sign-in profiles, saved secret names and which AI is installed.
+3. Build with create_automation / update_automation. Fix every problem it reports. Use {{secrets.NAME}} for passwords and tokens — never put them in plain text; ask the user to add the secret in Cadence › Connections › Secrets.
+4. Test with test_step (runs the automation up to that step and returns its output) and run_automation. Read failures with get_run and fix them.
+Sites that need signing in: use a web.browser step with a profile; the user signs in once from Cadence (Connections › Browser profiles) — tell them which profile and site. If you don't know a site's buttons, add actions with text= targets ("text=Export") and suggest the user open the step and use Record to capture the clicks.
+New automations start switched off unless enabled is true; switch them on when the user wants the schedule to start.`;
+
+const ref = { type: 'string', description: 'Automation id (from list_automations)' };
+const TOOLS = [
+  { name: 'cadence_reference', title: 'Automation format', description: 'The full reference: automation JSON shape, triggers, every step type with its fields and outputs, browser actions, slide layouts and the {{ }} template language. Read this before creating or editing automations.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
+  { name: 'cadence_context', title: 'What’s set up', description: 'Existing automations (id, name, trigger, next/last run), browser sign-in profiles, saved secret names (not values), installed AI tools, default output folder and week start.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
+  { name: 'list_automations', title: 'List automations', description: 'All automations with schedule, next run and last result.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
+  { name: 'get_automation', title: 'Get automation', description: 'One automation’s full JSON.', inputSchema: { type: 'object', properties: { id: ref }, required: ['id'] }, annotations: { readOnlyHint: true } },
+  { name: 'create_automation', title: 'Create automation', description: 'Create an automation from JSON (see cadence_reference). Returns its id and any problems to fix. Switched off unless enabled: true.', inputSchema: { type: 'object', properties: { automation: { type: 'object', description: 'The automation JSON: name, description, trigger, steps, optional output folder, enabled' } }, required: ['automation'] } },
+  { name: 'update_automation', title: 'Update automation', description: 'Replace an automation’s JSON (keep step ids stable so run history and week-over-week comparisons keep working). Pass the whole automation; get_automation first.', inputSchema: { type: 'object', properties: { id: ref, automation: { type: 'object' } }, required: ['id', 'automation'] } },
+  { name: 'set_enabled', title: 'Switch on or off', description: 'Turn an automation’s schedule / folder watch on or off.', inputSchema: { type: 'object', properties: { id: ref, enabled: { type: 'boolean' } }, required: ['id', 'enabled'] } },
+  { name: 'run_automation', title: 'Run automation', description: 'Run an automation now. Waits for it to finish (up to wait_seconds, default 600) and returns each step’s result, outputs (tables trimmed to 60 rows) and files made.', inputSchema: { type: 'object', properties: { id: ref, inputs: { type: 'object', description: 'Values available as {{inputs.name}}' }, wait_seconds: { type: 'number' } }, required: ['id'] } },
+  { name: 'test_step', title: 'Test up to a step', description: 'Run an automation up to and including one step (later steps are skipped, nothing is remembered for comparisons) and return that step’s output. Use to check a browser step, a table’s columns, or a template.', inputSchema: { type: 'object', properties: { id: ref, step_id: { type: 'string' } }, required: ['id', 'step_id'] } },
+  { name: 'get_run', title: 'Get run', description: 'A run’s status, per-step logs, errors, outputs and files.', inputSchema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] }, annotations: { readOnlyHint: true } },
+  { name: 'list_runs', title: 'Run history', description: 'Recent runs, optionally for one automation.', inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Automation id (optional)' }, limit: { type: 'number' } } }, annotations: { readOnlyHint: true } },
+  { name: 'cancel_run', title: 'Stop a run', description: 'Stop a run that is in progress.', inputSchema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
+  { name: 'delete_automation', title: 'Delete automation', description: 'Delete an automation (Cadence keeps a copy in its “deleted” folder). Only when the user asked.', inputSchema: { type: 'object', properties: { id: ref }, required: ['id'] }, annotations: { destructiveHint: true } },
+];
+
+module.exports = { TOOLS, INSTRUCTIONS };
