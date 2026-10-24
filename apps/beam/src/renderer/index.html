@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'">
+  <title>Beam</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Beam</b><span>Send to anything nearby</span></div></div>
+      <nav id="nav">
+        <button data-view="nearby" class="on"><span class="nav-ic" data-icon="radar"></span>Nearby<span class="nav-count" id="peerCount"></span></button>
+        <button data-view="activity"><span class="nav-ic" data-icon="activity"></span>Activity<span class="nav-count" id="liveCount"></span></button>
+        <button data-view="phone"><span class="nav-ic" data-icon="qr"></span>Phone &amp; tablet</button>
+        <button data-view="devices"><span class="nav-ic" data-icon="devices"></span>Devices</button>
+        <button data-view="settings"><span class="nav-ic" data-icon="gear"></span>Settings</button>
+      </nav>
+      <div class="side-fill"></div>
+      <div id="meCard" class="me-card"></div>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div id="dropShade"><div class="ds-inner"><span data-icon="beam" data-size="30"></span><b>Drop to send</b><span>Let go on a device to send straight away, or anywhere else to choose one.</span></div></div>
+  <div id="sheetHost"></div>
+  <div id="popHost"></div>
+  <div id="toasts"></div>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="nearby.js"></script>
+  <script src="views.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

@@ -196,6 +196,14 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "beam",
+      "name": "Beam",
+      "description": "AirDrop for Macs, PCs and phones: send files, folders, text and links straight to nearby devices, encrypted end to end and as fast as the network allows.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {

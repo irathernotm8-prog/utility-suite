@@ -5,6 +5,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | App | What it is | Lives in |
 |---|---|---|
 | **Assist** | Private, on-device AI chat and reply assistant | `apps/assist` |
+| **Beam** | AirDrop for Macs, PCs and phones: files, folders, text and links straight to nearby devices, encrypted, as fast as the network goes | `apps/beam` |
 | **Cadence** | Automations on a schedule: pull reports from sites, file them by week, and build slides and reports, with Claude and Codex plugged in | `apps/cadence` |
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
@@ -50,6 +51,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Relay | `~/Downloads/Relay/Relay Files` (library and downloads) |
 | Onward | `~/Downloads/Onward/Onward Files` (resume, credentials, applications) |
 | Slate | `~/Documents/Slate/Statements` |
+| Beam | `~/Downloads/Beam` (received files; `.beam-incoming/` inside holds transfers still arriving). Its app-data folder has `identity.json` (this device's key), `settings.json` (trusted devices, saved addresses, phone link) and `history.json` |
 | Cadence | its app-data folder: `flows/` (one JSON per automation), `runs.json`, `memory.json`, `secrets.json` (encrypted), browser sign-ins, `runs/` (scratch, 14 days). Output goes where each automation says, by default `~/Documents/Cadence/<automation>` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Decomp | its app-data folder: `engines/` (7-Zip, Java, JADX, Vineflower, .NET, ILSpy, Ghidra — up to ~1 GB) and `jobs.json`. Results go to `~/Documents/Decomp`, one folder per job |

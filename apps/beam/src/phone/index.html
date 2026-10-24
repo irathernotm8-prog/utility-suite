@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080b14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Beam">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>Beam · __NAME__</title>
+<style>
+:root { --bg: #080b14; --panel: #0f1424; --panel-2: #151b2e; --line: rgba(214,226,255,.09); --fg: #eaf0fc; --fg-2: #aeb8d0; --mut: #76819c; --acc: #4f8cff; --ok: #4fd18b; --bad: #ff5c72;
+  --grad: linear-gradient(135deg, #8ef0ff 0%, #4f8cff 52%, #6a62ff 100%); --on: #04102a; color-scheme: dark; }
+@media (prefers-color-scheme: light) { :root { --bg: #f4f6fb; --panel: #fff; --panel-2: #eef2f9; --line: rgba(20,40,100,.1); --fg: #161b29; --fg-2: #48506a; --mut: #7c849c; --acc: #2f6bf0; --ok: #129a52; --bad: #d63a52; --grad: linear-gradient(135deg, #5fd3f3 0%, #2f6bf0 55%, #5a4ff0 100%); --on: #fff; color-scheme: light; } }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  padding: max(18px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom)); }
+.wrap { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; align-items: center; gap: 12px; }
+header img { width: 44px; height: 44px; border-radius: 11px; }
+header b { display: block; font-size: 18px; letter-spacing: -.01em; } header span { font-size: 13px; color: var(--mut); }
+.hero { position: relative; border-radius: 22px; padding: 26px 20px 22px; background: var(--panel); border: 1px solid var(--line); text-align: center; overflow: hidden; }
+.hero::before { content: ''; position: absolute; inset: -40% -20% auto; height: 160%; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--acc) 22%, transparent), transparent 60%); pointer-events: none; }
+.hero h1 { position: relative; margin: 0 0 4px; font-size: 21px; letter-spacing: -.02em; }
+.hero p { position: relative; margin: 0 0 18px; color: var(--fg-2); font-size: 14px; }
+.big { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 56px; border: 0; border-radius: 16px; background: var(--grad); color: var(--on); font: inherit; font-weight: 700; font-size: 17px; box-shadow: 0 10px 28px color-mix(in srgb, var(--acc) 35%, transparent); }
+.big:active { transform: translateY(1px); }
+.big svg { width: 22px; height: 22px; }
+.off { color: var(--bad); font-size: 14px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); margin: 8px 4px 0; font-weight: 700; }
+.list { border-radius: 16px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
+.item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 60px; }
+.item + .item { border-top: 1px solid var(--line); }
+.ic { width: 38px; height: 38px; flex: none; border-radius: 11px; display: grid; place-items: center; background: color-mix(in srgb, var(--acc) 15%, transparent); color: var(--acc); }
+.ic svg { width: 19px; height: 19px; }
+.main { flex: 1; min-width: 0; } .name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .sub { font-size: 13px; color: var(--mut); }
+.bar { height: 5px; border-radius: 5px; background: var(--panel-2); overflow: hidden; margin-top: 6px; } .bar i { display: block; height: 100%; width: 0; background: var(--grad); transition: width .2s; }
+.item.done .ic { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); } .item.err .ic { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: 11px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); font: inherit; font-size: 14px; font-weight: 600; text-decoration: none; flex: none; }
+.row { display: flex; gap: 8px; }
+textarea { width: 100%; min-height: 84px; resize: vertical; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; font-size: 16px; outline: none; }
+textarea:focus { border-color: var(--acc); }
+.empty { padding: 18px; text-align: center; color: var(--mut); font-size: 14px; }
+.txt { white-space: pre-wrap; word-break: break-word; font-size: 15px; }
+.note { font-size: 12.5px; color: var(--mut); text-align: center; }
+.speed { color: var(--acc); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><img src="icon.png" alt=""><div><b>__NAME__</b><span id="status">Connected over Wi-Fi</span></div></header>
+
+  <section class="hero">
+    <h1>Send to __NAME__</h1>
+    <p>Photos, videos and any files — straight over your Wi-Fi.</p>
+    <input type="file" id="pick" multiple hidden>
+    <button class="big" id="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>Choose photos &amp; files</button>
+    <div class="off" id="off" hidden>__NAME__ isn’t receiving right now.</div>
+  </section>
+
+  <div id="ups"></div>
+
+  <section>
+    <h2>Send text or a link</h2>
+    <textarea id="text" placeholder="Paste anything — it lands on __NAME__’s clipboard"></textarea>
+    <div class="row" style="margin-top:8px"><span style="flex:1" id="tmsg" class="sub"></span><button class="btn" id="tsend">Send</button></div>
+  </section>
+
+  <section>
+    <h2>From __NAME__</h2>
+    <div class="list" id="shared"><div class="empty">Nothing here yet. On the computer, drop files in Beam › Phone &amp; tablet and they appear here.</div></div>
+  </section>
+  <p class="note">This page only works on the same network as __NAME__. Add it to your home screen to keep it handy.</p>
+</div>
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const human = (n) => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= 1000 && i < 4) { n /= 1000; i++; } return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + ' ' + u[i]; };
+const ICON = {
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+  err: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16.5h.01"/><circle cx="12" cy="12" r="9"/></svg>',
+  file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></svg>',
+  text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 6.5V5h14v1.5M12 5v14M9 19h6"/></svg>',
+};
+
+// ── sending files: two at a time, each with its own progress
+$('#go').onclick = () => $('#pick').click();
+$('#pick').onchange = () => { const files = [...$('#pick').files]; $('#pick').value = ''; if (files.length) upload(files); };
+function upload(files) {
+  const batch = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const total = files.reduce((a, f) => a + f.size, 0);
+  const box = document.createElement('div'); box.className = 'list';
+  box.innerHTML = files.map((f, i) => `<div class="item" id="u${batch}${i}"><span class="ic">${ICON.up}</span><div class="main"><div class="name">${esc(f.name)}</div><div class="sub">${human(f.size)} · waiting</div><div class="bar"><i></i></div></div></div>`).join('');
+  $('#ups').prepend(box);
+  let next = 0, done = 0;
+  const one = () => new Promise((resolve) => {
+    const i = next++; if (i >= files.length) return resolve(false);
+    const f = files[i], row = document.getElementById('u' + batch + i);
+    const xhr = new XMLHttpRequest();
+    const q = new URLSearchParams({ name: f.name, size: f.size, total, count: files.length, batch });
+    xhr.open('PUT', 'api/up?' + q);
+    const t0 = Date.now();
+    xhr.upload.onprogress = (e) => {
+      const s = (Date.now() - t0) / 1000;
+      row.querySelector('i').style.width = (e.loaded / f.size * 100) + '%';
+      row.querySelector('.sub').innerHTML = `${human(e.loaded)} of ${human(f.size)}${s > .5 ? ` · <span class="speed">${human(e.loaded / s)}/s</span>` : ''}`;
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200) { row.classList.add('done'); row.querySelector('.ic').innerHTML = ICON.ok; row.querySelector('.sub').textContent = `${human(f.size)} · sent`; row.querySelector('i').style.width = '100%'; }
+      else { fail(row, xhr); }
+      done++; resolve(true);
+    };
+    xhr.onerror = () => { fail(row, xhr); done++; resolve(true); };
+    xhr.send(f);
+  });
+  const lane = async () => { while (await one()) {} };
+  lane(); lane();
+}
+function fail(row, xhr) {
+  row.classList.add('err'); row.querySelector('.ic').innerHTML = ICON.err;
+  let m = 'Didn’t go through — check you’re on the same Wi-Fi.';
+  try { m = JSON.parse(xhr.responseText).error || m; } catch {}
+  row.querySelector('.sub').textContent = m;
+}
+
+// ── text
+$('#tsend').onclick = async () => {
+  const v = $('#text').value; if (!v.trim()) return;
+  $('#tsend').disabled = true;
+  try {
+    const r = await fetch('api/text', { method: 'POST', body: v });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Didn’t go through');
+    $('#text').value = ''; $('#tmsg').textContent = 'Sent ✓';
+  } catch (e) { $('#tmsg').textContent = e.message; }
+  $('#tsend').disabled = false;
+  setTimeout(() => { $('#tmsg').textContent = ''; }, 4000);
+};
+
+// ── what the computer put up for this phone
+let last = '';
+async function poll() {
+  try {
+    const r = await fetch('api/info', { cache: 'no-store' });
+    if (!r.ok) { $('#status').textContent = 'This link has expired — scan the code again'; return; }
+    const j = await r.json();
+    $('#status').textContent = 'Connected over Wi-Fi';
+    $('#off').hidden = j.receiving; $('#go').hidden = !j.receiving;
+    const key = JSON.stringify([j.shared, j.texts]);
+    if (key !== last) {
+      last = key;
+      const rows = [
+        ...j.texts.map(t => `<div class="item"><span class="ic">${ICON.text}</span><div class="main txt">${esc(t.text)}</div><button class="btn" data-copy="${esc(t.text)}">Copy</button></div>`),
+        ...j.shared.map(f => `<div class="item"><span class="ic">${ICON.file}</span><div class="main"><div class="name">${esc(f.name)}</div><div class="sub">${human(f.size)}</div></div><a class="btn" href="api/dl/${encodeURIComponent(f.id)}" download="${esc(f.name)}">Save</a></div>`),
+      ];
+      $('#shared').innerHTML = rows.length ? rows.join('') : '<div class="empty">Nothing here yet. On the computer, drop files in Beam › Phone &amp; tablet and they appear here.</div>';
+      document.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+        try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch { const ta = document.createElement('textarea'); ta.value = b.dataset.copy; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); b.textContent = 'Copied'; }
+        setTimeout(() => { b.textContent = 'Copy'; }, 1800);
+      });
+    }
+  } catch { $('#status').textContent = 'Can’t reach __NAME__ — same Wi-Fi?'; }
+}
+poll(); setInterval(poll, 3000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+</script>
+</body>
+</html>
