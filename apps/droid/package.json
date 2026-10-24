@@ -1,0 +1,40 @@
+{
+  "name": "droid",
+  "productName": "Droid",
+  "version": "0.1.0",
+  "description": "Virtual Android phones and tablets on your Mac or PC: build devices from Pixel, Galaxy, tablet or island-style frames, pick the Android version, screen, memory, cores, storage, network and location, run several side by side, drag in APKs and files, and find apps from F-Droid, Google Play or APK sites.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "DROID_DEMO=1 electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.0",
+    "@grpc/proto-loader": "^0.7.13",
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.droid",
+    "productName": "Droid",
+    "copyright": "Personal use",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "package.json", "node_modules/**/*"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "darkModeSupport": true
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

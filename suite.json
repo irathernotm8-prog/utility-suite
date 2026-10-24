@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -169,6 +169,14 @@
       "id": "scene",
       "name": "Scene",
       "description": "Save and switch whole setups in one click: the apps, where every window sits on which display, the sites and files that open with them, volume, appearance and wallpaper, for work, gaming, match day or anything else.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
+    },
+    {
+      "id": "droid",
+      "name": "Droid",
+      "description": "Virtual Android phones and tablets: build Pixel, Galaxy, island-style or tablet devices with your choice of Android version, screen, memory, cores, storage, network and location, run several at once, drag in apps and files, and get apps from F-Droid, Google Play or APK sites.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []

@@ -27,6 +27,7 @@
 | Crate | `apps/crate` | `docs/handoffs/Crate.md` |
 | Datum | `apps/datum` | `docs/handoffs/Datum.md` |
 | Docket | `apps/docket` | `docs/handoffs/Docket.md` |
+| Droid | `apps/droid` | `docs/handoffs/Droid.md` (downloads Google's Android Emulator at runtime; no native modules) |
 | Fresh Desk | `apps/fresh-desk` (after `./utility adopt fresh-desk`) | `docs/handoffs/Fresh Desk.md` |
 | Glean | `apps/glean` | `docs/handoffs/Glean.md` |
 | Kiln | `apps/kiln` | `docs/handoffs/Kiln.md` |

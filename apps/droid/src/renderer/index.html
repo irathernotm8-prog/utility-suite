@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; media-src 'self' file:; frame-src https:">
+  <title>Droid</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="../../node_modules/leaflet/dist/leaflet.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Droid</b><span>Virtual Android</span></div></div>
+      <nav id="nav">
+        <button data-view="devices" class="on"><span class="nav-ic" data-icon="phones"></span>Devices<span class="nav-count" id="navCount"></span></button>
+        <button data-view="apps"><span class="nav-ic" data-icon="store"></span>Get apps</button>
+        <button data-view="library"><span class="nav-ic" data-icon="box"></span>App library<span class="nav-count" id="libCount"></span></button>
+        <button data-view="system"><span class="nav-ic" data-icon="layers"></span>Android versions</button>
+        <button data-view="settings"><span class="nav-ic" data-icon="gear"></span>Settings</button>
+      </nav>
+      <div class="side-fill"></div>
+      <div id="hostCard" class="host-card"></div>
+      <button class="btn primary new-btn" data-act="new"><span data-icon="plus"></span>New device</button>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div id="sheetHost"></div>
+  <div id="toasts"></div>
+  <script src="icons.js"></script>
+  <script src="frames.js"></script>
+  <script src="../../node_modules/leaflet/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+  <script src="wizard.js"></script>
+  <script src="views.js"></script>
+</body>
+</html>

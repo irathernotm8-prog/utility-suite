@@ -8,6 +8,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
 | **Docket** | Meeting notes: on-device transcription of Zoom, Teams and Meet calls, AI summaries, one to-do list | `apps/docket` |
+| **Droid** | Virtual Android phones and tablets: pick the look, Android version and hardware, run several at once, drag in apps and files | `apps/droid` |
 | **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
 | **Glean** | Collects every photo and video from Instagram, Facebook, Patreon or any page at full size, grouped by post with captions; keeps each account up to date | `apps/glean` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
@@ -49,6 +50,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Slate | `~/Documents/Slate/Statements` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |
+| Droid | its app-data folder: `sdk/` (emulator and Android versions, 1–2 GB each), `avd/` (each device's disk), `apks/` (app library); movable in Android versions › Data folder. Screenshots and recordings go to `~/Pictures/Droid` |
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
 | Vitals | its app-data folder (`focus/` holds one small file per day of time tracking) |
 | All apps | their app-data folder (`~/Library/Application Support/<App>`, `%APPDATA%\<App>`) |

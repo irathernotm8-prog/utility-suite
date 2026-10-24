@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-23 22:10 — **Droid 0.1.0** — First release: virtual Android phones and tablets. Build devices in Pixel, Galaxy, island (iPhone-like) or tablet style with any Android version from 7 to 17 (with or without Google Play), resolution, memory, cores, storage, network (internet, isolated or proxy) and location (real, a simulated city with movement, or any spot on a map). Run several at once, each in its own phone window with touch, keyboard, sound, rotation, screenshots and recording. Drag APK, APKM or XAPK files onto a phone to install them and other files to copy them in, browse its files, save states, and find apps on F-Droid, the Play Store, Aurora Store or APK sites in the built-in browser.
+- 2026-10-23 22:10 — **Droid 0.1.0** (49 new) — Added to the Utility Package
 - 2026-10-23 15:27 — **Touchline 0.1.0** — Trophy art in cabinets, player trophies and competition headers; live scores widget
 - 2026-10-23 14:51 — **Scene 0.1.0** — First release: save and switch whole setups. Each scene remembers the apps, where every window sits on which display, links and files to open, and whether other apps stay, hide or quit, plus volume, light or dark, wallpaper and keeping the screen awake. Edit layouts by dragging windows on a drawing of your displays, start from templates (Work, Gaming, Match day, Deep work, Create, Movie night) or from what is on screen, switch with a shortcut, the quick switcher or the menu bar, or automatically when a monitor is plugged in, at a time of day or when an app opens. Restore previous puts everything back.
 - 2026-10-23 14:51 — **Scene 0.1.0** (28 new) — Added to the Utility Package
