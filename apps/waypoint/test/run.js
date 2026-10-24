@@ -229,6 +229,135 @@ test('checks find what’s missing', async () => {
   assert.ok(TL.checks(t).some(x => x.kind === 'stay'));
 });
 
+
+// ───────── booking (mock Duffel and LiteAPI servers that answer like the real ones)
+function mockServer(handler) {
+  return new Promise((res) => {
+    const seen = [];
+    const srv = http.createServer((req, resp) => {
+      let b = ''; req.on('data', d => b += d); req.on('end', () => {
+        const body = b ? JSON.parse(b) : null; seen.push({ method: req.method, url: req.url, headers: req.headers, body });
+        const [code, json] = handler(req, body); resp.writeHead(code, { 'content-type': 'application/json' }); resp.end(JSON.stringify(json));
+      });
+    });
+    srv.listen(0, '127.0.0.1', () => res({ srv, seen, url: `http://127.0.0.1:${srv.address().port}` }));
+  });
+}
+const duffelOffer = (id, amount) => ({ id, total_amount: amount, total_currency: 'USD', expires_at: '2026-11-01T00:00:00Z', owner: { name: 'Duffel Airways', iata_code: 'ZZ', logo_symbol_url: 'https://x/zz.svg' },
+  passengers: [{ id: 'pas_1', type: 'adult' }, { id: 'pas_2', type: 'adult' }], conditions: { refund_before_departure: { allowed: false }, change_before_departure: { allowed: true } },
+  slices: [{ duration: 'PT11H25M', origin: { iata_code: 'IAH', city_name: 'Houston' }, destination: { iata_code: 'LIS', city_name: 'Lisbon' }, segments: [
+    { departing_at: '2026-11-01T18:40:00', arriving_at: '2026-11-02T10:05:00', origin: { iata_code: 'IAH', city_name: 'Houston' }, destination: { iata_code: 'EWR', city_name: 'New York' }, marketing_carrier: { name: 'Duffel Airways', iata_code: 'ZZ' }, marketing_carrier_flight_number: '101', aircraft: { name: 'Boeing 787-9' }, passengers: [{ cabin_class_marketing_name: 'Economy', baggages: [{ type: 'checked', quantity: 1 }, { type: 'carry_on', quantity: 0 }] }] },
+    { departing_at: '2026-11-02T12:00:00', arriving_at: '2026-11-02T23:30:00', origin: { iata_code: 'EWR', city_name: 'New York' }, destination: { iata_code: 'LIS', city_name: 'Lisbon' }, marketing_carrier: { name: 'Duffel Airways', iata_code: 'ZZ' }, marketing_carrier_flight_number: '202', passengers: [{ cabin_class_marketing_name: 'Economy', baggages: [] }] }] }],
+});
+
+test('flights: Duffel search, fresh price, booking → trip bookings on the timeline', async () => {
+  const P = require('../src/core/providers');
+  const CAP = require('../src/core/capture');
+  const m = await mockServer((req, body) => {
+    if (req.headers.authorization !== 'Bearer duffel_test_abc' || req.headers['duffel-version'] !== 'v2') return [401, { errors: [{ message: 'bad token' }] }];
+    if (req.url.startsWith('/air/offer_requests')) return [201, { data: { offers: [duffelOffer('off_1', '812.40'), duffelOffer('off_2', '640.00')] } }];
+    if (req.url === '/air/offers/off_2') return [200, { data: duffelOffer('off_2', '640.00') }];
+    if (req.url === '/air/orders') return [201, { data: { id: 'ord_9', booking_reference: 'RZPVBD', total_amount: '640.00', total_currency: 'USD', live_mode: false, owner: { name: 'Duffel Airways' }, passengers: body.data.passengers, slices: duffelOffer('x', '1').slices } }];
+    if (req.url.startsWith('/places/suggestions')) return [200, { data: [{ iata_code: 'LIS', name: 'Humberto Delgado Airport', city_name: 'Lisbon', type: 'airport' }] }];
+    return [404, { errors: [{ message: 'nope' }] }];
+  });
+  try {
+    const d = new P.Duffel('duffel_test_abc', m.url);
+    assert.strictEqual(d.mode, 'test');
+    const offers = await d.search({ from: 'IAH', to: 'LIS', depart: '2026-11-01', ret: '2026-11-08', adults: 2, maxStops: 1 });
+    const req = m.seen[0];
+    assert.match(req.url, /return_offers=true/);
+    assert.deepStrictEqual(req.body.data.slices, [{ origin: 'IAH', destination: 'LIS', departure_date: '2026-11-01' }, { origin: 'LIS', destination: 'IAH', departure_date: '2026-11-08' }]);
+    assert.strictEqual(req.body.data.passengers.length, 2); assert.strictEqual(req.body.data.max_connections, 1);
+    const o = offers.find(x => x.id === 'off_2');
+    assert.strictEqual(o.price, 640); assert.strictEqual(o.slices[0].minutes, 685); assert.strictEqual(o.slices[0].stops, 1);
+    assert.strictEqual(o.slices[0].segments[0].flight, 'ZZ 101'); assert.strictEqual(o.slices[0].bags, '1 checked'); assert.strictEqual(o.changeable, true);
+    assert.deepStrictEqual((await d.places('lis')).map(x => x.code), ['LIS']);
+    const pax = [{ given: 'Bilal', family: 'Ahmad', born: '1995-01-01', gender: 'm', email: 'b@example.com', phone: '+17135550100' }, { given: 'Kiana', family: 'Campbell', born: '1996-02-02', gender: 'f', email: 'k@example.com', phone: '+17135550101' }];
+    const order = await d.book({ offerId: 'off_2', amount: '640.00', currency: 'USD', passengers: pax.map((p, i) => ({ ...p, id: o.passengerIds[i] })) });
+    const ob = m.seen[m.seen.length - 1].body.data;
+    assert.strictEqual(ob.type, 'instant'); assert.deepStrictEqual(ob.payments, [{ type: 'balance', amount: '640.00', currency: 'USD' }]);
+    assert.strictEqual(ob.passengers[1].id, 'pas_2'); assert.strictEqual(ob.passengers[1].title, 'ms'); assert.strictEqual(ob.passengers[0].born_on, '1995-01-01');
+    assert.strictEqual(order.ref, 'RZPVBD'); assert.strictEqual(order.mode, 'test');
+    // into the trip
+    let n = 0; const trip = { items: [], bookings: [] };
+    const bks = CAP.flightBookings(trip, o, order, () => 'b' + (++n));
+    assert.strictEqual(bks.length, 1);
+    assert.deepStrictEqual([bks[0].from, bks[0].to, bks[0].startDate, bks[0].startTime, bks[0].endDate, bks[0].endTime, bks[0].ref, bks[0].cost], ['IAH', 'LIS', '2026-11-01', '18:40', '2026-11-02', '23:30', 'RZPVBD', 640]);
+    assert.match(bks[0].title, /ZZ 101 \+ ZZ 202 · Houston → Lisbon/); assert.match(bks[0].notes, /TEST booking/);
+    for (const b of bks) TL.syncBooking(trip, b, () => 'i' + (++n));
+    assert.deepStrictEqual(trip.items.map(i => i.day), ['2026-11-01', '2026-11-02']);
+    // a bad key reads as a key problem
+    await assert.rejects(new P.Duffel('duffel_test_wrong', m.url).search({ from: 'IAH', to: 'LIS', depart: '2026-11-01' }), /didn’t accept your key/);
+  } finally { m.srv.close(); }
+});
+
+test('stays: LiteAPI search by city, prebook, book on the account card', async () => {
+  const P = require('../src/core/providers');
+  const CAP = require('../src/core/capture');
+  const m = await mockServer((req, body) => {
+    if (req.headers['x-api-key'] !== 'sand_123') return [401, { error: { message: 'no' } }];
+    if (req.url === '/v3/hotels/rates') return [200, { data: [
+      { hotelId: 'lp1', roomTypes: [{ offerId: 'o_b', offerRetailRate: { amount: 540, currency: 'EUR' }, rates: [{ name: 'Double', boardName: 'Room only', cancellationPolicies: { refundableTag: 'NRFN' } }] },
+        { offerId: 'o_a', offerRetailRate: { amount: 420, currency: 'EUR' }, rates: [{ name: 'Twin', boardName: 'Breakfast included', maxOccupancy: 2, cancellationPolicies: { refundableTag: 'RFN', cancelPolicyInfos: [{ cancelTime: '2026-10-30 12:00:00' }] } }] }] },
+      { hotelId: 'lp2', roomTypes: [{ offerId: 'o_c', offerRetailRate: { amount: 300, currency: 'EUR' }, rates: [{ name: 'Single' }] }] }],
+      hotels: [{ id: 'lp1', name: 'Casa do Largo', main_photo: 'https://x/1.jpg', address: 'Largo 12', rating: 8.9 }, { id: 'lp2', name: 'Hostel Lisboa' }] }];
+    if (req.url === '/b3/rates/prebook') return [200, { data: { prebookId: 'pre_1', price: 420, currency: 'EUR' } }];
+    if (req.url === '/b3/rates/book') return [200, { data: { bookingId: 'bk_77', hotelConfirmationCode: 'HC-5521', status: 'CONFIRMED', price: 420, currency: 'EUR', checkin: '2026-11-02', checkout: '2026-11-05', hotel: { name: 'Casa do Largo' } } }];
+    return [404, {}];
+  });
+  try {
+    const l = new P.LiteApi('sand_123', m.url + '/v3', m.url + '/b3');
+    assert.strictEqual(l.mode, 'test');
+    const hotels = await l.search({ city: 'Lisbon', country: 'PT', checkin: '2026-11-02', checkout: '2026-11-05', adults: 3, rooms: 2, currency: 'EUR' });
+    const sb = m.seen[0].body;
+    assert.strictEqual(sb.cityName, 'Lisbon'); assert.strictEqual(sb.countryCode, 'PT'); assert.strictEqual(sb.guestNationality, 'US');
+    assert.deepStrictEqual(sb.occupancies, [{ adults: 2, children: [] }, { adults: 2, children: [] }]);
+    assert.deepStrictEqual(hotels.map(h => h.name), ['Hostel Lisboa', 'Casa do Largo']);       // cheapest first
+    const h = hotels[1];
+    assert.deepStrictEqual(h.rooms.map(r => r.offerId), ['o_a', 'o_b']); assert.strictEqual(h.rooms[0].perNight, 140); assert.strictEqual(h.rooms[0].refundable, true); assert.strictEqual(h.photo, 'https://x/1.jpg');
+    const pre = await l.prebook('o_a');
+    assert.strictEqual(pre.prebookId, 'pre_1'); assert.strictEqual(m.seen[1].body.usePaymentSdk, false);
+    const res = await l.book({ prebookId: 'pre_1', holder: { given: 'Bilal', family: 'Ahmad', email: 'b@example.com' }, guests: [{ given: 'Bilal', family: 'Ahmad', email: 'b@example.com' }], ref: 'wp-1' });
+    const bb = m.seen[2].body;
+    assert.deepStrictEqual(bb.payment, { method: 'ACC_CREDIT_CARD' }); assert.strictEqual(bb.holder.firstName, 'Bilal'); assert.strictEqual(bb.guests[0].occupancyNumber, 1); assert.strictEqual(bb.clientReference, 'wp-1');
+    assert.strictEqual(res.ref, 'HC-5521');
+    const b = CAP.stayBooking(h, h.rooms[0], res, { checkin: '2026-11-02', checkout: '2026-11-05' }, () => 'b1');
+    assert.deepStrictEqual([b.type, b.title, b.startDate, b.endDate, b.ref, b.cost, b.currency, b.paid], ['stay', 'Casa do Largo', '2026-11-02', '2026-11-05', 'HC-5521', 420, 'EUR', true]);
+    assert.match(b.notes, /Free cancellation until 2026-10-30 12:00/);
+    await assert.rejects(l.search({ city: 'Lisbon', checkin: '2026-11-02', checkout: '2026-11-03' }), /country/);
+  } finally { m.srv.close(); }
+});
+
+test('booking sites, reading confirmation pages, airports and private details', () => {
+  const CAP = require('../src/core/capture');
+  const A = require('../src/core/airports');
+  const { Secrets, keyMode } = require('../src/core/secrets');
+  const q = { from: 'IAH', to: 'LIS', depart: '2026-11-01', ret: '2026-11-08', adults: 2 };
+  assert.match(CAP.siteUrl('flights', 'google', q).url, /^https:\/\/www\.google\.com\/travel\/flights\?q=Flights%20to%20LIS%20from%20IAH%20on%202026-11-01%20through%202026-11-08/);
+  assert.strictEqual(CAP.siteUrl('flights', 'kayak', q).url, 'https://www.kayak.com/flights/IAH-LIS/2026-11-01/2026-11-08/2adults?sort=bestflight_a');
+  assert.strictEqual(CAP.siteUrl('flights', 'skyscanner', q).url, 'https://www.skyscanner.com/transport/flights/iah/lis/261101/261108/?adultsv2=2');
+  assert.strictEqual(CAP.siteUrl('stays', 'booking', { city: 'Porto', checkin: '2026-11-05', checkout: '2026-11-08', adults: 2 }).url, 'https://www.booking.com/searchresults.html?ss=Porto&checkin=2026-11-05&checkout=2026-11-08&group_adults=2&no_rooms=1');
+  const page = 'Thanks, Bilal! Your booking is confirmed.\nBooking number: 4021889113\nPIN: 7731\nCheck-in Mon 2 Nov\nTotal price € 612.40\n2 nights, 1 room';
+  assert.ok(CAP.looksConfirmed(page)); assert.ok(!CAP.looksConfirmed('Search results for Lisbon · 412 properties'));
+  const g = CAP.readConfirmation(page, 'https://secure.booking.com/confirmation.html', 'Confirmation | Booking.com');
+  assert.deepStrictEqual([g.provider, g.kind, g.ref, g.total, g.currency], ['Booking.com', 'stay', '4021889113', 612.4, 'EUR']);
+  const fl = CAP.readConfirmation('You’re all set!\nConfirmation code: K7Q2XM\nFlight UA 1234 departs 6:40 AM\nTotal $1,380.00', 'https://www.united.com/en/us/confirmation', '');
+  assert.deepStrictEqual([fl.provider, fl.kind, fl.ref, fl.total, fl.currency], ['United', 'flight', 'K7Q2XM', 1380, 'USD']);
+  assert.deepStrictEqual(A.find('lisb').map(a => a.code), ['LIS']); assert.strictEqual(A.find('LHR')[0].code, 'LHR'); assert.ok(A.find('tokyo').map(a => a.code).includes('HND'));
+  assert.strictEqual(A.guess('Lisbon & Porto, Portugal', 'PT').code, 'LIS'); assert.strictEqual(A.codeOf('Lisbon (LIS)'), 'LIS'); assert.strictEqual(A.codeOf('iah'), 'IAH'); assert.strictEqual(A.codeOf('Houston'), 'IAH');
+  assert.strictEqual(new Set(A.LIST.map(a => a.code)).size, A.LIST.length);
+  // private details: encrypted when the keychain is there, never readable as plain text
+  const f = path.join(tmp(), 'private.bin');
+  const fake = { available: () => true, encrypt: (t) => Buffer.from(t).map(x => x ^ 0x5a), decrypt: (b) => Buffer.from(b).map(x => x ^ 0x5a).toString() };
+  const s1 = new Secrets(f, fake);
+  s1.setKey('duffel', ' duffel_test_xyz '); s1.saveTraveler({ given: 'Bilal', family: 'Ahmad', born: '1995-01-01', email: 'b@example.com' });
+  assert.ok(!fs.readFileSync(f).toString().includes('duffel_test_xyz'));
+  const s2 = new Secrets(f, fake);
+  assert.strictEqual(s2.key('duffel'), 'duffel_test_xyz'); assert.strictEqual(s2.travelers()[0].family, 'Ahmad');
+  assert.strictEqual(keyMode('duffel', 'duffel_test_1'), 'test'); assert.strictEqual(keyMode('duffel', 'duffel_live_1'), 'live'); assert.strictEqual(keyMode('liteapi', 'sand_1'), 'test'); assert.strictEqual(keyMode('liteapi', ''), null);
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {

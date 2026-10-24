@@ -25,7 +25,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Trace** | Paths, decisions, org charts and folder plans you can trace, with notes and screenshot guides | `apps/trace` |
 | **Vitals** | Task manager and system dashboard: live CPU, memory, GPU and temperatures, apps and uninstalling, startup items, permissions, time and focus, checkup | `apps/vitals` |
 | **Touchline** | Football scores, tables, match stats, squads and player histories for every league and season | `apps/touchline` |
-| **Waypoint** | Travel planning: trips with interactive day timelines, bookings, documents, budgets and destination research, all offline; to your phone by QR code, to another computer with Beam | `apps/waypoint` |
+| **Waypoint** | Travel planning and booking: search and book flights and hotels, trips with interactive day timelines, bookings, documents, budgets and research, all offline; to your phone by QR code, to another computer with Beam | `apps/waypoint` |
 | **Utility Hub** | Installs, updates and removes the apps on each computer | `apps/hub` |
 
 ## How it works
@@ -60,7 +60,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Droid | its app-data folder: `sdk/` (emulator and Android versions, 1–2 GB each), `avd/` (each device's disk), `apks/` (app library); movable in Android versions › Data folder. Screenshots and recordings go to `~/Pictures/Droid` |
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
 | Vitals | its app-data folder (`focus/` holds one small file per day of time tracking) |
-| Waypoint | `~/Documents/Waypoint` (one folder per trip: `trip.json` and `Documents/`; change it in Settings) |
+| Waypoint | `~/Documents/Waypoint` (one folder per trip: `trip.json` and `Documents/`; change it in Settings). Its app-data folder holds `private.bin` (booking keys and saved travelers, encrypted with the system keychain) and the booking browser's sign-ins |
 | All apps | their app-data folder (`~/Library/Application Support/<App>`, `%APPDATA%\<App>`) |
 
 ## Commands

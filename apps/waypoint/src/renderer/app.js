@@ -9,7 +9,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const S = { settings: {}, trips: [], trip: null, view: 'trips', day: null, sel: null, dataDir: '', home: '', beam: false, share: null, mode: 'day' };
 const VIEWS = {};
 const TRIP_VIEWS = [
-  ['overview', 'Overview', 'home'], ['timeline', 'Timeline', 'timeline'], ['bookings', 'Bookings', 'ticket'],
+  ['overview', 'Overview', 'home'], ['timeline', 'Timeline', 'timeline'], ['bookings', 'Bookings', 'ticket'], ['book', 'Book', 'search'],
   ['docs', 'Documents', 'passport'], ['budget', 'Budget', 'wallet'], ['research', 'Research', 'map'],
 ];
 const COVERS = {

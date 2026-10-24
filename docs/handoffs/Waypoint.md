@@ -1,6 +1,6 @@
 # Waypoint: handoff for the Waypoint chat
 
-Waypoint is the Utility Package's travel planner: trips with interactive day timelines, bookings, documents, budgets and destination research, all kept on the computer so they work offline, and handed to a phone (QR over Wi-Fi), another computer (Beam or a `.waypoint` file) or anywhere (one-file offline pack, PDF). It lives in `apps/waypoint` inside `~/Downloads/Utility Package`. `apps/waypoint/README.md` has the features and code map.
+Waypoint is the Utility Package's travel planner and booker: flight and hotel search with booking (Duffel/LiteAPI keys, or booking sites inside the app with Save to trip), trips with interactive day timelines, bookings, documents, budgets and destination research, all kept on the computer so they work offline, and handed to a phone (QR over Wi-Fi), another computer (Beam or a `.waypoint` file) or anywhere (one-file offline pack, PDF). It lives in `apps/waypoint` inside `~/Downloads/Utility Package`. `apps/waypoint/README.md` has the features and code map.
 
 ## Working on it
 
@@ -8,7 +8,7 @@ Waypoint is the Utility Package's travel planner: trips with interactive day tim
 cd ~/Downloads/Utility\ Package/apps/waypoint
 npm install
 npm start          # WAYPOINT_DEMO=1 npm start shows sample trips
-npm test           # 10 Node checks, no Electron
+npm test           # 13 Node checks, no Electron
 ```
 
 To ship a change, bump `version` in `package.json`, then from the Utility Package folder:
@@ -30,10 +30,20 @@ Pull before starting work. Stay inside `apps/waypoint`; `tools/`, `suite.json` a
   3. **PDF/image preview windows** and **Save PDF** on both systems.
   4. Saving the offline pack on iPhone: Safari puts the downloaded page in Files; opening it from there works offline.
 
+## Booking (0.2.0)
+
+- **Not yet tried against the real Duffel or LiteAPI services** — the tests use mock servers shaped like their APIs (from their docs). First real check: add a Duffel **test** key (free at app.duffel.com) and book a Duffel Airways flight; add a LiteAPI **sandbox** key and book a hotel. If a field name is off, the error from the service shows in the app.
+- Duffel live mode needs Duffel's business/identity check and a topped-up balance (payment type `balance`); about $3 + 1% per order. LiteAPI production charges the card on the LiteAPI account (`ACC_CREDIT_CARD`).
+- Cancelling or changing a booking happens with the airline/hotel (or the Duffel/LiteAPI dashboard); Waypoint doesn't do it yet.
+- The booking browser uses its own saved session (`persist:waypoint-web`) and an ordinary Chrome user agent. Some sites may still block embedded browsers; the toolbar has "Open in your browser".
+- `WAYPOINT_DEMO=1` uses sample flight/hotel services when no keys are set (screenshots, trying the flow).
+
 ## Rules specific to Waypoint
 
 - **Times are local to the trip** (`trip.tz`); `TL.localNow(tz)` drives “today” and the now line. Never store absolute timestamps for plans.
 - **Bookings own their timeline items** (`item.bookingId` + `item.part`); always go through `TL.syncBooking` and `writeBack` in `renderer/timeline.js`.
 - **Documents are owned by the main process**: `store.save` ignores any doc the window invents and keeps the stored `file`; paths go through `store.docPath` (no escaping the trip folder).
 - `src/core/timeline.js` and `places.js` load in both Node and the window — no Node or DOM calls in them.
+- **Keys and traveler profiles live only in `private.bin`** (safeStorage-encrypted) in the app-data folder; the window gets key *modes*, never keys. All booking calls run in the main process.
+- Fares and rooms are re-checked before paying (Duffel offer refresh, LiteAPI prebook); never skip that.
 - The phone server only answers `/w/<token>/<shared trip>/…`, GET/HEAD only.

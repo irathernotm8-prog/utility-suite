@@ -2,16 +2,21 @@
 // Waypoint — main process: the window, settings, the trip store, documents, the offline pack, PDF,
 // .waypoint files, phone hand-off over Wi-Fi and "Send with Beam". The window talks to all of it
 // through window.waypoint.call(...) → the `api` table below.
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, clipboard, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
-const { Store } = require('./core/store');
+const { Store, newId: makeId } = require('./core/store');
 const bundle = require('./core/bundle');
 const pack = require('./core/pack');
 const { Share } = require('./core/share');
 const TL = require('./core/timeline');
+const { Secrets, keyMode } = require('./core/secrets');
+const P = require('./core/providers');
+const CAP = require('./core/capture');
+const AIRPORTS = require('./core/airports');
+const browser = require('./browser');
 
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -24,7 +29,8 @@ const ICON = path.join(ROOT, 'build', 'icon.png');
 if (!process.env.WAYPOINT_MULTI && !app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 app.setAppUserModelId('com.bilal.waypoint');
 
-let win = null, store = null, share = null, settings = null;
+let win = null, store = null, share = null, settings = null, secrets = null;
+const offerCache = new Map(), roomCache = new Map();
 let pendingOpen = [];   // .waypoint files opened before the window was ready
 
 // ───────── settings
@@ -33,7 +39,7 @@ function defaults() {
   return {
     dataDir: process.env.WAYPOINT_DATA || path.join(app.getPath('documents'), 'Waypoint'),
     theme: 'system', currency: 'USD', clock: 'auto', weekStart: 'auto', onboarded: false,
-    lastTrip: '', timelineZoom: 64, embedDocs: true, sharePort: 0, shareToken: '', me: '',
+    lastTrip: '', timelineZoom: 64, embedDocs: true, sharePort: 0, shareToken: '', me: '', homeAirport: '', nationality: 'US',
   };
 }
 function loadSettings() { let s = {}; try { s = JSON.parse(fs.readFileSync(SETTINGS, 'utf8')); } catch {} return { ...defaults(), ...s }; }
@@ -122,6 +128,21 @@ async function htmlToPdf(html, out) {
 
 function progress(kind, id) { let last = 0; return (done, total) => { const now = Date.now(); if (now - last > 120 || done === total) { last = now; send('progress', { kind, id, done, total }); } }; }
 
+
+// ───────── booking services (keys live encrypted in secrets; WAYPOINT_DEMO pretends without keys)
+function flights() { const k = secrets.key('duffel'); return k ? new P.Duffel(k) : DEMO ? new P.DemoFlights() : null; }
+function stays() { const k = secrets.key('liteapi'); return k ? new P.LiteApi(k) : DEMO ? new P.DemoStays() : null; }
+async function attachConfirmation(tripId, html, name, tag, bookingIds) {
+  fs.mkdirSync(tmpDir(), { recursive: true });
+  const f = path.join(tmpDir(), `${fileSafe(name)}.pdf`);
+  await htmlToPdf(html, f);
+  const r = await store.addDocs(tripId, [f], { tag, name, bookingId: bookingIds[0] });
+  fs.rm(f, { force: true }, () => {});
+  const trip = store.get(tripId);
+  for (const id of bookingIds.slice(1)) { const b = trip.bookings.find(x => x.id === id); if (b && r.added[0] && !b.docs.includes(r.added[0].id)) b.docs.push(r.added[0].id); }
+  return store.save(trip);
+}
+
 // ───────── IPC
 const api = {
   state: () => ({
@@ -129,7 +150,7 @@ const api = {
     home: Intl.DateTimeFormat().resolvedOptions().timeZone, beam: !!beamPath(), user: os.userInfo().username,
   }),
   set: (patch) => {
-    const ok = ['theme', 'currency', 'clock', 'weekStart', 'onboarded', 'lastTrip', 'timelineZoom', 'embedDocs', 'me'];
+    const ok = ['theme', 'currency', 'clock', 'weekStart', 'onboarded', 'lastTrip', 'timelineZoom', 'embedDocs', 'me', 'homeAirport', 'nationality'];
     for (const k of ok) if (k in patch) settings[k] = patch[k];
     saveSettings(); if ('theme' in patch) applyTheme();
     return settings;
@@ -252,6 +273,99 @@ const api = {
   openUrl: (u) => { if (/^https?:\/\//i.test(String(u))) shell.openExternal(String(u)); },
   copy: (text) => { clipboard.writeText(String(text ?? '')); return true; },
   beamInstalled: () => !!beamPath(),
+  // ───────── booking
+  bookingState: () => ({
+    flights: keyMode('duffel', secrets.key('duffel')) || (DEMO ? 'demo' : null), stays: keyMode('liteapi', secrets.key('liteapi')) || (DEMO ? 'demo' : null),
+    travelers: secrets.travelers(), encrypted: secrets.encrypted(), sites: CAP.siteList(), homeAirport: settings.homeAirport, nationality: settings.nationality,
+  }),
+  setKey: (service, key) => { if (!['duffel', 'liteapi'].includes(service)) throw new Error('Unknown service'); secrets.setKey(service, key); return api.bookingState(); },
+  testKey: async (service) => {
+    if (service === 'duffel') { const f = flights(); if (!f) throw new Error('Add a Duffel key first.'); await f.places('lon'); return f.mode; }
+    const s = stays(); if (!s) throw new Error('Add a LiteAPI key first.');
+    await P.call(`${s.base}/data/currencies`, { headers: { 'X-API-Key': s.key }, timeout: 15000 }); return s.mode;
+  },
+  saveTraveler: (t) => secrets.saveTraveler(t),
+  removeTraveler: (id) => secrets.removeTraveler(id),
+  airports: async (q) => {
+    const local = AIRPORTS.find(q, 8).map(a => ({ code: a.code, city: a.city, name: a.name, country: a.country }));
+    const f = secrets.key('duffel') ? flights() : null;
+    if (!f || local.length >= 6) return local;
+    try { const more = await f.places(q); const seen = new Set(local.map(a => a.code)); return [...local, ...more.filter(a => !seen.has(a.code))].slice(0, 10); } catch { return local; }
+  },
+  searchFlights: async (q) => {
+    const f = flights(); if (!f) throw new Error('Add a Duffel key in Settings › Booking to search flights here — or use Google Flights.');
+    if (!/^[A-Z]{3}$/.test(q.from || '') || !/^[A-Z]{3}$/.test(q.to || '')) throw new Error('Pick the airports from the list (three-letter codes like IAH or LIS).');
+    if (!q.depart) throw new Error('Pick a departure date.');
+    const offers = await f.search(q);
+    offerCache.clear(); for (const o of offers) offerCache.set(o.id, o);
+    return { mode: f.mode, offers };
+  },
+  bookFlight: async ({ tripId, offerId, passengers }) => {
+    const f = flights(); if (!f) throw new Error('Flight booking isn’t set up.');
+    let offer = offerCache.get(offerId); if (!offer) throw new Error('That fare has expired. Search again.');
+    if (f.mode !== 'demo') {
+      const fresh = await f.offer(offerId);
+      if (Math.abs(fresh.price - offer.price) > 0.009) { offerCache.set(offerId, fresh); const e = new Error(`The price changed to ${fresh.price.toFixed(2)} ${fresh.currency}. Check it and book again.`); e.code = 'price_changed'; throw e; }
+      offer = fresh;
+    }
+    if (passengers.length !== offer.passengerIds.length) throw new Error(`This fare is for ${offer.passengerIds.length} traveler${offer.passengerIds.length > 1 ? 's' : ''}.`);
+    for (const p of passengers) if (!p.given || !p.family || !p.born || !p.email || !p.phone) throw new Error('Each traveler needs a name as on their passport, date of birth, email and phone (with country code, like +1 713…).');
+    const order = await f.book({ offerId, amount: offer.price.toFixed(2), currency: offer.currency, passengers: passengers.map((p, i) => ({ ...p, id: offer.passengerIds[i] })) });
+    const trip = store.get(tripId);
+    const bks = CAP.flightBookings(trip, offer, order, makeId);
+    for (const b of bks) { trip.bookings.push(b); TL.syncBooking(trip, b, makeId); }
+    store.save(trip);
+    const sl = (order.slices && order.slices.length ? order.slices : offer.slices);
+    const html = CAP.confirmationHtml({ title: sl.map(x => `${x.from.city || x.from.code} → ${x.to.city || x.to.code}`).join(' · '), kind: 'Flight', ref: order.ref, mode: order.mode,
+      lines: [['Airline', order.airline || offer.airline.name], ...sl.map((x, i) => [i === 0 ? 'Outbound' : 'Return', x.segments.map(g => `${g.flight}  ${g.from.code} ${g.depart.replace('T', ' ')} → ${g.to.code} ${g.arrive.replace('T', ' ')}`).join('\n')]), ['Bags', sl[0].bags || '—'], ['Changes / refunds', `${offer.changeable ? 'Changes allowed' : 'No changes'} · ${offer.refundable ? 'Refundable' : 'Non-refundable'}`], ['Duffel order', order.orderId]],
+      total: `${order.amount.toFixed(2)} ${order.currency}`, travelers: order.passengers.join(', '), note: 'Manage or cancel this booking with the airline using the reference above.' });
+    const added = await attachConfirmation(tripId, html, `Flight confirmation ${order.ref}`, 'ticket', bks.map(b => b.id));
+    return { trip: added, refs: [order.ref], mode: order.mode, bookings: bks.map(b => b.id) };
+  },
+  searchStays: async (q) => {
+    const s = stays(); if (!s) throw new Error('Add a LiteAPI key in Settings › Booking to search hotels here — or use Booking.com.');
+    if (!q.city) throw new Error('Type a city.'); if (!q.checkin || !q.checkout || q.checkout <= q.checkin) throw new Error('Pick check-in and check-out dates.');
+    const hotels = await s.search({ ...q, nationality: settings.nationality || 'US' });
+    roomCache.clear(); for (const h of hotels) for (const r of h.rooms) roomCache.set(r.offerId, { hotel: h, room: r });
+    return { mode: s.mode, hotels };
+  },
+  prebookStay: async (offerId) => {
+    const s = stays(); if (!s) throw new Error('Hotel booking isn’t set up.');
+    const c = roomCache.get(offerId); if (!c) throw new Error('That room has expired. Search again.');
+    const pre = await s.prebook(offerId);
+    return { ...pre, price: pre.price || c.room.price, currency: pre.currency || c.room.currency };
+  },
+  bookStay: async ({ tripId, offerId, prebookId, holder, guests, q }) => {
+    const s = stays(); if (!s) throw new Error('Hotel booking isn’t set up.');
+    const c = roomCache.get(offerId); if (!c) throw new Error('That room has expired. Search again.');
+    if (!holder.given || !holder.family || !holder.email) throw new Error('Add the guest’s name and email.');
+    const res = await s.book({ prebookId, holder, guests: guests && guests.length ? guests : [holder], ref: `wp-${tripId}-${Date.now()}` });
+    if (!res.amount) { res.amount = c.room.price; res.currency = c.room.currency; }
+    const trip = store.get(tripId);
+    const b = CAP.stayBooking(c.hotel, c.room, res, q, makeId);
+    trip.bookings.push(b); TL.syncBooking(trip, b, makeId); store.save(trip);
+    const html = CAP.confirmationHtml({ title: b.title, kind: 'Stay', ref: res.ref, mode: res.mode,
+      lines: [['Address', b.address || '—'], ['Check in', `${b.startDate} from 15:00`], ['Check out', `${b.endDate} by 11:00`], ['Room', [c.room.name, c.room.board].filter(Boolean).join(' · ')], ['Cancellation', c.room.refundable ? `Free cancellation${c.room.cancelUntil ? ' until ' + c.room.cancelUntil.replace('T', ' ').slice(0, 16) : ''}` : 'Non-refundable'], ['LiteAPI booking', res.bookingId]],
+      total: `${Number(res.amount).toFixed(2)} ${res.currency}`, travelers: `${holder.given} ${holder.family}`, note: 'Show this reference at check-in.' });
+    const added = await attachConfirmation(tripId, html, `${b.title} confirmation`, 'booking', [b.id]);
+    return { trip: added, refs: [res.ref], mode: res.mode, bookings: [b.id] };
+  },
+  openSite: (kind, siteId, q, tripId) => {
+    const u = process.env.WAYPOINT_TEST_SITE ? { url: process.env.WAYPOINT_TEST_SITE } : CAP.siteUrl(kind, siteId, q);
+    const t = tripId && store.has(tripId) ? store.get(tripId) : null;
+    browser.open(u.url, { kind, q, site: siteId, sites: CAP.siteList()[kind], tripId, tripName: t ? t.name : '' }, {
+      dark: shouldDark, icon: ICON, siteUrl: (k, id, qq) => CAP.siteUrl(k, id, qq),
+      saved: async ({ tripId: id, file, guess, url, kind: k, q: qq }) => {
+        if (!id || !store.has(id)) throw new Error('Open a trip in Waypoint first.');
+        const r = await store.addDocs(id, [file], { tag: k === 'stays' ? 'booking' : 'ticket', name: `${guess.provider || 'Booking'} confirmation${guess.ref ? ' ' + guess.ref : ''}` });
+        send('captured', { tripId: id, docId: r.added[0] && r.added[0].id, guess, url, kind: k, q: qq });
+        showWindow();
+        return true;
+      },
+    });
+    return true;
+  },
+
 };
 ipcMain.handle('call', async (_e, method, ...args) => {
   try {
@@ -261,6 +375,7 @@ ipcMain.handle('call', async (_e, method, ...args) => {
   } catch (e) { return { ok: false, error: e.message || String(e) }; }
 });
 ipcMain.on('pending', (e) => { e.returnValue = pendingOpen.splice(0); });
+ipcMain.handle('browser', (_e, c, a) => browser.command(c, a));
 
 // ───────── menu
 function buildMenu() {
@@ -274,6 +389,7 @@ function buildMenu() {
     { label: 'Add Documents…', accelerator: 'CmdOrCtrl+Shift+D', click: cmd('add-docs') },
     { label: 'Add Expense…', accelerator: 'CmdOrCtrl+Shift+E', click: cmd('add-expense') },
     { type: 'separator' },
+    { label: 'Book Flights & Stays…', accelerator: 'CmdOrCtrl+B', click: cmd('book') },
     { label: 'Take It With You…', accelerator: 'CmdOrCtrl+Shift+S', click: cmd('take') },
     { type: 'separator' },
     IS_MAC ? { role: 'close' } : { role: 'quit' },
@@ -293,6 +409,7 @@ app.whenReady().then(async () => {
   if (DEMO && !store.list().length) { const { seed } = require('./demo'); await seed(store); store.scan(); }
   share = new Share({ store, settings: () => settings, saveSettings, tmpDir: path.join(tmpDir(), 'share'), onVisit: (v) => send('visit', v) });
   cleanOutbox();
+  secrets = new Secrets(path.join(USER, 'private.bin'), { available: () => { try { return safeStorage.isEncryptionAvailable(); } catch { return false; } }, encrypt: (t) => safeStorage.encryptString(t), decrypt: (b) => safeStorage.decryptString(b) });
   pendingOpen.push(...process.argv.filter(a => /\.waypoint$/i.test(a) && fs.existsSync(a)));
   buildMenu();
   createWindow();

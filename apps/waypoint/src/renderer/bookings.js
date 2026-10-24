@@ -4,7 +4,7 @@
 
 VIEWS.bookings = {
   head: () => `<h1>Bookings <small>${plural(S.trip.bookings.length, 'booking')}</small></h1>`,
-  actions: () => `<div class="seg" id="bkSort"><button data-s="date" class="${S.bkSort !== 'type' ? 'on' : ''}">By date</button><button data-s="type" class="${S.bkSort === 'type' ? 'on' : ''}">By kind</button></div><button class="btn primary" id="bkAdd"><span data-icon="plus" data-size="15"></span>Add booking</button>`,
+  actions: () => `<button class="btn" id="bkFind"><span data-icon="search" data-size="15"></span>Find flights &amp; stays</button><div class="seg" id="bkSort"><button data-s="date" class="${S.bkSort !== 'type' ? 'on' : ''}">By date</button><button data-s="type" class="${S.bkSort === 'type' ? 'on' : ''}">By kind</button></div><button class="btn primary" id="bkAdd"><span data-icon="plus" data-size="15"></span>Add booking</button>`,
   render(v) {
     const t = S.trip;
     if (!t.bookings.length) {
@@ -32,6 +32,7 @@ VIEWS.bookings = {
   },
   after() {
     $('#bkAdd').onclick = () => bookingSheet();
+    $('#bkFind').onclick = () => go('book');
     $$('#bkSort button').forEach(b => b.onclick = () => { S.bkSort = b.dataset.s; render(); });
   },
 };
@@ -56,6 +57,7 @@ function bookingCard(b) {
     </div>
     <div class="bk-right">${b.ref ? copyBtn(b.ref) : '<span class="muted small">No confirmation #</span>'}
       ${Number(b.cost) > 0 ? `<span class="bk-cost">${esc(money(Number(b.cost), b.currency || t.currency))}${b.paid ? '<span class="pill ok">Paid</span>' : '<span class="pill warn">To pay</span>'}</span>` : ''}
+      ${b.booked ? `<span class="pill ${b.booked.mode === 'live' ? 'acc' : 'warn'}">${icon('check', 11)} Booked in Waypoint${b.booked.mode === 'live' ? '' : b.booked.mode === 'demo' ? ' · sample' : ' · test'}</span>` : ''}
       ${b.onTimeline === false ? '<span class="pill">Not on timeline</span>' : ''}</div>
     <button class="icon-btn sm bk-more" data-more="${b.id}" title="More">${icon('more', 16)}</button>
   </div>`;
@@ -85,12 +87,12 @@ async function deleteBooking(id) {
 }
 
 // ───────── the booking sheet (fields change with the kind)
-function bookingSheet(b, kind) {
+function bookingSheet(b, kind, prefill) {
   const t = S.trip;
   const isNew = !b;
   const days = TL.dayList(t.start, t.end);
-  const x = b ? { ...b } : { id: newId(), type: kind || 'flight', title: '', provider: '', ref: '', from: '', to: '', address: '', phone: '', seat: '', startDate: (S.view === 'timeline' && S.day) || days[0] || '', startTime: '', endDate: '', endTime: '', cost: '', currency: t.currency, paid: false, notes: '', docs: [], onTimeline: true };
-  const el = openSheet(`<div class="sheet-head">${tile('a-sky', 'ticket', 'md', 18)}<div class="grow"><h3>${isNew ? 'Add a booking' : 'Edit booking'}</h3><div class="muted small">Bookings with a date show up on the timeline.</div></div></div>
+  const x = b ? { ...b } : { id: newId(), type: kind || 'flight', title: '', provider: '', ref: '', from: '', to: '', address: '', phone: '', seat: '', startDate: (S.view === 'timeline' && S.day) || days[0] || '', startTime: '', endDate: '', endTime: '', cost: '', currency: t.currency, paid: false, notes: '', docs: [], onTimeline: true, ...(prefill || {}) };
+  const el = openSheet(`<div class="sheet-head">${tile('a-sky', 'ticket', 'md', 18)}<div class="grow"><h3>${isNew ? 'Add a booking' : 'Edit booking'}</h3><div class="muted small">${prefill ? 'Filled in from the confirmation page — check it, then save.' : 'Bookings with a date show up on the timeline.'}</div></div></div>
     <div class="sheet-body">
       <div class="kind-picker">${Object.entries(TL.BOOKING_TYPES).map(([k, d]) => `<button type="button" class="kind ${k === x.type ? 'on' : ''}" data-kind="${k}">${icon(d.icon, 16)}<span>${esc(d.label)}</span></button>`).join('')}</div>
       <div id="bkFields"></div>
@@ -129,6 +131,7 @@ function bookingSheet(b, kind) {
     const i = t.bookings.findIndex(q => q.id === x.id);
     if (i >= 0) t.bookings[i] = x; else t.bookings.push(x);
     TL.syncBooking(t, x, newId);
+    for (const id of x.docs || []) { const d = t.docs.find(q => q.id === id); if (d) d.bookingId = x.id; }
     // a booking outside the trip dates: offer to stretch the trip
     if (x.startDate && t.start && (x.startDate < t.start || (x.endDate || x.startDate) > t.end)) {
       toast('This booking is outside the trip dates', `${fmtDate(x.startDate)} isn't between ${fmtDate(t.start)} and ${fmtDate(t.end)}.`, 'info', 10000, [{ label: 'Stretch the trip', run: () => { t.start = [t.start, x.startDate].sort()[0]; t.end = [t.end, x.endDate || x.startDate].sort().pop(); persist(); render(); } }]);

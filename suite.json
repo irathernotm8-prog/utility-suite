@@ -208,7 +208,7 @@
     {
       "id": "waypoint",
       "name": "Waypoint",
-      "description": "Travel planning: trips with interactive day timelines, bookings, documents, budgets and destination research, all offline, handed to your phone or another computer in seconds.",
+      "description": "Travel planning and booking: flight and hotel search with booking, trips with interactive day timelines, bookings, documents, budgets and research, all offline, handed to your phone or another computer in seconds.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []

@@ -46,6 +46,7 @@ function wireDrop() {
 
   W.on('theme', () => applyTheme());
   W.on('open-bundle', (p) => bundleSheet(p));
+  W.on('captured', (c) => captured(c));
   W.on('visit', (v) => { if (S.share) { S.share.visits = [v, ...(S.share.visits || [])]; const b = $('#takeBody'); if (b && $('.phone-take', b)) drawPhone(b, S.share); } toast(`${v.dev} ${v.what}`, S.trip ? S.trip.name : '', 'ok', 4000); });
   W.on('progress', (p) => { const bar = $('#tfProg i') || (S.importing && $('#prog', S.importing)); if (bar) { const el = bar.tagName === 'I' ? bar : bar.querySelector('i'); if (el) { if (bar.classList) bar.classList.remove('indet'); el.style.width = (p.total ? p.done / p.total * 100 : 100) + '%'; } } });
   W.on('menu', (c) => {
@@ -57,6 +58,7 @@ function wireDrop() {
     else if (c === 'add-docs') addDocs();
     else if (c === 'add-expense') expenseSheet();
     else if (c === 'take') takeSheet();
+    else if (c === 'book') go('book');
   });
   for (const p of W.pending()) bundleSheet(p);
   // keep "now" lines, countdowns and local clocks fresh

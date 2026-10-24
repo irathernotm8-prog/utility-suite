@@ -9,13 +9,17 @@ const ROOT = path.join(__dirname, '..', '..');
 const OUT = path.join(__dirname, 'out');
 fs.mkdirSync(OUT, { recursive: true });
 const errors = [];
+const http = require('http');
+const srv = http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); r.end(`<html><head><title>Confirmation | Booking.com</title></head><body style="font:16px system-ui;padding:40px;max-width:720px"><h1>Thanks, Bilal! Your booking in Porto is confirmed.</h1><p>Booking number: <b>5517203391</b> · PIN 4410</p><p>Ribeira Loft · Check-in Mon · 3 nights · 2 guests</p><p>Total price € 540.00</p></body></html>`); });
+let SITE = '';
 
 (async () => {
+  await new Promise(r => srv.listen(0, '127.0.0.1', r)); SITE = `http://127.0.0.1:${srv.address().port}/confirmation`;
   for (const theme of ['dark', 'light']) {
     const ud = fs.mkdtempSync(path.join(os.tmpdir(), 'waypoint-shots-'));
     const data = path.join(ud, 'Trips');
     fs.writeFileSync(path.join(ud, 'settings.json'), JSON.stringify({ theme, onboarded: true, me: 'Bilal', dataDir: data }));
-    const app = await electron.launch({ executablePath: require(path.join(ROOT, 'node_modules', 'electron')), args: [ROOT, '--no-sandbox'], env: { ...process.env, WAYPOINT_DEMO: '1', WAYPOINT_USER_DATA: ud, WAYPOINT_DATA: data, WAYPOINT_MULTI: '1' } });
+    const app = await electron.launch({ executablePath: require(path.join(ROOT, 'node_modules', 'electron')), args: [ROOT, '--no-sandbox'], env: { ...process.env, WAYPOINT_DEMO: '1', WAYPOINT_USER_DATA: ud, WAYPOINT_DATA: data, WAYPOINT_MULTI: '1', WAYPOINT_TEST_SITE: SITE } });
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 1320, height: 840 });
     page.on('console', m => { if (m.type() === 'error') errors.push(`${theme} console: ${m.text()}`); });
@@ -114,6 +118,47 @@ const errors = [];
       console.log('pdf', fs.existsSync(pdf) ? fs.statSync(pdf).size + ' bytes' : 'MISSING');
       fs.copyFileSync(pdf, path.join(OUT, 'itinerary.pdf'));
     }
+
+    if (theme === 'dark') {
+      // ── Book: flights (sample service), checkout, booked
+      await page.evaluate(() => go('book')); await page.waitForTimeout(500);
+      await page.evaluate(() => { BK.fq.from = 'IAH'; render(); }); await page.waitForTimeout(200);
+      await shot('20-book-form');
+      await page.click('#fForm button[type=submit]'); await page.waitForSelector('.offer', { timeout: 10000 }); await page.waitForTimeout(300);
+      await shot('21-flight-results');
+      await page.click('.offer'); await page.waitForTimeout(300);
+      await page.evaluate(() => { const set = (n, v) => document.querySelectorAll(`.pax [name=${n}]`).forEach((f, i) => { f.value = v[i] || v[0]; }); set('given', ['Bilal', 'Kiana']); set('family', ['Ahmad', 'Campbell']); set('born', ['1995-03-14', '1996-07-02']); set('email', ['bilal@example.com', 'kiana@example.com']); set('phone', ['+17135550100', '+17135550101']); document.querySelectorAll('.pax [name=gender]')[1].value = 'f'; });
+      await shot('22-flight-checkout');
+      await page.click('#buy'); await page.waitForSelector('.booked', { timeout: 15000 }); await page.waitForTimeout(400);
+      await shot('23-flight-booked');
+      console.log('flight booking →', await page.evaluate(() => { const b = S.trip.bookings.filter(x => x.booked); return b.map(x => `${x.title} ${x.startDate} ${x.startTime} ref ${x.ref} docs ${x.docs.length}`).join(' | '); }));
+      await page.click('#bkTl'); await page.waitForTimeout(500); await shot('24-flight-on-timeline');
+      // stays
+      await page.evaluate(() => { go('book'); BK.tab = 'stays'; render(); }); await page.waitForTimeout(300);
+      await page.click('#sForm button[type=submit]'); await page.waitForSelector('.hotel', { timeout: 10000 }); await page.waitForTimeout(300);
+      await shot('25-stay-results');
+      await page.click('.hotel'); await page.waitForTimeout(300); await shot('26-hotel-rooms');
+      await page.click('[data-room]'); await page.waitForSelector('#buy:not([disabled])', { timeout: 10000 });
+      await page.evaluate(() => { const v = { given: 'Bilal', family: 'Ahmad', email: 'bilal@example.com', phone: '+17135550100' }; for (const k in v) document.querySelector(`.pax [name=${k}]`).value = v[k]; });
+      await shot('27-stay-checkout');
+      await page.click('#buy'); await page.waitForSelector('.booked', { timeout: 15000 }); await page.waitForTimeout(300);
+      await page.click('#bkList'); await page.waitForTimeout(500); await shot('28-bookings-after');
+      // settings › booking
+      await page.evaluate(() => { S.setFocus = 'booking'; go('settings'); }); await page.waitForTimeout(500); await shot('29-settings-booking');
+      // the booking browser on a local "confirmation" page, then Save to trip
+      await page.evaluate((u) => call('openSite', 'stays', 'booking', { city: 'Porto', checkin: S.trip.start, checkout: S.trip.end, adults: 2 }, S.trip.id));
+      await page.waitForTimeout(1200);
+      const wins = app.windows();
+      const barPage = wins.find(w => w.url().endsWith('browser.html'));
+      await new Promise(r => setTimeout(r, 2500));
+      if (barPage) await barPage.screenshot({ path: path.join(OUT, `${theme}-30-browser-bar.png`) });
+      if (barPage) { await barPage.click('#save'); }
+      await page.waitForTimeout(2500);
+      await page.bringToFront();
+      await shot('31-captured-booking');
+      console.log('captured →', await page.evaluate(() => { const f = (n) => { const el = document.querySelector(`#bkFields [name=${n}]`); return el ? el.value : '?'; }; return [f('provider'), f('ref'), f('cost'), f('currency'), f('startDate')].join(' / '); }));
+      await page.evaluate(() => closeSheet());
+    }
     await page.setViewportSize({ width: 960, height: 640 });
     await page.evaluate(() => go('timeline')); await page.waitForTimeout(400);
     await shot('18-small-timeline');
@@ -133,6 +178,7 @@ const errors = [];
   await page.click('#firstSample'); await page.waitForTimeout(900);
   await page.screenshot({ path: path.join(OUT, 'dark-00b-sample.png') });
   await app.close();
+  srv.close();
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors');
   console.log('shots in', OUT);
 })().catch(e => { console.error(e); console.log(errors.join('\n')); process.exit(1); });

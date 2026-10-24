@@ -1,6 +1,7 @@
 # Regenerates build/icon.png (run: python3 build/make-icon.py). Needs Pillow.
-# A twilight tile (deep plum-navy) with a warm sunset glow low on the horizon: a dotted route winds up
-# from a small start point to a bold amber-to-rose map pin (plan the way, then follow it).
+# A boarding pass on a twilight tile: a cream ticket, tilted, with a sunset map pin and a little route
+# (origin → plane → destination) on the main part, and a sunset-coloured stub with a barcode.
+# Plan it, book it, carry it.
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 import math, os
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -13,82 +14,96 @@ def squircle(size, inset, n=4.4):
         t = i / 720 * 2 * math.pi; x = math.cos(t); y = math.sin(t)
         pts.append((c + r * math.copysign(abs(x) ** (2 / n), x), c + r * math.copysign(abs(y) ** (2 / n), y)))
     ImageDraw.Draw(m).polygon(pts, fill=255); return m
-
 def lin(size, c0, c1, angle=0):
     g = Image.linear_gradient('L').rotate(angle, expand=False).resize(size)
     return Image.merge('RGB', [g.point(lambda v, a=a, b=b: int(a + (b - a) * v / 255)) for a, b in zip(c0, c1)]).convert('RGBA')
-
 def layer(m, col=None, g=None):
-    l = Image.new('RGBA', (N, N), (0, 0, 0, 0))
+    l = Image.new('RGBA', m.size, (0, 0, 0, 0))
     if g is not None: l.paste(g, mask=m)
     else: l.paste(col, mask=m)
     return l
+def blur(img, r): return img.filter(ImageFilter.GaussianBlur(P(r)))
 
 mask = squircle(N, int(N * 0.085))
-bg = lin((N, N), (34, 24, 52), (12, 10, 22), 0)            # plum at the top → ink at the bottom
-# sunset glow low on the tile
-glow = Image.new('RGBA', (N, N), (0, 0, 0, 0)); dg = ImageDraw.Draw(glow)
-dg.ellipse((P(-160), P(700), P(1184), P(1320)), fill=(255, 84, 110, 120))
-dg.ellipse((P(120), P(820), P(900), P(1220)), fill=(255, 170, 80, 120))
-bg = Image.alpha_composite(bg, glow.filter(ImageFilter.GaussianBlur(P(120))))
-cool = Image.new('RGBA', (N, N), (0, 0, 0, 0)); ImageDraw.Draw(cool).ellipse((P(420), P(40), P(1060), P(560)), fill=(140, 110, 255, 45))
-bg = Image.alpha_composite(bg, cool.filter(ImageFilter.GaussianBlur(P(140))))
+bg = lin((N, N), (40, 28, 66), (14, 10, 24), 0)
+glow = Image.new('L', (N, N), 0); ImageDraw.Draw(glow).ellipse((P(60), P(420), P(1000), P(1220)), fill=255)
+bg = Image.alpha_composite(bg, layer(blur(glow, 150), (255, 110, 90, 120)))
+cool = Image.new('L', (N, N), 0); ImageDraw.Draw(cool).ellipse((P(380), P(-120), P(1100), P(460)), fill=255)
+bg = Image.alpha_composite(bg, layer(blur(cool, 150), (150, 110, 255, 60)))
 
-# the route: a cubic curve from the start dot (lower left) to the pin's point
-def bez(p0, p1, p2, p3, t):
-    u = 1 - t
-    return (u**3*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t**3*p3[0], u**3*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t**3*p3[1])
-start = (262, 790); tip = (640, 700)
-c1, c2 = (470, 820), (300, 560)
-c3, c4 = (520, 470), (720, 600)
-pts = [bez(start, c1, c2, (420, 560), i / 400) for i in range(401)] + [bez((420, 560), c3, c4, tip, i / 400) for i in range(1, 401)]
-# even spacing along the path
-dist = [0]
-for a, b in zip(pts, pts[1:]): dist.append(dist[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
-route = Image.new('L', (N, N), 0); dr = ImageDraw.Draw(route)
-step = 50; d = 92
-while d < dist[-1] - 70:
-    i = next(k for k, v in enumerate(dist) if v >= d)
-    x, y = pts[i]; r = 15
-    dr.ellipse((P(x - r), P(y - r), P(x + r), P(y + r)), fill=255)
-    d += step
-sd = Image.new('L', (N, N), 0); ImageDraw.Draw(sd).ellipse((P(start[0] - 40), P(start[1] - 40), P(start[0] + 40), P(start[1] + 40)), fill=255)
-ring = Image.new('L', (N, N), 0); ImageDraw.Draw(ring).ellipse((P(start[0] - 66), P(start[1] - 66), P(start[0] + 66), P(start[1] + 66)), outline=255, width=int(P(12)))
+# ── the ticket, drawn flat at W×H then rotated into place
+W, H, CUT, R = 780, 440, 575, 48
+w, h = int(P(W)), int(P(H))
+def flat(): return Image.new('L', (w, h), 0)
+shape = flat(); ds = ImageDraw.Draw(shape)
+ds.rounded_rectangle((0, 0, w, h), radius=P(R), fill=255)
+for y in (0, H): ds.ellipse((P(CUT - 34), P(y - 34), P(CUT + 34), P(y + 34)), fill=0)
+main = ImageChops.multiply(shape, (lambda m: (ImageDraw.Draw(m).rectangle((0, 0, P(CUT), h), fill=255), m)[1])(flat()))
+stub = ImageChops.subtract(shape, main)
+perf = flat(); dp = ImageDraw.Draw(perf)
+for y in range(66, H - 50, 32): dp.ellipse((P(CUT - 7), P(y - 7), P(CUT + 7), P(y + 7)), fill=255)
+bars = flat(); db = ImageDraw.Draw(bars); x = CUT + 52; i = 0
+while x < W - 44:
+    bw = [7, 13, 5, 10, 6, 15, 8, 5][i % 8]; db.rectangle((P(x), P(92), P(x + bw), P(H - 92)), fill=255); x += bw + 8; i += 1
+# route on the ticket: two code blocks with a plane between, and two quiet lines under
+txt = flat(); dt = ImageDraw.Draw(txt)
+dt.rounded_rectangle((P(296), P(128), P(366), P(166)), radius=P(10), fill=255)
+dt.rounded_rectangle((P(470), P(128), P(540), P(166)), radius=P(10), fill=255)
+quiet = flat(); dq = ImageDraw.Draw(quiet)
+for (x0, y0, x1) in [(296, 236, 520), (296, 288, 450), (296, 340, 488)]: dq.rounded_rectangle((P(x0), P(y0), P(x1), P(y0 + 20)), radius=P(10), fill=255)
+dots = flat(); dd = ImageDraw.Draw(dots)
+for xx in (384, 404, 446, 466): dd.ellipse((P(xx - 5), P(147 - 5), P(xx + 5), P(147 + 5)), fill=255)
+plane = flat(); dpl = ImageDraw.Draw(plane)
+px0, py0, sc = 425, 147, 1.15
+shp = [(30, 0), (22, -5), (6, -6), (-6, -30), (-15, -30), (-7, -6), (-21, -6), (-27, -15), (-32, -15), (-28, 0), (-32, 15), (-27, 15), (-21, 6), (-7, 6), (-15, 30), (-6, 30), (6, 6), (22, 5)]
+dpl.polygon([(P(px0 + a * sc), P(py0 + b * sc)) for a, b in shp], fill=255)
+# the pin
+pin = flat(); dpn = ImageDraw.Draw(pin)
+cx, cy, PR, tip = 162, 196, 98, 368
+dpn.ellipse((P(cx - PR), P(cy - PR), P(cx + PR), P(cy + PR)), fill=255)
+ang = math.asin(PR / (tip - cy))
+dpn.polygon([(P(cx - PR * math.cos(ang)), P(cy + PR * math.sin(ang))), (P(cx + PR * math.cos(ang)), P(cy + PR * math.sin(ang))), (P(cx), P(tip))], fill=255)
+pin = pin.filter(ImageFilter.GaussianBlur(P(4))).point(lambda v: 255 if v > 128 else 0)
+hole = flat(); ImageDraw.Draw(hole).ellipse((P(cx - 36), P(cy - 36), P(cx + 36), P(cy + 36)), fill=255)
+pinShadow = flat(); ImageDraw.Draw(pinShadow).ellipse((P(cx - 52), P(tip - 9), P(cx + 52), P(tip + 13)), fill=120)
+hl = flat(); ImageDraw.Draw(hl).arc((P(cx - PR + 18), P(cy - PR + 18), P(cx + PR - 18), P(cy + PR - 18)), start=200, end=258, fill=170, width=int(P(12)))
+hl = ImageChops.multiply(hl.filter(ImageFilter.GaussianBlur(P(4))), pin)
 
-# the pin: a teardrop with its point at `tip`
-px, py, R = 640, 330, 190           # head centre and radius; point at (640, 700)
-pin = Image.new('L', (N, N), 0); dp = ImageDraw.Draw(pin)
-dp.ellipse((P(px - R), P(py - R), P(px + R), P(py + R)), fill=255)
-ang = math.asin(R / (tip[1] - py))
-l = (px - R * math.cos(ang), py + R * math.sin(ang)); rr = (px + R * math.cos(ang), py + R * math.sin(ang))
-dp.polygon([(P(l[0]), P(l[1])), (P(rr[0]), P(rr[1])), (P(tip[0]), P(tip[1]))], fill=255)
-pin = pin.filter(ImageFilter.GaussianBlur(P(6))).point(lambda v: 255 if v > 128 else 0)
-hole = Image.new('L', (N, N), 0); ImageDraw.Draw(hole).ellipse((P(px - 64), P(py - 64), P(px + 64), P(py + 64)), fill=255)
-pinBody = ImageChops.subtract(pin, hole)
+def tgrad(c0, c1, angle=0): return lin((w, h), c0, c1, angle)
+def pgrad(c0, c1, box):
+    g = Image.new('RGBA', (w, h), (0, 0, 0, 0)); x0, y0, x1, y1 = [int(P(v)) for v in box]
+    g.paste(lin((x1 - x0, y1 - y0), c0, c1, 0), (x0, y0)); return g
 
-grad = Image.new('RGBA', (N, N), (0, 0, 0, 0))
-_g = lin((int(P(2 * R + 40)), int(P(tip[1] - py + R + 40))), (255, 200, 84), (255, 72, 122), 0)
-grad.paste(_g, (int(P(px - R - 20)), int(P(py - R - 20))))
-shadow = layer(pin, (10, 2, 10, 190)); shadow = ImageChops.offset(shadow, 0, int(P(26))).filter(ImageFilter.GaussianBlur(P(30)))
-pglow = layer(pin, (255, 130, 80, 120)).filter(ImageFilter.GaussianBlur(P(70)))
-pinL = layer(pinBody, g=grad)
-holeL = layer(hole, (255, 244, 232, 255))
-# a soft highlight on the upper left of the pin head
-hl = Image.new('L', (N, N), 0); ImageDraw.Draw(hl).arc((P(px - R + 26), P(py - R + 26), P(px + R - 26), P(py + R - 26)), start=196, end=262, fill=150, width=int(P(16)))
-hl = ImageChops.multiply(hl.filter(ImageFilter.GaussianBlur(P(6))), pin)
-hlL = Image.new('RGBA', (N, N), (255, 255, 255, 0)); hlL.putalpha(hl)
-routeL = layer(route, g=lin((N, N), (255, 236, 210), (255, 170, 120), -30))
-rglow = layer(route, (255, 160, 100, 90)).filter(ImageFilter.GaussianBlur(P(16)))
-startL = layer(sd, (255, 236, 210, 255)); ringL = layer(ring, (255, 220, 190, 110))
-# the pin's shadow on the ground: a small ellipse under the point
-gsh = Image.new('L', (N, N), 0); ImageDraw.Draw(gsh).ellipse((P(tip[0] - 70), P(tip[1] - 14), P(tip[0] + 70), P(tip[1] + 22)), fill=150)
-gshL = layer(gsh.filter(ImageFilter.GaussianBlur(P(10))), (20, 6, 10, 255))
+ticket = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+for l in (layer(main, g=tgrad((255, 251, 245), (248, 232, 220), 0)),
+          layer(stub, g=tgrad((255, 186, 76), (238, 70, 116), 0)),
+          layer(perf, (40, 28, 66, 255)),
+          layer(ImageChops.multiply(bars, stub), (255, 246, 236, 235)),
+          layer(quiet, (226, 208, 200, 255)), layer(txt, (60, 44, 70, 255)), layer(dots, (240, 140, 110, 255)), layer(plane, (240, 100, 100, 255)),
+          layer(pinShadow.filter(ImageFilter.GaussianBlur(P(6))), (120, 70, 60, 255)),
+          layer(ImageChops.subtract(pin, hole), g=pgrad((255, 200, 84), (245, 70, 120), (cx - PR, cy - PR, cx + PR, tip))),
+          layer(hole, (255, 251, 245, 255))):
+    ticket = Image.alpha_composite(ticket, l)
+hlL = Image.new('RGBA', (w, h), (255, 255, 255, 0)); hlL.putalpha(hl); ticket = Image.alpha_composite(ticket, hlL)
+# a soft top sheen across the ticket
+sh = flat(); ImageDraw.Draw(sh).rectangle((0, 0, w, P(110)), fill=46); sh = ImageChops.multiply(sh.filter(ImageFilter.GaussianBlur(P(40))), shape)
+shL = Image.new('RGBA', (w, h), (255, 255, 255, 0)); shL.putalpha(sh); ticket = Image.alpha_composite(ticket, shL)
+
+def place(img, angle, ox, oy):
+    r = img.rotate(angle, resample=Image.BICUBIC, expand=True)
+    c = Image.new(img.mode, (N, N), 0 if img.mode == 'L' else (0, 0, 0, 0))
+    c.paste(r, (int(P(ox)) - r.width // 2, int(P(oy)) - r.height // 2), r if img.mode == 'RGBA' else None)
+    return c
+ANG, CX, CY = 11, 512, 548
+front = place(ticket, ANG, CX, CY)
+fmask = place(shape, ANG, CX, CY)
 
 out = bg
-for x in (rglow, routeL, ringL, startL, gshL, shadow, pglow, pinL, holeL, hlL): out = Image.alpha_composite(out, x)
-sheen = Image.new('RGBA', (N, N), (0, 0, 0, 0)); ImageDraw.Draw(sheen).ellipse((P(-200), P(-640), P(1224), P(300)), fill=(255, 255, 255, 12))
-out = Image.alpha_composite(out, sheen.filter(ImageFilter.GaussianBlur(P(30))))
+out = Image.alpha_composite(out, blur(ImageChops.offset(layer(fmask, (8, 3, 12, 210)), 0, int(P(34))), 38))
+out = Image.alpha_composite(out, front)
 rim = ImageChops.subtract(mask, mask.filter(ImageFilter.MinFilter(int(N * .004) * 2 + 1)))
+sheen = Image.new('RGBA', (N, N), (0, 0, 0, 0)); ImageDraw.Draw(sheen).ellipse((P(-200), P(-640), P(1224), P(300)), fill=(255, 255, 255, 12))
+out = Image.alpha_composite(out, blur(sheen, 30))
 out.putalpha(mask)
 rl = Image.new('RGBA', (N, N), (255, 210, 180, 255)); rl.putalpha(rim.point(lambda v: v * 50 // 255)); out = Image.alpha_composite(out, rl)
 out.resize((1024, 1024), Image.LANCZOS).save(os.path.join(HERE, 'icon.png'))
