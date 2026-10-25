@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-25 18:12 — **Facet 0.1.0** — First release: make 3D models on this computer, with no tokens and nothing uploaded. Type a prompt and pick from quick concept sketches, drop in a photo or drawing, or give it front, side and back photos. Engines: Fast (TripoSR, coloured), Detailed (Hunyuan3D 2 mini Turbo, optional colour), Best (Hunyuan3D 2 Turbo) and Multi-view. Facet sets up its own Python and PyTorch for NVIDIA (CUDA), Apple Silicon (Metal) or the CPU, and downloads only the models you pick. 3D viewer with clay, wireframe and normals, a library in Documents › Facet, and export to GLB, OBJ, PLY and print-ready STL.
+- 2026-10-25 18:12 — **Facet 0.1.0** (48 new) — Added to the Utility Package
 - 2026-10-25 04:30 — **Waypoint 0.2.1** — New app icon, in line with the rest of the suite
 - 2026-10-25 04:30 — **Docket 0.1.2** — New app icon, in line with the rest of the suite
 - 2026-10-25 04:30 — **Glean 0.1.1** — New app icon, in line with the rest of the suite

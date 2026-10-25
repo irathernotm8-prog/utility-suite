@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' file: data: blob:; worker-src 'self' blob:">
+  <title>Facet</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Facet</b><span>Local 3D generation</span></div></div>
+      <nav id="nav">
+        <button data-view="create" class="on"><span class="nav-ic" data-icon="sparkle"></span>Create</button>
+        <button data-view="library"><span class="nav-ic" data-icon="grid"></span>Library<span class="nav-count" id="libCount"></span></button>
+        <button data-view="models"><span class="nav-ic" data-icon="cube"></span>Models<span class="nav-count" id="modelsCount"></span></button>
+        <button data-view="settings"><span class="nav-ic" data-icon="gear"></span>Settings</button>
+      </nav>
+      <div class="side-fill"></div>
+      <div id="powerCard" class="power-card"></div>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view">
+        <div class="pane" data-pane="create"></div>
+        <div class="pane" data-pane="library" hidden></div>
+        <div class="pane" data-pane="models" hidden></div>
+        <div class="pane" data-pane="settings" hidden></div>
+      </section>
+    </main>
+  </div>
+  <div id="dropVeil"><div class="veil-box"><span class="veil-ic"></span><b>Drop to make it 3D</b><span>A photo or drawing of one object · or a .glb, .obj, .stl or .ply to add to your library</span></div></div>
+  <div id="sheetHost"></div>
+  <div id="toasts"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

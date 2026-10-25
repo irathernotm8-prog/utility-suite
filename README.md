@@ -12,6 +12,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Decomp** | Takes any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, on every core | `apps/decomp` |
 | **Docket** | Meeting notes: on-device transcription of Zoom, Teams and Meet calls, AI summaries, one to-do list | `apps/docket` |
 | **Droid** | Virtual Android phones and tablets: pick the look, Android version and hardware, run several at once, drag in apps and files | `apps/droid` |
+| **Facet** | 3D models from a prompt or a picture, generated on this computer's own GPU: concept sketches, photo and multi-view to mesh, viewer, GLB/OBJ/STL/PLY export | `apps/facet` |
 | **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
 | **Glean** | Collects every photo and video from Instagram, Facebook, Patreon or any page at full size, grouped by post with captions; keeps each account up to date | `apps/glean` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
@@ -58,6 +59,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Decomp | its app-data folder: `engines/` (7-Zip, Java, JADX, Vineflower, .NET, ILSpy, Ghidra — up to ~1 GB) and `jobs.json`. Results go to `~/Documents/Decomp`, one folder per job |
 | Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |
 | Droid | its app-data folder: `sdk/` (emulator and Android versions, 1–2 GB each), `avd/` (each device's disk), `apks/` (app library); movable in Android versions › Data folder. Screenshots and recordings go to `~/Pictures/Droid` |
+| Facet | `~/Documents/Facet` (one folder per model: `model.glb`, pictures, `facet.json`; change in Settings). Its app-data folder holds `Models/` (3D and image models, 2–20 GB) and `Engine/` (private Python and PyTorch, 1.5–5 GB) |
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
 | Vitals | its app-data folder (`focus/` holds one small file per day of time tracking) |
 | Waypoint | `~/Documents/Waypoint` (one folder per trip: `trip.json` and `Documents/`; change it in Settings). Its app-data folder holds `private.bin` (booking keys and saved travelers, encrypted with the system keychain) and the booking browser's sign-ins |

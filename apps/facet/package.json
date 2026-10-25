@@ -1,0 +1,37 @@
+{
+  "name": "facet",
+  "productName": "Facet",
+  "version": "0.1.0",
+  "description": "Make 3D models from a prompt or a picture, generated entirely on this computer: no accounts, no tokens, no uploads.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "FACET_DEMO=1 electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.facet",
+    "productName": "Facet",
+    "copyright": "Personal use",
+    "asar": false,
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "engine/**/*", "!engine/**/__pycache__", "build/icon.png", "package.json"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.graphics-design",
+      "darkModeSupport": true
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

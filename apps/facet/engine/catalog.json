@@ -1,0 +1,356 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "triposr",
+      "kind": "shape",
+      "name": "TripoSR",
+      "short": "TripoSR",
+      "label": "Fast",
+      "tagline": "Coloured models in seconds",
+      "blurb": "Reads a single picture and builds a coloured mesh. Seconds on a graphics card, about a minute on a laptop CPU. Softer detail than Hunyuan.",
+      "repo": "stabilityai/TripoSR",
+      "allow": [
+        "config.yaml",
+        "model.ckpt"
+      ],
+      "also": [
+        {
+          "repo": "facebook/dino-vitb16",
+          "allow": [
+            "config.json"
+          ]
+        }
+      ],
+      "sizeMB": 1680,
+      "license": "MIT",
+      "licenseUrl": "https://huggingface.co/stabilityai/TripoSR",
+      "colors": true,
+      "needs": {
+        "cudaGB": 4,
+        "macGB": 8,
+        "cpu": "ok"
+      },
+      "speed": {
+        "cuda": "~5 s",
+        "mps": "~20 s",
+        "cpu": "~1\u20132 min"
+      },
+      "detail": [
+        {
+          "id": "low",
+          "label": "Low",
+          "resolution": 160
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "resolution": 256
+        },
+        {
+          "id": "high",
+          "label": "High",
+          "resolution": 320
+        }
+      ],
+      "recommended": true
+    },
+    {
+      "id": "hy3d-mini-turbo",
+      "kind": "shape",
+      "name": "Hunyuan3D 2 mini Turbo",
+      "short": "Hunyuan mini Turbo",
+      "label": "Detailed",
+      "tagline": "Sharp, clean shapes",
+      "blurb": "Tencent's compact Hunyuan3D 2 model in its 5-step Turbo form. Much crisper geometry than TripoSR. Untextured; Facet can borrow colour from TripoSR.",
+      "repo": "tencent/Hunyuan3D-2mini",
+      "allow": [
+        "hunyuan3d-dit-v2-mini-turbo/config.yaml",
+        "hunyuan3d-dit-v2-mini-turbo/model.fp16.safetensors",
+        "hunyuan3d-vae-v2-mini-turbo/config.yaml",
+        "hunyuan3d-vae-v2-mini-turbo/model.fp16.safetensors"
+      ],
+      "sizeMB": 4230,
+      "license": "Tencent Hunyuan Community",
+      "licenseUrl": "https://huggingface.co/tencent/Hunyuan3D-2mini/blob/main/LICENSE",
+      "licenseNote": "Free for personal use. Not licensed for use in the EU, UK or South Korea.",
+      "colors": false,
+      "needs": {
+        "cudaGB": 6,
+        "macGB": 16,
+        "cpu": "slow"
+      },
+      "speed": {
+        "cuda": "~15 s",
+        "mps": "~1\u20132 min",
+        "cpu": "~10 min"
+      },
+      "steps": 5,
+      "detail": [
+        {
+          "id": "low",
+          "label": "Low",
+          "octree": 256
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "octree": 380
+        },
+        {
+          "id": "high",
+          "label": "High",
+          "octree": 512
+        }
+      ],
+      "recommended": true
+    },
+    {
+      "id": "hy3d-mini",
+      "kind": "shape",
+      "name": "Hunyuan3D 2 mini",
+      "short": "Hunyuan mini",
+      "label": "Detailed+",
+      "tagline": "More steps, a little more fidelity",
+      "blurb": "The same mini model run for 30 steps instead of 5. Slower, occasionally better on thin parts and fine features.",
+      "repo": "tencent/Hunyuan3D-2mini",
+      "allow": [
+        "hunyuan3d-dit-v2-mini/config.yaml",
+        "hunyuan3d-dit-v2-mini/model.fp16.safetensors"
+      ],
+      "sizeMB": 3820,
+      "license": "Tencent Hunyuan Community",
+      "licenseUrl": "https://huggingface.co/tencent/Hunyuan3D-2mini/blob/main/LICENSE",
+      "licenseNote": "Free for personal use. Not licensed for use in the EU, UK or South Korea.",
+      "colors": false,
+      "needs": {
+        "cudaGB": 6,
+        "macGB": 16,
+        "cpu": "very slow"
+      },
+      "speed": {
+        "cuda": "~40 s",
+        "mps": "~4\u20136 min",
+        "cpu": "30 min +"
+      },
+      "steps": 30,
+      "detail": [
+        {
+          "id": "low",
+          "label": "Low",
+          "octree": 256
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "octree": 380
+        },
+        {
+          "id": "high",
+          "label": "High",
+          "octree": 512
+        }
+      ]
+    },
+    {
+      "id": "hy3d-turbo",
+      "kind": "shape",
+      "name": "Hunyuan3D 2 Turbo",
+      "short": "Hunyuan 2 Turbo",
+      "label": "Best",
+      "tagline": "The full-size model",
+      "blurb": "The full Hunyuan3D 2 shape model (about twice the size of mini). The most faithful geometry Facet can make. Wants a strong graphics card or a Mac with 24 GB or more.",
+      "repo": "tencent/Hunyuan3D-2",
+      "allow": [
+        "hunyuan3d-dit-v2-0-turbo/config.yaml",
+        "hunyuan3d-dit-v2-0-turbo/model.fp16.safetensors",
+        "hunyuan3d-vae-v2-0-turbo/config.yaml",
+        "hunyuan3d-vae-v2-0-turbo/model.fp16.safetensors"
+      ],
+      "sizeMB": 5340,
+      "license": "Tencent Hunyuan Community",
+      "licenseUrl": "https://huggingface.co/tencent/Hunyuan3D-2/blob/main/LICENSE",
+      "licenseNote": "Free for personal use. Not licensed for use in the EU, UK or South Korea.",
+      "colors": false,
+      "needs": {
+        "cudaGB": 10,
+        "macGB": 24,
+        "cpu": "very slow"
+      },
+      "speed": {
+        "cuda": "~25 s",
+        "mps": "~3 min",
+        "cpu": "30 min +"
+      },
+      "steps": 5,
+      "detail": [
+        {
+          "id": "low",
+          "label": "Low",
+          "octree": 256
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "octree": 380
+        },
+        {
+          "id": "high",
+          "label": "High",
+          "octree": 512
+        }
+      ]
+    },
+    {
+      "id": "hy3d-mv-turbo",
+      "kind": "shape",
+      "name": "Hunyuan3D 2 Multi-view",
+      "short": "Hunyuan 2 MV",
+      "label": "Multi-view",
+      "tagline": "Front, side and back photos",
+      "blurb": "Give it two to four photos of the same object (front, left, back, right) and it builds one model that agrees with all of them. Best for real objects you can photograph.",
+      "repo": "tencent/Hunyuan3D-2mv",
+      "allow": [
+        "hunyuan3d-dit-v2-mv-turbo/config.yaml",
+        "hunyuan3d-dit-v2-mv-turbo/model.fp16.safetensors"
+      ],
+      "also": [
+        {
+          "repo": "tencent/Hunyuan3D-2",
+          "allow": [
+            "hunyuan3d-vae-v2-0-turbo/config.yaml",
+            "hunyuan3d-vae-v2-0-turbo/model.fp16.safetensors"
+          ]
+        }
+      ],
+      "sizeMB": 5340,
+      "license": "Tencent Hunyuan Community",
+      "licenseUrl": "https://huggingface.co/tencent/Hunyuan3D-2mv/blob/main/LICENSE",
+      "licenseNote": "Free for personal use. Not licensed for use in the EU, UK or South Korea.",
+      "colors": false,
+      "multiview": true,
+      "needs": {
+        "cudaGB": 10,
+        "macGB": 24,
+        "cpu": "very slow"
+      },
+      "speed": {
+        "cuda": "~30 s",
+        "mps": "~3 min",
+        "cpu": "30 min +"
+      },
+      "steps": 5,
+      "detail": [
+        {
+          "id": "low",
+          "label": "Low",
+          "octree": 256
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "octree": 380
+        },
+        {
+          "id": "high",
+          "label": "High",
+          "octree": 512
+        }
+      ]
+    },
+    {
+      "id": "sd-turbo",
+      "kind": "image",
+      "name": "SD Turbo",
+      "short": "SD Turbo",
+      "label": "Quick sketches",
+      "tagline": "Prompt to concept in a blink",
+      "blurb": "Turns a prompt into concept pictures in one or two steps, so you can pick the one to build. Small and fast everywhere.",
+      "repo": "stabilityai/sd-turbo",
+      "allow": [
+        "model_index.json",
+        "scheduler/*",
+        "tokenizer/*",
+        "text_encoder/config.json",
+        "unet/config.json",
+        "vae/config.json",
+        "text_encoder/model.fp16.safetensors",
+        "unet/diffusion_pytorch_model.fp16.safetensors",
+        "vae/diffusion_pytorch_model.fp16.safetensors"
+      ],
+      "sizeMB": 2580,
+      "license": "Stability AI Community",
+      "licenseUrl": "https://huggingface.co/stabilityai/sd-turbo/blob/main/LICENSE.md",
+      "licenseNote": "Free for personal use and for businesses under $1M a year.",
+      "needs": {
+        "cudaGB": 4,
+        "macGB": 8,
+        "cpu": "ok"
+      },
+      "speed": {
+        "cuda": "<1 s each",
+        "mps": "~2 s each",
+        "cpu": "~30 s each"
+      },
+      "recommended": true
+    },
+    {
+      "id": "sdxl-turbo",
+      "kind": "image",
+      "name": "SDXL Turbo",
+      "short": "SDXL Turbo",
+      "label": "Better sketches",
+      "tagline": "Richer detail from the same prompt",
+      "blurb": "The larger SDXL version of the sketch model. Follows prompts more closely and draws cleaner objects, at about twice the size.",
+      "repo": "stabilityai/sdxl-turbo",
+      "allow": [
+        "model_index.json",
+        "scheduler/*",
+        "tokenizer/*",
+        "tokenizer_2/*",
+        "text_encoder/config.json",
+        "text_encoder_2/config.json",
+        "unet/config.json",
+        "vae/config.json",
+        "text_encoder/model.fp16.safetensors",
+        "text_encoder_2/model.fp16.safetensors",
+        "unet/diffusion_pytorch_model.fp16.safetensors",
+        "vae/diffusion_pytorch_model.fp16.safetensors"
+      ],
+      "sizeMB": 6940,
+      "license": "Stability AI Community",
+      "licenseUrl": "https://huggingface.co/stabilityai/sdxl-turbo/blob/main/LICENSE.md",
+      "licenseNote": "Free for personal use and for businesses under $1M a year.",
+      "needs": {
+        "cudaGB": 8,
+        "macGB": 16,
+        "cpu": "slow"
+      },
+      "speed": {
+        "cuda": "~1 s each",
+        "mps": "~5 s each",
+        "cpu": "~2 min each"
+      }
+    },
+    {
+      "id": "cutout",
+      "kind": "helper",
+      "name": "Background remover",
+      "short": "IS-Net",
+      "label": "Required",
+      "tagline": "Lifts the object off its background",
+      "blurb": "IS-Net, used to cut your object out of photos before it is turned into 3D.",
+      "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx",
+      "dest": "rembg/isnet-general-use.onnx",
+      "sizeMB": 171,
+      "license": "Apache 2.0",
+      "licenseUrl": "https://github.com/xuebinqin/DIS",
+      "needs": {
+        "cudaGB": 0,
+        "macGB": 0,
+        "cpu": "ok"
+      },
+      "required": true
+    }
+  ]
+}
