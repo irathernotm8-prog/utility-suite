@@ -4,10 +4,11 @@ import { ic } from './icons.js';
 import { Viewer } from './viewer.js';
 import { S, onChange, go, model, refreshLibrary, setHead, defaultHead } from './app.js';
 import { exportMenu, useImages } from './create.js';
+import { openRig } from './rigui.js';
 
 const F = window.facet;
 let root = null, wired = false, viewer = null;
-const st = { q: '', sort: 'new', open: null, viewMode: 'shaded' };
+const st = { q: '', sort: 'new', open: null, viewMode: 'shaded', rigged: true, clip: 'Idle', skel: false };
 
 export function show(pane, arg) {
   root = pane;
@@ -101,18 +102,22 @@ function renderDetail() {
   if (!m) { st.open = null; renderGrid(); return; }
   root.classList.add('flush');
   setHead(`<button class="icon-btn" id="dBack" title="Back">${ic('back', 17)}</button><h1><span class="ellip">${esc(m.name)}</span><small>${esc(model(m.engine)?.name || '')}</small></h1>`,
-    `<button class="btn sm" id="dShow">${ic('folder', 14)}Show</button><button class="btn sm primary" id="dExport">${ic('share', 14)}Export</button>`);
+    `<button class="btn sm" id="dRig">${ic('person', 14)}${m.paths.rigged ? 'Re-rig' : 'Rig'}</button><button class="btn sm" id="dShow">${ic('folder', 14)}Show</button><button class="btn sm primary" id="dExport">${ic('share', 14)}Export</button>`);
+  $('#dRig').onclick = () => openRig(m, () => { st.rigged = true; st.clip = 'Idle'; renderDetail(); });
   $('#dBack').onclick = () => { st.open = null; closeViewer(); renderGrid(); };
   $('#dShow').onclick = () => F.reveal(m.paths.model);
   $('#dExport').onclick = (e) => exportMenu(e.currentTarget, m);
   closeViewer();
   root.innerHTML = `<div class="detail"><div class="stage"><div class="viewer-host" id="dv"></div>
       <div class="tb top"><div class="seg sm" id="dMode">${[['shaded', 'Shaded'], ['clay', 'Clay'], ['wire', 'Wireframe'], ['normals', 'Normals']].map(([k, l]) => `<button data-m="${k}" class="${st.viewMode === k ? 'on' : ''}">${l}</button>`).join('')}</div><span class="sep"></span><button class="icon-btn sm on" id="dSpin">${ic('rotate', 15)}</button><button class="icon-btn sm" id="dFrame">${ic('frame', 15)}</button></div>
+      <div class="tb clips" id="dClips" hidden></div>
     </div><div class="d-side" id="dSide"></div></div>`;
   try {
     viewer = new Viewer($('#dv', root));
     viewer.setMode(st.viewMode);
-    viewer.load(m.paths.model).then(() => {
+    const showRig = !!m.paths.rigged && st.rigged;
+    viewer.load(showRig ? m.paths.rigged : m.paths.model).then((info) => {
+      renderClips(m, info);
       if (!m.paths.thumb) setTimeout(async () => { try { await F.library.thumb(m.id, viewer.snapshot(512)); refreshLibrary(); } catch {} }, 450);
     }).catch((e) => toast('Could not open the model', e.message, 'bad'));
   } catch {
@@ -125,6 +130,22 @@ function renderDetail() {
   renderDetailSide();
 }
 
+function renderClips(m, info) {
+  const bar = $('#dClips', root);
+  if (!bar) return;
+  if (!m.paths.rigged) { bar.hidden = true; return; }
+  bar.hidden = false;
+  const clips = info?.rigged ? info.clips : [];
+  if (info?.rigged && !clips.includes(st.clip)) st.clip = null;
+  bar.innerHTML = `<div class="seg sm" id="dRigSeg"><button data-r="static" class="${!st.rigged ? 'on' : ''}">Static</button><button data-r="rigged" class="${st.rigged ? 'on' : ''}">Rigged</button></div>
+    ${info?.rigged ? `<span class="sep"></span><div class="seg sm" id="dClipSeg"><button data-c="" class="${!st.clip ? 'on' : ''}">Pose</button>${clips.map((c) => `<button data-c="${esc(c)}" class="${st.clip === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
+    <button class="icon-btn sm ${st.skel ? 'on' : ''}" id="dSkel" title="Show bones">${ic('person', 15)}</button>` : ''}`;
+  for (const b of $$('#dRigSeg button', bar)) b.onclick = () => { st.rigged = b.dataset.r === 'rigged'; renderDetail(); };
+  for (const b of $$('#dClipSeg button', bar)) b.onclick = () => { st.clip = b.dataset.c || null; viewer?.setClip(st.clip); for (const x of $$('#dClipSeg button', bar)) x.classList.toggle('on', x === b); };
+  const sk = $('#dSkel', bar); if (sk) sk.onclick = () => { st.skel = !st.skel; viewer?.setSkeleton(st.skel); sk.classList.toggle('on', st.skel); };
+  if (info?.rigged) { viewer?.setClip(st.clip); viewer?.setSkeleton(st.skel); }
+}
+
 function renderDetailSide() {
   const m = S.library.find((x) => x.id === st.open);
   const side = $('#dSide', root);
@@ -134,7 +155,7 @@ function renderDetailSide() {
   const p = m.params || {};
   side.innerHTML = `
     <input class="d-name" id="dName" value="${esc(m.name)}" spellcheck="false">
-    <div class="row" style="margin-top:-8px"><span class="pill acc">${esc(eng?.label || (m.engine === 'import' ? 'Added file' : m.engine))}</span>${s.colors ? '<span class="pill info">Coloured</span>' : m.engine !== 'import' ? '<span class="pill">Clay</span>' : ''}${s.watertight ? '<span class="pill ok">Watertight</span>' : ''}<span class="muted small" style="margin-left:auto">${ago(m.createdAt)}</span></div>
+    <div class="row" style="margin-top:-8px"><span class="pill acc">${esc(eng?.label || (m.engine === 'import' ? 'Added file' : m.engine))}</span>${s.texture ? '<span class="pill info">Painted</span>' : s.colors ? '<span class="pill info">Coloured</span>' : m.engine !== 'import' ? '<span class="pill">Clay</span>' : ''}${m.rig ? `<span class="pill ok">Rigged · ${m.rig.joints || ''} bones</span>` : ''}${s.watertight ? '<span class="pill ok">Watertight</span>' : ''}<span class="muted small" style="margin-left:auto">${ago(m.createdAt)}</span></div>
     ${m.source?.prompt ? `<div class="field"><label>Prompt</label><div class="quote">${esc(m.source.prompt)}</div></div>` : ''}
     ${m.paths.input ? `<div class="field"><label>${m.source?.mode === 'prompt' ? 'Sketch it was built from' : 'Picture'}</label><div class="sources"><img src="${fileUrl(m.paths.input)}" alt="" id="dInput"></div></div>` : ''}
     <div class="facts">
@@ -148,6 +169,7 @@ function renderDetailSide() {
     <div class="field"><label>Notes</label><textarea class="textarea" id="dNotes" rows="3" placeholder="Anything to remember about this model">${esc(m.notes || '')}</textarea></div>
     <div class="d-actions">
       ${m.paths.input ? `<button class="btn" id="dRemix">${ic('wand', 14)}Make again</button>` : ''}
+      ${m.paths.input && !s.texture ? `<button class="btn" id="dPaint">${ic('paint', 14)}Paint from picture</button>` : ''}
       <button class="btn" id="dFav">${ic('star', 14)}${m.favorite ? 'Unfavourite' : 'Favourite'}</button>
       <button class="btn" id="dOpen">${ic('external', 14)}Open in app</button>
       <button class="btn danger" id="dDel">${ic('trash', 14)}Delete</button>
@@ -157,6 +179,13 @@ function renderDetailSide() {
   name.onkeydown = (e) => { if (e.key === 'Enter') name.blur(); };
   const notes = $('#dNotes', side); notes.onchange = () => F.library.update(m.id, { notes: notes.value });
   const remix = $('#dRemix', side); if (remix) remix.onclick = () => { go('create'); useImages([m.paths.input]); toast('Picture loaded in Create', 'Try another engine or detail level', 'info'); };
+  const paint = $('#dPaint', side);
+  if (paint) paint.onclick = async () => {
+    paint.disabled = true;
+    const close = toast('Painting from the picture', 'Unwrapping and projecting; this takes a minute', 'busy', 0);
+    try { await F.library.repaint(m.id); close(); toast('Painted', m.rig ? 'The rig was removed because the surface changed. Rig it again.' : 'The old version is kept as model-before-paint.glb'); await refreshLibrary(); renderDetail(); }
+    catch (e) { close(); paint.disabled = false; toast('Could not paint', e.message, 'bad'); }
+  };
   $('#dFav', side).onclick = async () => { await F.library.update(m.id, { favorite: !m.favorite }); refreshLibrary(); };
   $('#dOpen', side).onclick = () => F.openPath(m.paths.model);
   $('#dDel', side).onclick = () => del(m);

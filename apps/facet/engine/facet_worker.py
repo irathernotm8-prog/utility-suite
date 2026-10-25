@@ -246,6 +246,19 @@ def image_pipe(mid):
     return LOADED[key]
 
 
+def cropped(img):
+    """True when the object runs off the top or bottom of a sketch (feet or head cut off), which makes poor models."""
+    try:
+        if not os.path.exists(os.path.join(os.environ["U2NET_HOME"], "isnet-general-use.onnx")):
+            return False
+        cut = cut_out(img)
+        al = np.asarray(cut.getchannel("A")) > 127
+        edge = max(2, al.shape[0] // 100)
+        return bool(al[-edge:].mean() > 0.02 or al[:edge].mean() > 0.02)
+    except Exception:
+        return False
+
+
 def cmd_imagine(rid, a):
     t = _torch()
     mid = a.get("model") or "sd-turbo"
@@ -270,7 +283,7 @@ def cmd_imagine(rid, a):
                    guidance_scale=0.0, width=size, height=size, generator=g).images[0]
         p = os.path.join(out_dir, f"idea-{seed + i}.png")
         img.save(p)
-        images.append({"path": p, "seed": seed + i})
+        images.append({"path": p, "seed": seed + i, "cropped": cropped(img)})
         send({"id": rid, "type": "progress", "stage": "imagine", "pct": 0.05 + 0.9 * (i + 1) / n, "msg": f"Sketched {i + 1} of {n}", "image": p})
     if not KEEP:
         drop("img:")
@@ -406,6 +419,9 @@ def vertex_colors(mesh):
     return None
 
 
+TEXTURED_MAX_FACES = 150000
+
+
 def remove_floaters(mesh, keep_ratio=0.02):
     import trimesh
     if len(mesh.faces) < 10:
@@ -454,9 +470,14 @@ def normalize(mesh):
     return mesh
 
 
+def has_texture(mesh):
+    return getattr(mesh.visual, "kind", None) == "texture" and getattr(mesh.visual, "uv", None) is not None
+
+
 def stats(mesh):
-    return {"vertices": int(len(mesh.vertices)), "faces": int(len(mesh.faces)), "colors": vertex_colors(mesh) is not None,
-            "watertight": bool(mesh.is_watertight)}
+    textured = has_texture(mesh)
+    return {"vertices": int(len(mesh.vertices)), "faces": int(len(mesh.faces)), "colors": textured or vertex_colors(mesh) is not None,
+            "texture": textured, "watertight": bool(mesh.is_watertight)}
 
 
 def srgb_to_linear(c):
@@ -509,10 +530,19 @@ def export_mesh(mesh, path, fmt=None, height_mm=None):
         with open(path, "wb") as f:
             f.write(data)
     elif fmt == "obj":
-        text = trimesh.exchange.obj.export_obj(m, include_color=vertex_colors(m) is not None, include_texture=False)
+        if has_texture(m):
+            base = os.path.splitext(os.path.basename(path))[0]
+            text, files = trimesh.exchange.obj.export_obj(m, include_texture=True, return_texture=True, mtl_name=base + ".mtl")
+            for name, data in files.items():
+                with open(os.path.join(os.path.dirname(os.path.abspath(path)), name), "wb") as f:
+                    f.write(data)
+        else:
+            text = trimesh.exchange.obj.export_obj(m, include_color=vertex_colors(m) is not None, include_texture=False)
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
     else:
+        if fmt == "ply" and has_texture(m):
+            m.visual = m.visual.to_color()
         m.export(path, file_type=fmt)
     return path
 
@@ -585,39 +615,143 @@ def cmd_shape(rid, a):
     else:
         raise RuntimeError("Unknown engine " + engine)
 
-    send({"id": rid, "type": "progress", "stage": "clean", "pct": 0.88, "msg": "Cleaning up the mesh"})
+    send({"id": rid, "type": "progress", "stage": "clean", "pct": 0.80, "msg": "Cleaning up the mesh"})
+    import texture as tex
     mesh = remove_floaters(mesh)
     mesh = normalize(mesh)
+    # turn the model so the side in the picture faces forward (+z), as game engines expect
+    mesh, front_key, front_iou = tex.face_front(mesh, prepared["front"])
+    mesh = normalize(mesh)
+    mode = a.get("texture") or "picture"
+    fallback = None
+    if vertex_colors(mesh) is not None:
+        fallback = (np.asarray(mesh.vertices).copy(), vertex_colors(mesh).copy())
     if color_from is not None:
         ref = normalize(remove_floaters(color_from))
+        ref, _, _ = tex.face_front(ref, prepared["front"])
+        ref = normalize(ref)
         # line the two up box-to-box before borrowing colour
         b, rb = mesh.bounds, ref.bounds
         scale = (b[1] - b[0]) / np.maximum(rb[1] - rb[0], 1e-6)
         rv = (np.asarray(ref.vertices) - rb[0]) * scale + b[0]
-        mesh = transfer_colors(mesh, rv, vertex_colors(ref))
-    mesh = simplify(mesh, a.get("faces"))
+        fallback = (rv, vertex_colors(ref))
+        if mode == "vertex":
+            mesh = transfer_colors(mesh, rv, vertex_colors(ref))
+
+    budget = int(a.get("faces") or 0)
+    if mode == "picture":
+        # a texture carries the detail, so the surface can stay lighter; very dense meshes also unwrap slowly
+        budget = min(budget or TEXTURED_MAX_FACES, TEXTURED_MAX_FACES)
+    mesh = simplify(mesh, budget)
     try:
         mesh.fix_normals()
     except Exception:
         pass
 
-    send({"id": rid, "type": "progress", "stage": "export", "pct": 0.95, "msg": "Saving"})
+    painted = None
+    if mode == "picture":
+        views_dirs = [(prepared["front"], [0.0, 0.0, 1.0])]
+        V, F = np.asarray(mesh.vertices), np.asarray(mesh.faces)
+        if "back" in prepared:
+            views_dirs.append((prepared["back"], [0.0, 0.0, -1.0]))
+        for side in ("left", "right"):
+            if side in prepared:
+                # which side a photo shows is ambiguous by name; the silhouette decides
+                cands = [np.array([1.0, 0, 0]), np.array([-1.0, 0, 0])]
+                d = max(cands, key=lambda c: tex.View(prepared[side], c, V, F).silhouette_iou())
+                views_dirs.append((prepared[side], d.tolist()))
+        steps = {"Unwrapping the surface": 0.84, "Painting from the picture": 0.88, "Filling hidden sides": 0.92}
+        prog = lambda m: send({"id": rid, "type": "progress", "stage": "paint", "pct": steps.get(m, 0.9), "msg": m})
+        size = int(a.get("textureSize") or 2048)
+        mesh, painted = tex.bake(mesh, views_dirs, fallback=fallback, size=size, progress=prog)
+    elif mode == "none":
+        import trimesh
+        mesh.visual = trimesh.visual.ColorVisuals(mesh)
+
+    send({"id": rid, "type": "progress", "stage": "export", "pct": 0.96, "msg": "Saving"})
     glb = export_mesh(mesh, os.path.join(out_dir, "model.glb"))
     LOADED["last"] = mesh  # quick re-exports
     if not KEEP:
         drop()
     s = stats(mesh)
-    s.update(seconds=round(time.time() - t0, 1), seed=seed, engine=engine, device=device())
+    s.update(seconds=round(time.time() - t0, 1), seed=seed, engine=engine, device=device(), front=front_key, fit=round(float(front_iou), 3))
+    if painted is not None:
+        s["painted"] = round(painted, 3)
     return {"glb": glb, "stats": s}
 
 
 def cmd_export(rid, a):
     src = a["src"]
+    if a.get("format") == "glb" and src.lower().endswith(".glb") and not a.get("faces") and not a.get("heightM"):
+        import shutil
+        shutil.copyfile(src, a["out"])
+        return {"path": a["out"]}
     m = load_mesh(src)
     if a.get("faces"):
         m = simplify(m, a["faces"])
+    if a.get("heightM"):
+        h = float(m.bounds[1][1] - m.bounds[0][1]) or 1.0
+        m.apply_scale(float(a["heightM"]) / h)
     out = export_mesh(m, a["out"], a.get("format"), a.get("heightMm"))
     return {"path": out, "stats": stats(m)}
+
+
+def cmd_repaint(rid, a):
+    """Paints an existing model from its picture (for models made before Facet painted textures)."""
+    import texture as tex
+    send({"id": rid, "type": "progress", "stage": "paint", "pct": 0.05, "msg": "Reading the model"})
+    mesh = load_mesh(a["src"])
+    img = Image.open(a["image"]).convert("RGBA")
+    if not has_transparency(img):
+        img = frame(cut_out(img))
+    fallback = None
+    mesh = normalize(remove_floaters(mesh))
+    mesh, key, iou = tex.face_front(mesh, img)
+    mesh = normalize(mesh)
+    if vertex_colors(mesh) is not None:
+        fallback = (np.asarray(mesh.vertices).copy(), vertex_colors(mesh).copy())
+    mesh = simplify(mesh, TEXTURED_MAX_FACES)
+    steps = {"Unwrapping the surface": 0.3, "Painting from the picture": 0.6, "Filling hidden sides": 0.85}
+    mesh, painted = tex.bake(mesh, [(img, [0.0, 0.0, 1.0])], fallback=fallback, size=int(a.get("textureSize") or 2048),
+                             progress=lambda m: send({"id": rid, "type": "progress", "stage": "paint", "pct": steps.get(m, 0.5), "msg": m}))
+    export_mesh(mesh, a["out"])
+    s = stats(mesh)
+    s.update(front=key, fit=round(float(iou), 3), painted=round(painted, 3))
+    return {"path": a["out"], "stats": s}
+
+
+def _rig_mesh(src):
+    """The mesh to rig, with UV seams welded so weights flow across the whole surface."""
+    m = load_mesh(src)
+    welded = m.copy()
+    try:
+        welded.merge_vertices(merge_tex=True, merge_norm=True)
+    except TypeError:
+        welded.merge_vertices()
+    return m, welded
+
+
+def cmd_rig_guess(rid, a):
+    import rig
+    _, welded = _rig_mesh(a["src"])
+    b = welded.bounds
+    return {"markers": rig.guess_markers(welded), "bounds": b.tolist()}
+
+
+def cmd_rig(rid, a):
+    import rig
+    from scipy.spatial import cKDTree
+    send({"id": rid, "type": "progress", "stage": "rig", "pct": 0.05, "msg": "Placing the skeleton"})
+    mesh, welded = _rig_mesh(a["src"])
+    markers = a.get("markers") or rig.guess_markers(welded)
+    joints = rig.build_skeleton(welded, markers)
+    send({"id": rid, "type": "progress", "stage": "rig", "pct": 0.15, "msg": "Working out how the surface follows each bone"})
+    J, W = rig.skin_weights(welded, joints, progress=lambda f: send({"id": rid, "type": "progress", "stage": "rig", "pct": 0.15 + 0.7 * f, "msg": "Weighting the skin"}))
+    # carry the weights back to the textured mesh (same positions, split along UV seams)
+    _, nn = cKDTree(np.asarray(welded.vertices)).query(np.asarray(mesh.vertices), k=1)
+    send({"id": rid, "type": "progress", "stage": "rig", "pct": 0.9, "msg": "Saving the rigged model"})
+    out = rig.write_glb(a["out"], mesh, joints, J[nn], W[nn], height_m=float(a.get("heightM") or 1.8), animations=a.get("animations", True))
+    return {"path": out, "joints": len(joints), "markers": markers, "clips": ["Idle", "Walk", "Wave"] if a.get("animations", True) else []}
 
 
 def cmd_unload(rid, a):
@@ -625,7 +759,8 @@ def cmd_unload(rid, a):
     return {"ok": True}
 
 
-COMMANDS = {"hello": cmd_hello, "imagine": cmd_imagine, "cutout": cmd_cutout, "shape": cmd_shape, "export": cmd_export, "unload": cmd_unload}
+COMMANDS = {"hello": cmd_hello, "imagine": cmd_imagine, "cutout": cmd_cutout, "shape": cmd_shape, "export": cmd_export, "unload": cmd_unload,
+            "rig_guess": cmd_rig_guess, "rig": cmd_rig, "repaint": cmd_repaint}
 
 
 def friendly(e):

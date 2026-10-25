@@ -20,13 +20,17 @@ To ship: bump `version` in `package.json`, `./utility note facet "…"`, `./util
 - **Model files live at `<Models>/<org>/<repo>/<path>`.** hy3dgen finds them through `HY3DGEN_MODELS`, diffusers by local path, TripoSR by local path plus `FACET_MODELS` for the DINO config. Do not switch to the Hugging Face cache layout.
 - **The Python environment is versioned.** Changing `engine/requirements.txt`, the PyTorch choice or `HY3DGEN_SHA` in `src/setup.js` changes the environment version; users then see "Update engine". `transformers` must stay below 5 (TripoSR's ViT weights and hy3dgen use the 4.x module names).
 - **TripoSR is vendored** (MIT) in `engine/tsr` with two edits marked `Facet:`: marching cubes via scikit-image (no torchmcubes compile) and the DINO config read from the models folder. Hunyuan3D (`hy3dgen`) is installed from Tencent's GitHub archive at a pinned commit, never vendored (its licence).
+- **Orientation:** after clean-up every model is turned so the side in the front picture faces +z (`texture.face_front`, by silhouette overlap), and stands on y = 0. Rigging and the engine presets rely on that.
+- **Textures:** `texture.bake` unwraps with xatlas and paints from the pictures; models with a texture are capped at 150k faces (`TEXTURED_MAX_FACES`) because unwrapping very dense meshes is slow. "Guess the hidden sides" (`colorize`) only supplies the fill colour for unseen areas.
+- **Rigging:** joint names are Mixamo's (`mixamorig:*`) — keep them; Unity/Unreal/Mixamo mapping depends on it. The character's left is +x. Skin weights come from surface (graph) distance, so loose capes and long hair near an arm can follow the arm; the marker editor is the user's fix for odd guesses. A rigged export with a face limit (Roblox) re-rigs a reduced copy with the saved markers.
 - **Vertex colours:** Facet keeps sRGB internally and writes linear colours into GLB (glTF's rule); `load_mesh` converts back when reading a GLB. OBJ/PLY get sRGB.
 - **Memory:** one big model in memory at a time (two on ≥20 GB GPUs). Hunyuan is built directly in half precision. CPU-only machines with under 20 GB RAM use bfloat16 (slow on CPUs without native bf16, but it fits). Stopping a job kills the worker; the next request restarts it.
 - No native Node modules. The Python side compiles nothing (all wheels).
 
 ## Not done yet / ideas
 
-- Textures beyond vertex colour: Hunyuan3D-Paint needs a CUDA-compiled rasterizer, so it would be NVIDIA-only. TripoSR's texture bake needs an OpenGL context in Python.
+- Generated (not projected) textures for the hidden back: Hunyuan3D-Paint would do it but needs a CUDA-compiled rasterizer, so NVIDIA-only.
+- Finger bones, and rig types for quadrupeds or props.
 - AMD GPUs on Windows run on the CPU (no DirectML path).
 - Batch mode (a folder of pictures → a folder of models).
 

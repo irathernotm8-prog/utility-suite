@@ -8,7 +8,7 @@
       "short": "TripoSR",
       "label": "Fast",
       "tagline": "Coloured models in seconds",
-      "blurb": "Reads a single picture and builds a coloured mesh. Seconds on a graphics card, about a minute on a laptop CPU. Softer detail than Hunyuan.",
+      "blurb": "Reads a single picture and builds a mesh in seconds on a graphics card, about a minute on a laptop CPU. Softer shapes than Hunyuan; good for props and quick drafts.",
       "repo": "stabilityai/TripoSR",
       "allow": [
         "config.yaml",
@@ -62,7 +62,7 @@
       "short": "Hunyuan mini Turbo",
       "label": "Detailed",
       "tagline": "Sharp, clean shapes",
-      "blurb": "Tencent's compact Hunyuan3D 2 model in its 5-step Turbo form. Much crisper geometry than TripoSR. Untextured; Facet can borrow colour from TripoSR.",
+      "blurb": "Tencent's compact Hunyuan3D 2 model in its 5-step Turbo form. Much crisper geometry than TripoSR; Facet paints it from your picture. The best choice for characters.",
       "repo": "tencent/Hunyuan3D-2mini",
       "allow": [
         "hunyuan3d-dit-v2-mini-turbo/config.yaml",

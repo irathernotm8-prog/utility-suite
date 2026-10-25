@@ -236,3 +236,21 @@ html.win #head { padding-right: 150px; }
 .veil-box { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 54px; border-radius: 26px; border: 2px dashed color-mix(in srgb, var(--acc) 70%, transparent); background: var(--glass); text-align: center; }
 .veil-box b { font-size: 20px; } .veil-box span { color: var(--fg-2); font-size: 13px; max-width: 360px; }
 .veil-box .veil-ic { color: var(--acc); }
+
+/* ── rigging */
+.rig-wrap { display: grid; grid-template-columns: 1fr 280px; gap: 16px; min-height: 0; }
+.rig-stage { position: relative; height: min(560px, calc(100vh - 260px)); border-radius: 16px; background: var(--stage); border: 1px solid var(--line); overflow: hidden; }
+.rig-host canvas { position: absolute; inset: 0; }
+.rig-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.rig-svg .bone { stroke: color-mix(in srgb, var(--fg) 55%, transparent); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 5 5; }
+.rig-svg .mk { cursor: grab; } .rig-svg.dragging .mk { cursor: grabbing; }
+.rig-svg .mk .halo { opacity: .25; }
+.rig-svg .mk circle:not(.halo) { stroke: #fff; stroke-width: 2.5; }
+.rig-svg .mk text { font-size: 11px; font-weight: 650; fill: var(--fg); text-anchor: middle; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; pointer-events: none; }
+.rig-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--fg-2); padding: 20px; text-align: center; }
+.rig-side { display: flex; flex-direction: column; gap: 12px; }
+.rig-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; color: var(--fg-2); }
+.rig-legend span { display: flex; align-items: center; gap: 6px; } .rig-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.rig-progress { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color: var(--fg-2); }
+.tb.clips { top: 64px; left: 50%; transform: translateX(-50%); }
+.idea .crop-flag { position: absolute; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 7px; font-size: 11.5px; font-weight: 600; background: color-mix(in srgb, var(--warn) 85%, #000); color: #1b1300; }

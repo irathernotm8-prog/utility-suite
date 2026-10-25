@@ -46,7 +46,7 @@ function writeMeta(m) {
 
 function decorate(m) {
   const f = (n) => (n && fs.existsSync(path.join(m.dir, n)) ? path.join(m.dir, n) : null);
-  return { ...m, paths: { model: f(m.files?.model), input: f(m.files?.input), thumb: f(m.files?.thumb), dir: m.dir } };
+  return { ...m, paths: { model: f(m.files?.model), input: f(m.files?.input), thumb: f(m.files?.thumb), rigged: f(m.files?.rigged), dir: m.dir } };
 }
 
 function list() {
@@ -81,6 +81,15 @@ function update(id, patch) {
   return decorate(writeMeta({ ...raw, ...allowed }));
 }
 
+function setRig(id, rig) {
+  const m = find(id);
+  if (!m) return null;
+  const { paths, ...raw } = m;
+  raw.files = { ...raw.files, rigged: rig ? 'model-rigged.glb' : null };
+  raw.rig = rig;
+  return decorate(writeMeta(raw));
+}
+
 function setThumb(id, dataUrl) {
   const m = find(id);
   if (!m || !/^data:image\/png;base64,/.test(dataUrl)) return false;
@@ -103,4 +112,4 @@ function importStart(file) {
   return m;
 }
 
-module.exports = { list, find, create, finish, abandon, update, setThumb, trash, importStart, nameFrom, writeMeta, decorate };
+module.exports = { list, find, create, finish, abandon, update, setThumb, setRig, trash, importStart, nameFrom, writeMeta, decorate };

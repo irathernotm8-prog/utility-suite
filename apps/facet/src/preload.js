@@ -32,7 +32,8 @@ contextBridge.exposeInMainWorld('facet', {
   create: { imagine: (a) => call('create:imagine', a), make: (a) => call('create:make', a), cancel: (id) => call('create:cancel', id), jobs: () => call('create:jobs') },
   library: {
     list: () => call('library:list'), get: (id) => call('library:get', id), update: (id, p) => call('library:update', id, p), trash: (id) => call('library:trash', id),
-    thumb: (id, url) => call('library:thumb', id, url), export: (id, f, o) => call('library:export', id, f, o), import: (files) => call('library:import', files)
+    thumb: (id, url) => call('library:thumb', id, url), export: (id, f, o) => call('library:export', id, f, o), import: (files) => call('library:import', files),
+    rigGuess: (id, fresh) => call('library:rigGuess', id, fresh), rig: (id, markers, o) => call('library:rig', id, markers, o), unrig: (id) => call('library:unrig', id), repaint: (id) => call('library:repaint', id)
   },
   on: { engine: on('engine'), models: on('models'), job: on('job'), library: on('library'), worker: on('worker') }
 });

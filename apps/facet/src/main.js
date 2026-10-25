@@ -47,7 +47,7 @@ function applyTheme() {
 /* ───────────────────────── prompts ───────────────────────── */
 const STYLES = {
   object: (p) => `${p}, a single object, front view at eye level, full view, centered, isolated on a plain white background, soft even studio lighting, clean product render`,
-  character: (p) => `${p}, full-body character, standing, front view, arms slightly away from the body, centered, isolated on a plain white background, soft lighting, 3D character render`,
+  character: (p) => `${p}, full body visible from head to feet, standing straight in an A-pose with arms held out away from the body, legs slightly apart, facing the camera, front view, centered, simple clean silhouette, isolated on a plain white background, soft even lighting, 3D character render`,
   game: (p) => `${p}, stylized game asset, single object, full view, centered, isolated on a plain white background, hand-painted look, 3D render`,
   lowpoly: (p) => `${p}, low poly 3D model, simple flat-shaded facets, single object, full view, centered, plain white background`,
   figurine: (p) => `${p}, collectible figurine on a small base, full view, centered, plain white background, studio lighting, smooth painted resin`,
@@ -85,6 +85,25 @@ function startImagine(a) {
   return job.id;
 }
 
+function startRig(id, markers, opts = {}) {
+  const m = library.find(id);
+  if (!m) throw new Error('That model is gone.');
+  const jid = crypto.randomUUID();
+  const job = { id: jid, kind: 'rig', status: 'running', stage: 'queued', pct: 0, msg: 'Waiting for the engine', projectId: id, name: m.name };
+  jobs.set(jid, job);
+  jobUpdate(job, {});
+  const heightM = Math.max(0.1, Math.min(50, Number(opts.heightM) || 1.8));
+  const r = worker.request('rig', { src: m.paths.model, markers, out: path.join(m.dir, 'model-rigged.glb'), heightM, animations: opts.animations !== false },
+    (p) => jobUpdate(job, { stage: p.stage, pct: p.pct, msg: p.msg }));
+  job._req = r.id;
+  r.promise.then((res) => {
+    const saved = library.setRig(id, { markers: res.markers, heightM, clips: res.clips, joints: res.joints, at: Date.now() });
+    jobUpdate(job, { status: 'done', pct: 1, msg: 'Rigged', project: saved });
+    send('library', { type: 'updated', id });
+  }).catch((e) => jobUpdate(job, { status: e.stopped ? 'stopped' : 'failed', error: e.stopped ? null : e.message, msg: e.stopped ? 'Stopped' : e.message }));
+  return jid;
+}
+
 function startMake(a) {
   const eng = models.get(a.engine);
   if (!eng || eng.kind !== 'shape') throw new Error('Choose a 3D engine.');
@@ -95,7 +114,7 @@ function startMake(a) {
   for (const v of Object.values(views)) if (v && !fs.existsSync(v)) throw new Error('A picture could not be found: ' + v);
 
   const name = (a.name || '').trim() || (a.prompt ? library.nameFrom(a.prompt) : library.nameFrom(path.basename(views.front, path.extname(views.front)).replace(/[-_]+/g, ' ')));
-  const params = { detail: a.detail, faces: a.faces || 0, colorize: !!a.colorize && !eng.colors, removeBg: a.removeBg !== false, seed: a.seed ?? -1 };
+  const params = { detail: a.detail, faces: a.faces || 0, colorize: !!a.colorize && !eng.colors, removeBg: a.removeBg !== false, seed: a.seed ?? -1, texture: a.texture || 'picture' };
   const source = { mode: a.mode, prompt: a.prompt || null, style: a.style || null, imageModel: a.prompt ? a.imageModel : null, views: Object.keys(views).filter(k => views[k]) };
   const meta = library.create({ name, source, engine: a.engine, params });
   // keep the originals with the model
@@ -109,7 +128,7 @@ function startMake(a) {
   const dp = detailParams(a.engine, a.detail);
   const r = worker.request('shape', {
     engine: a.engine, views, outDir: meta.dir, removeBg: params.removeBg, seed: params.seed, faces: params.faces,
-    colorize: params.colorize, resolution: dp.resolution, octree: dp.octree, steps: dp.steps
+    colorize: params.colorize, resolution: dp.resolution, octree: dp.octree, steps: dp.steps, texture: params.texture
   }, (p) => jobUpdate(job, { stage: p.stage, pct: p.pct, msg: p.msg, ...(p.image ? { image: p.image } : {}) }));
   job._req = r.id;
   r.promise.then((res) => {
@@ -194,11 +213,51 @@ function registerIpc() {
     const m = library.find(id);
     if (!m) throw new Error('That model is gone.');
     const ext = fmt === 'glb' ? 'glb' : fmt;
-    const r = await dialog.showSaveDialog(win, { title: `Export ${m.name}`, defaultPath: path.join(app.getPath('downloads'), `${m.name}.${ext}`), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
+    const rigged = opts.rigged && m.paths.rigged;
+    const suffix = opts.suffix ? ` (${opts.suffix})` : rigged ? ' (rigged)' : '';
+    const r = await dialog.showSaveDialog(win, { title: `Export ${m.name}`, defaultPath: path.join(app.getPath('downloads'), `${m.name}${suffix}.${ext}`), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
     if (r.canceled || !r.filePath) return null;
-    if (fmt === 'glb' && !opts.faces) { fs.copyFileSync(m.paths.model, r.filePath); return { path: r.filePath }; }
-    const { promise } = worker.request('export', { src: m.paths.model, out: r.filePath, format: fmt, heightMm: fmt === 'stl' ? (opts.heightMm || core.get().export.stlHeight) : null, faces: opts.faces || 0 });
+    if (rigged && opts.faces && (m.stats?.faces || Infinity) > opts.faces && m.rig?.markers) {
+      // a lighter rigged copy: reduce the static model, then rig it again with the same markers
+      const tmp = path.join(core.scratchDir(), `rig-${Date.now()}.glb`);
+      await worker.request('export', { src: m.paths.model, out: tmp, format: 'glb', faces: opts.faces }).promise;
+      try { await worker.request('rig', { src: tmp, markers: m.rig.markers, out: r.filePath, heightM: m.rig.heightM || 1.8, animations: (m.rig.clips || []).length > 0 }).promise; }
+      finally { try { fs.unlinkSync(tmp); } catch {} }
+      return { path: r.filePath };
+    }
+    if (rigged) { fs.copyFileSync(m.paths.rigged, r.filePath); return { path: r.filePath }; }
+    if (fmt === 'glb' && !opts.faces && !opts.heightM) { fs.copyFileSync(m.paths.model, r.filePath); return { path: r.filePath }; }
+    const { promise } = worker.request('export', { src: m.paths.model, out: r.filePath, format: fmt, heightMm: fmt === 'stl' ? (opts.heightMm || core.get().export.stlHeight) : null, heightM: opts.heightM || null, faces: opts.faces || 0 });
     return promise;
+  });
+  handle('library:rigGuess', async (id, fresh) => {
+    const m = library.find(id);
+    if (!m) throw new Error('That model is gone.');
+    if (m.rig?.markers && !fresh) return { markers: m.rig.markers, saved: true };
+    return worker.request('rig_guess', { src: m.paths.model }).promise;
+  });
+  handle('library:rig', async (id, markers, opts) => startRig(id, markers, opts));
+  handle('library:repaint', async (id) => {
+    const m = library.find(id);
+    if (!m?.paths.input) throw new Error('This model has no picture to paint from.');
+    const tmp = path.join(m.dir, 'model-painted.glb');
+    const res = await worker.request('repaint', { src: m.paths.model, image: m.paths.input, out: tmp }).promise;
+    const before = path.join(m.dir, 'model-before-paint.glb');
+    if (!fs.existsSync(before)) fs.copyFileSync(m.paths.model, before);
+    fs.renameSync(tmp, m.paths.model);
+    if (m.paths.thumb) { try { fs.unlinkSync(m.paths.thumb); } catch {} }
+    if (m.paths.rigged) { try { fs.unlinkSync(m.paths.rigged); } catch {} library.setRig(id, null); }
+    const { paths, ...raw } = library.find(id);
+    const saved = library.decorate(library.writeMeta({ ...raw, stats: { ...(raw.stats || {}), ...res.stats }, params: { ...(raw.params || {}), texture: 'picture' } }));
+    send('library', { type: 'updated', id });
+    return saved;
+  });
+  handle('library:unrig', async (id) => {
+    const m = library.find(id);
+    if (m?.paths.rigged) { try { fs.unlinkSync(m.paths.rigged); } catch {} }
+    const saved = library.setRig(id, null);
+    send('library', { type: 'updated', id });
+    return saved;
   });
   handle('library:import', async (files) => {
     const added = [];

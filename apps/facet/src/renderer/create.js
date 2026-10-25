@@ -3,6 +3,7 @@ import { $, $$, esc, h, toast, menu, fileUrl, fmtNum } from './util.js';
 import { ic } from './icons.js';
 import { Viewer } from './viewer.js';
 import { S, onChange, go, model, installed, fit, FIT_LABEL, speed, deviceLabel, saveSettings, refreshLibrary, setHead } from './app.js';
+import { openRig, exportFor } from './rigui.js';
 
 const F = window.facet;
 const STYLES = [['object', 'Object'], ['character', 'Character'], ['game', 'Game asset'], ['lowpoly', 'Low-poly'], ['figurine', 'Figurine'], ['prop', 'Prop']];
@@ -122,7 +123,10 @@ function renderCompose() {
     <div class="block-label"><span class="grow">3D engine</span><button class="link-btn" data-go="models">Manage</button></div>
     <div class="engines">${engRows || '<div class="hint">No engines in this group yet.</div>'}</div>
     ${detail.length ? `<div class="field"><label>Detail</label><div class="seg full" id="detailSeg">${detail.map((d) => `<button data-d="${d.id}" class="${c.detail === d.id ? 'on' : ''}">${d.label}</button>`).join('')}</div></div>` : ''}
-    ${eng && !eng.colors ? `<div class="opt-row"><div class="grow"><b>Add colour</b><span>${canColor ? 'Borrows colour from the Fast engine. Adds a few seconds.' : 'Needs the Fast engine (TripoSR) downloaded.'}</span></div><button class="switch ${canColor && c.colorize ? 'on' : ''}" id="swColor" ${canColor ? '' : 'disabled'}></button></div>` : ''}
+    <div class="field"><label>Surface</label><div class="seg full" id="texSeg"><button data-t="picture" class="${(c.texture || 'picture') === 'picture' ? 'on' : ''}">${ic('paint', 13)}Painted from the picture</button><button data-t="none" class="${c.texture === 'none' ? 'on' : ''}">Plain clay</button></div>
+      <span class="hint">${(c.texture || 'picture') === 'picture' ? 'The picture is projected onto the model as a texture. Sides it can’t see are filled in.' : 'No colour: a clean mesh to paint or sculpt yourself.'}</span></div>
+    ${eng && !eng.colors && (c.texture || 'picture') === 'picture' ? `<div class="opt-row"><div class="grow"><b>Guess the hidden sides</b><span>${canColor ? 'Uses the Fast engine’s colour read for the back and sides. Adds a little time.' : 'Needs the Fast engine (TripoSR) downloaded.'}</span></div><button class="switch ${canColor && c.colorize ? 'on' : ''}" id="swColor" ${canColor ? '' : 'disabled'}></button></div>` : ''}
+    ${c.mode === 'prompt' && c.style === 'character' ? `<div class="note info">${ic('person', 15)}<div>Character sketches ask for a full-body A-pose, which rigs best. Pick a sketch with the feet in frame and the arms away from the body.</div></div>` : ''}
     <button class="adv-toggle ${st.adv ? 'open' : ''}" id="advT">${ic('arrow', 13)}More options</button>
     <div class="adv" ${st.adv ? '' : 'hidden'}>
       <div class="field"><label>Polygon budget</label><select class="select" id="faces">${[[0, 'Full detail'], [200000, '200k faces'], [100000, '100k faces'], [50000, '50k faces'], [20000, '20k (game-ready)'], [5000, '5k (low-poly)']].map(([v, l]) => `<option value="${v}" ${Number(c.faces) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -164,6 +168,7 @@ function wireCompose(box) {
   };
   for (const b of $$('#detailSeg button', box)) b.onclick = async () => { await setC({ detail: b.dataset.d }); renderCompose(); };
   const sc = $('#swColor', box); if (sc) sc.onclick = async () => { await setC({ colorize: !C().colorize }); renderCompose(); };
+  for (const b of $$('#texSeg button', box)) b.onclick = async () => { await setC({ texture: b.dataset.t }); renderCompose(); };
   for (const sb of $$('#swBg', box)) sb.onclick = async () => { await setC({ removeBg: !C().removeBg }); renderCompose(); };
   $('#advT', box).onclick = () => { st.adv = !st.adv; renderCompose(); };
   const fs = $('#faces', box); if (fs) fs.onchange = () => setC({ faces: Number(fs.value) });
@@ -261,7 +266,7 @@ async function make() {
     st.stage = 'making';
     st.makeJob = await F.create.make({
       mode: c.mode, views, prompt: c.mode === 'prompt' ? st.ideas?.prompt : null, style: c.style, imageModel: c.imageModel,
-      engine: r.eng.id, detail: c.detail, faces: c.faces, colorize: c.colorize, removeBg: c.removeBg, seed: c.seed
+      engine: r.eng.id, detail: c.detail, faces: c.faces, colorize: c.colorize, removeBg: c.removeBg, seed: c.seed, texture: c.texture || 'picture'
     });
     renderStage(); renderFoot();
     if (S.jobs.get(st.makeJob)) onJob(S.jobs.get(st.makeJob));
@@ -343,7 +348,7 @@ function renderStage() {
     const cells = [];
     for (let i = 0; i < n; i++) {
       const im = imgs[i];
-      cells.push(im ? `<button class="idea ${st.pick === im.path ? 'on' : ''}" data-p="${esc(im.path)}"><img src="${fileUrl(im.path)}" alt=""><span class="tick">${ic('check', 14)}</span></button>` : `<div class="idea wait">${i === imgs.length && st.ideaJob ? '<span class="spin"></span>' : ''}</div>`);
+      cells.push(im ? `<button class="idea ${st.pick === im.path ? 'on' : ''}" data-p="${esc(im.path)}"><img src="${fileUrl(im.path)}" alt=""><span class="tick">${ic('check', 14)}</span>${im.cropped ? `<span class="crop-flag">${ic('alert', 12)}Cut off at the edge</span>` : ''}</button>` : `<div class="idea wait">${i === imgs.length && st.ideaJob ? '<span class="spin"></span>' : ''}</div>`);
     }
     layer.innerHTML = `<div class="stage-layer"><div class="ideas">
       <div class="ideas-head"><div class="grow"><b>${st.ideaJob ? 'Sketching ideas…' : 'Pick one to build'}</b><br><span class="ellip">${esc(st.ideas.prompt)}</span></div>
@@ -396,8 +401,9 @@ function renderStage() {
         <button class="icon-btn sm ${st.grid ? 'on' : ''}" id="vGrid" title="Grid">${ic('grid', 15)}</button>
         <button class="icon-btn sm" id="vFrame" title="Reset view">${ic('frame', 15)}</button>
       </div>
-      <div class="tb bl">${r.paths.input ? `<img src="${fileUrl(r.paths.input)}" alt="">` : ''}<div><b>${esc(r.name)}</b><span>${fmtNum(s.faces)} faces · ${s.colors ? 'coloured' : 'clay'} · ${s.seconds != null ? s.seconds + ' s' : ''} · ${esc(eng?.label || r.engine)}</span></div></div>
+      <div class="tb bl">${r.paths.input ? `<img src="${fileUrl(r.paths.input)}" alt="">` : ''}<div><b>${esc(r.name)}</b><span>${fmtNum(s.faces)} faces · ${s.texture ? 'painted' : s.colors ? 'coloured' : 'clay'} · ${s.seconds != null ? s.seconds + ' s' : ''} · ${esc(eng?.label || r.engine)}</span></div></div>
       <div class="tb br">
+        <button class="btn sm ghost" id="vRig">${ic('person', 14)}${r.paths.rigged ? 'Re-rig' : 'Rig'}</button>
         <button class="btn sm ghost" id="vReveal">${ic('folder', 14)}Show</button>
         <button class="btn sm ghost" id="vLib">${ic('grid', 14)}Library</button>
         <button class="btn sm primary" id="vExport">${ic('share', 14)}Export</button>
@@ -408,6 +414,7 @@ function renderStage() {
     $('#vGrid', layer).onclick = (e) => { st.grid = !st.grid; viewer?.setGrid(st.grid); e.currentTarget.classList.toggle('on', st.grid); };
     $('#vFrame', layer).onclick = () => viewer?.frame();
     $('#vReveal', layer).onclick = () => F.reveal(r.paths.model);
+    $('#vRig', layer).onclick = () => openRig(st.result, (p) => { if (p) go('library', { open: p.id }); });
     $('#vLib', layer).onclick = () => go('library', { open: r.id });
     $('#vExport', layer).onclick = (e) => exportMenu(e.currentTarget, r);
     return;
@@ -448,12 +455,16 @@ export function exportMenu(anchor, r) {
     catch (e) { close(); toast('Export failed', e.message, 'bad'); }
   };
   const h0 = S.settings.export.stlHeight;
+  const latest = S.library.find((x) => x.id === r.id) || r;
   menu(anchor, [
+    { icon: 'sparkle', text: 'Export for an app or engine…', sub: 'Unity, Unreal, Godot…', run: () => exportFor(anchor, latest) },
+    '-',
     { label: 'Export as' },
+    ...(latest.paths?.rigged ? [{ icon: 'person', text: 'GLB, rigged', sub: 'Skeleton + animations', run: () => ex('glb', { rigged: true }) }] : []),
     { icon: 'cube', text: 'GLB', sub: 'Blender, Unity, web', run: () => ex('glb') },
-    { icon: 'cube', text: 'OBJ', sub: 'Most 3D apps', run: () => ex('obj') },
+    { icon: 'cube', text: 'OBJ', sub: 'With .mtl + texture', run: () => ex('obj') },
     { icon: 'printer', text: `STL · ${h0} mm tall`, sub: '3D printing', run: () => ex('stl', { heightMm: h0 }) },
-    { icon: 'cube', text: 'PLY', sub: 'With vertex colour', run: () => ex('ply') },
+    { icon: 'cube', text: 'PLY', sub: 'Vertex colour', run: () => ex('ply') },
     '-',
     { icon: 'bolt', text: 'GLB, game-ready', sub: '20k faces', run: () => ex('glb', { faces: 20000 }) },
     { icon: 'bolt', text: 'GLB, low-poly', sub: '5k faces', run: () => ex('glb', { faces: 5000 }) }

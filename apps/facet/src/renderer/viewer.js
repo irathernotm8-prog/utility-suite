@@ -65,12 +65,14 @@ export class Viewer {
     this.clay = new THREE.MeshStandardMaterial({ color: 0xc9c4d6, roughness: 0.62, metalness: 0.0 });
     this.colorMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.58, metalness: 0.0 });
     this.normalMat = new THREE.MeshNormalMaterial();
+    this.clayWire = new THREE.MeshStandardMaterial({ color: 0xc9c4d6, roughness: 0.62, metalness: 0.0, wireframe: true });
     this.wireMat = new THREE.MeshBasicMaterial({ color: 0x8b7bff, wireframe: true, transparent: true, opacity: 0.35 });
 
     this._ro = new ResizeObserver(() => this.resize());
     this._ro.observe(host);
     this.resize();
-    this._loop = () => { this._raf = requestAnimationFrame(this._loop); this.controls.update(); this.renderer.render(this.scene, this.camera); };
+    this.clock = new THREE.Clock();
+    this._loop = () => { this._raf = requestAnimationFrame(this._loop); const dt = this.clock.getDelta(); this.mixer?.update(dt); this.controls.update(); this.renderer.render(this.scene, this.camera); };
     this._loop();
   }
 
@@ -88,6 +90,9 @@ export class Viewer {
     }
     this.meshes = [];
     this.info = null;
+    this.mixer?.stopAllAction();
+    this.mixer = null; this.clips = [];
+    if (this.skel) { this.scene.remove(this.skel); this.skel = null; }
   }
 
   async load(path) {
@@ -106,9 +111,11 @@ export class Viewer {
       if (o.material?.map) textured = true;
       tris += o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3;
       verts += o.geometry.attributes.position.count;
-      const wire = new THREE.Mesh(o.geometry, this.wireMat);
-      wire.visible = false; wire.userData.isWire = true;
-      o.add(wire);
+      if (!o.isSkinnedMesh) {
+        const wire = new THREE.Mesh(o.geometry, this.wireMat);
+        wire.visible = false; wire.userData.isWire = true;
+        o.add(wire);
+      }
       this.meshes.push(o);
     }
     // sit the model on the floor, centred, about one unit tall
@@ -121,7 +128,18 @@ export class Viewer {
     obj.position.set(-c.x, -box.min.y, -c.z);
     this.root.add(obj);
     this.bounds = new THREE.Box3().setFromObject(obj);
-    this.info = { triangles: Math.round(tris), vertices: verts, colors, textured, size };
+    // rigged models: animations and a skeleton overlay
+    this.mixer = gltf.animations?.length ? new THREE.AnimationMixer(obj) : null;
+    this.clips = gltf.animations || [];
+    this.action = null;
+    const rigged = found.some((o) => o.isSkinnedMesh);
+    if (this.skel) { this.scene.remove(this.skel); this.skel = null; }
+    if (rigged) {
+      this.skel = new THREE.SkeletonHelper(obj);
+      this.skel.visible = false;
+      this.scene.add(this.skel);
+    }
+    this.info = { triangles: Math.round(tris), vertices: verts, colors, textured, size, rigged, clips: this.clips.map((c) => c.name) };
     this.setMode(this.mode === 'shaded' && !colors && !textured ? 'shaded' : this.mode);
     this.frame();
     return this.info;
@@ -146,11 +164,21 @@ export class Viewer {
       const hasColor = !!m.geometry.attributes.color;
       const orig = m.userData.orig;
       const shaded = orig?.map ? orig : hasColor ? this.colorMat : this.clay;
-      m.material = mode === 'normals' ? this.normalMat : mode === 'clay' || mode === 'wire' ? this.clay : shaded;
+      m.material = mode === 'normals' ? this.normalMat : mode === 'wire' && m.isSkinnedMesh ? this.clayWire : mode === 'clay' || mode === 'wire' ? this.clay : shaded;
       for (const ch of m.children) if (ch.userData.isWire) ch.visible = mode === 'wire';
     }
   }
   setAutoRotate(on) { this.controls.autoRotate = !!on; }
+  // plays one clip on loop; null returns to the bind pose
+  setClip(name) {
+    if (!this.mixer) return;
+    this.mixer.stopAllAction();
+    this.action = null;
+    const clip = this.clips.find((c) => c.name === name);
+    if (clip) { this.action = this.mixer.clipAction(clip); this.action.reset().play(); }
+    else this.mixer.update(0);
+  }
+  setSkeleton(on) { if (this.skel) this.skel.visible = !!on; }
   setGrid(on) { this.grid.visible = !!on; }
 
   // A square, transparent PNG of the current model from a pleasant angle, for the library
@@ -175,6 +203,7 @@ export class Viewer {
     cancelAnimationFrame(this._raf);
     this._ro.disconnect();
     this.clear();
+    this.mixer?.stopAllAction();
     this.controls.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

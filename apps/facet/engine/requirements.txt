@@ -16,6 +16,7 @@ scipy>=1.11
 scikit-image>=0.22
 fast-simplification>=0.1.9
 pygltflib>=1.16
+xatlas>=0.0.9
 opencv-python-headless>=4.8
 rembg==2.0.86
 onnxruntime>=1.18

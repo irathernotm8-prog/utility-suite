@@ -15,8 +15,10 @@ Make 3D models from a prompt or a picture, generated entirely on this computer. 
   | Detailed+ | Hunyuan3D 2 mini | Same model, 30 steps |
   | Best | Hunyuan3D 2 Turbo | Full-size model; wants ≥10 GB VRAM or a 24 GB Mac |
   | Multi-view | Hunyuan3D 2 MV Turbo | 2–4 photos |
-- **Viewer.** Orbit, turntable, shaded / clay / wireframe / normals, floor shadow, grid.
-- **Export.** GLB, OBJ, STL (scaled to a chosen height in mm, z-up for slicers), PLY with vertex colour, plus game-ready (20k) and low-poly (5k) GLB.
+- **Painted textures.** Every model is UV-unwrapped and painted from the picture(s) it came from: each texel is projected into each view, coloured only where that view can actually see it, and the hidden sides are filled from their nearest painted neighbours (or from TripoSR's colour guess). The model is also turned to face +z, the convention in every engine.
+- **Rigging.** Characters get a Mixamo-named humanoid skeleton (27 bones), skin weights measured along the surface, and Idle / Walk / Wave test clips, written as one skinned GLB. Eight markers (chin, wrists, elbows, knees, groin) are placed automatically and can be dragged before rigging. Unity Humanoid, Unreal's retargeter, Blender, Godot, Roblox and three.js read it directly, and Mixamo animations retarget onto it.
+- **Viewer.** Orbit, turntable, shaded / clay / wireframe / normals, floor shadow, grid; for rigged models a Static/Rigged switch, clip player and bone overlay.
+- **Export.** GLB (static or rigged), OBJ with .mtl and texture, STL (scaled to a chosen height in mm, z-up for slicers), PLY with vertex colour, game-ready (20k) and low-poly (5k) GLB, and **Export for…** presets for Unity, Unreal, Godot, Blender, Roblox (20k, re-rigged at that size), three.js and 3D printing, each with a one-line import tip.
 - **Library.** Every model is a folder in `~/Documents/Facet` with `model.glb`, the input picture, the original source picture(s), a thumbnail and `facet.json`. Rename, favourite, notes, make again, add existing .glb/.obj/.stl/.ply files.
 
 ## How it runs
@@ -43,8 +45,11 @@ Electron window ──IPC──▶ main process ──stdin/stdout JSON lines─
 | `src/worker.js` | Python worker process and request queue |
 | `src/library.js` | Library folders and `facet.json` |
 | `src/tools.js` | Processes, resumable downloads, uv, hardware detection |
-| `src/renderer/` | Window UI (ES modules): `app.js` shell, `create.js`, `library.js`, `models.js`, `settings.js`, `onboarding.js`, `viewer.js` (three.js), `vendor/` (three.js r180, MIT) |
-| `engine/facet_worker.py` | All inference and mesh work |
+| `src/renderer/` | Window UI (ES modules): `app.js` shell, `create.js`, `library.js`, `models.js`, `settings.js`, `onboarding.js`, `viewer.js` (three.js, clips, bones), `rig-editor.js` (marker editor), `rigui.js` (rig sheet, Export for…), `vendor/` (three.js r180, MIT) |
+| `engine/facet_worker.py` | All inference and mesh work; commands `hello`, `imagine`, `shape`, `export`, `rig_guess`, `rig` |
+| `engine/texture.py` | UV unwrap (xatlas), view fitting by silhouette, visibility, texture bake |
+| `engine/rig.py` | Marker guess, skeleton, geodesic skin weights, clips, skinned GLB writer (pygltflib) |
+| `engine/selftest.py` | Texture + rig check on a synthetic figure (run by `npm test` when the engine is set up) |
 | `engine/catalog.json` | Models, files, sizes, licences, hardware needs |
 | `engine/tsr/` | TripoSR (MIT), with marching cubes swapped to scikit-image and DINO config read locally |
 | `build/make-icon.py` | Regenerates `build/icon.png` |
@@ -53,7 +58,7 @@ Electron window ──IPC──▶ main process ──stdin/stdout JSON lines─
 
 | What | Where |
 |---|---|
-| Library | `~/Documents/Facet` (change in Settings) |
+| Library | `~/Documents/Facet` (change in Settings). Each model folder: `model.glb` (painted), `model-rigged.glb` once rigged, `input.png`, `source-*.png`, `thumb.png`, `facet.json` (including the rig markers) |
 | Models | `<app data>/Models` (change in Models) |
 | Python, PyTorch, uv, engine log | `<app data>/Engine` |
 | Settings | `<app data>/facet.json` |

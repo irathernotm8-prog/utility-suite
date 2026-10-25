@@ -40,6 +40,15 @@ t('the worker compiles', () => {
   catch (e) { if (e.code === 'ENOENT') return; throw new Error(String(e.stderr || e.message)); }
 });
 
+t('texturing and rigging self-test (uses the engine Python when it is set up)', () => {
+  const os = require('os');
+  const base = process.env.FACET_PY || (process.platform === 'darwin' ? path.join(os.homedir(), 'Library/Application Support/Facet/Engine/python-env/bin/python')
+    : process.platform === 'win32' ? path.join(process.env.APPDATA || '', 'Facet/Engine/python-env/Scripts/python.exe') : path.join(os.homedir(), '.config/Facet/Engine/python-env/bin/python'));
+  if (!fs.existsSync(base)) { console.log('    (skipped: engine not set up on this computer)'); return; }
+  try { execFileSync(base, [path.join(ROOT, 'engine/selftest.py')], { stdio: 'pipe', timeout: 300000 }); }
+  catch (e) { if (e.status === 3) { console.log('    (skipped: engine needs an update)'); return; } throw new Error(String(e.stderr || e.stdout || e.message).slice(-800)); }
+});
+
 console.log('renderer');
 t('every script the window imports exists', () => {
   const dir = path.join(ROOT, 'src/renderer');

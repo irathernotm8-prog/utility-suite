@@ -22,6 +22,7 @@ const DEFAULTS = {
     faces: 0,
     removeBg: true,
     colorize: true,
+    texture: 'picture',
     seed: -1
   },
   export: { format: 'glb', stlHeight: 100 },
