@@ -1,3 +1,5 @@
+# NOTE: build/icon.png is now drawn from build/icon.svg (the Utility Suite icon family). Running this script
+# overwrites icon.png with the old design; keep only its tray-icon output if you rerun it.
 # Regenerates build/icon.png and the tray icons in src/assets (run: python3 build/make-icon.py). Needs Pillow.
 # A cream note card on warm charcoal: a coral-to-amber waveform at the top turns into lines of ink and a ticked to-do.
 from PIL import Image, ImageDraw, ImageFilter, ImageChops

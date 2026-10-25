@@ -1,7 +1,7 @@
 {
   "name": "glean",
   "productName": "Glean",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Collect every photo and video from a page you can see (Instagram, Facebook, Patreon, X and any site) at full size, grouped by post with captions, and keep each account up to date.",
   "main": "src/main.js",
   "author": "Bilal",

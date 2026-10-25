@@ -1,3 +1,5 @@
+# NOTE: build/icon.png is now drawn from build/icon.svg (the Utility Suite icon family). Running this script
+# overwrites icon.png with the old design; keep only its tray-icon output if you rerun it.
 # Regenerates build/icon.png, build/tray.png and build/trayTemplate*.png (run: python3 build/make-icon.py). Needs Pillow.
 # A midnight-blue tile with a cool azure glow: a bold arrow launching up and to the right,
 # with three signal waves rippling out ahead of it (send, and it lands nearby).

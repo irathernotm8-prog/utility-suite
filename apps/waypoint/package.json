@@ -1,7 +1,7 @@
 {
   "name": "waypoint",
   "productName": "Waypoint",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Plan and book whole trips in one place: flight and hotel search with booking, interactive day timelines, bookings, documents, budgets and destination research, all kept on your computer so every plan works offline, and handed to your phone or another computer in seconds.",
   "main": "src/main.js",
   "author": "Bilal",

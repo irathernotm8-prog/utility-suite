@@ -1,3 +1,5 @@
+# NOTE: build/icon.png is now drawn from build/icon.svg (the Utility Suite icon family). Running this script
+# overwrites icon.png with the old design; keep only its tray-icon output if you rerun it.
 # Regenerates build/icon.png (run: python3 build/make-icon.py). Needs Pillow.
 # A porcelain tile with a fanned stack of photos (an iris-to-rose sunset over hills on top),
 # gathered by an iris badge with a down arrow.

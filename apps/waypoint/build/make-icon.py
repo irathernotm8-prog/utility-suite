@@ -1,3 +1,5 @@
+# NOTE: build/icon.png is now drawn from build/icon.svg (the Utility Suite icon family). Running this script
+# overwrites icon.png with the old design; keep only its tray-icon output if you rerun it.
 # Regenerates build/icon.png (run: python3 build/make-icon.py). Needs Pillow.
 # A boarding pass on a twilight tile: a cream ticket, tilted, with a sunset map pin and a little route
 # (origin → plane → destination) on the main part, and a sunset-coloured stub with a barcode.

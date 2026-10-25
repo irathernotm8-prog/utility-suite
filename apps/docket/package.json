@@ -1,7 +1,7 @@
 {
   "name": "docket",
   "productName": "Docket",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Takes notes in your Zoom, Teams and Google Meet calls: transcribes on your computer, summarizes, and turns every meeting's action items into one to-do list.",
   "main": "src/main.js",
   "author": "Bilal",
