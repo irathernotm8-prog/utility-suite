@@ -61,7 +61,7 @@ function build() {
 /* ───────────────────────── compose panel ───────────────────────── */
 function shapeEngines() {
   const multi = C().mode === 'views';
-  return S.models.filter((m) => m.kind === 'shape' && !!m.multiview === multi);
+  return S.models.filter((m) => (m.kind === 'shape' && !!m.multiview === multi) || (m.kind === 'cloud' && !multi));
 }
 function currentEngine() {
   const list = shapeEngines();
@@ -89,7 +89,7 @@ function renderCompose() {
         <select class="select" id="imgModel">${imageModels.map((m) => `<option value="${m.id}" ${m.id === c.imageModel ? 'selected' : ''} ${m.installed ? '' : 'disabled'}>${esc(m.name)}${m.installed ? '' : ' (not downloaded)'}</option>`).join('')}</select>
         <div class="seg" id="ideaCount">${[1, 2, 4].map((n) => `<button class="${c.ideas === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}</div>
       </div>
-      ${haveImageModel ? '<div class="hint">Facet sketches a few ideas first. Pick the one you like and it becomes 3D.</div>' : `<div class="note info">${ic('info', 15)}<div>Prompts need a sketch model. <button class="link-btn" data-go="models">Get SD Turbo</button> (2.6 GB).</div></div>`}`;
+      ${eng?.kind === 'cloud' ? '<div class="hint">Tripo can build straight from the prompt, or you can sketch ideas here first and send the one you like.</div>' : haveImageModel ? '<div class="hint">Facet sketches a few ideas first. Pick the one you like and it becomes 3D.</div>' : `<div class="note info">${ic('info', 15)}<div>Prompts need a sketch model. <button class="link-btn" data-go="models">Get SD Turbo</button> (2.6 GB).</div></div>`}`;
   } else if (mode === 'image') {
     input = dropZone('single', st.image, 'Drop a picture of one object', 'Photo, render or drawing · click to browse · or paste');
   } else {
@@ -106,7 +106,7 @@ function renderCompose() {
     return `<button class="eng ${sel ? 'on' : ''} ${m.installed ? '' : 'off'}" data-eng="${m.id}">
       <span class="radio"></span>
       <span class="grow"><b>${esc(m.label)}</b> <span class="e-sub">· ${esc(m.short || m.name)}</span><br><span class="e-sub">${esc(m.tagline)}</span></span>
-      <span class="e-right">${m.installed ? `${esc(speed(m))}<br><span style="color:var(--${FIT_LABEL[f][0] === 'ok' ? 'mut' : FIT_LABEL[f][0]})">${f === 'great' || f === 'ok' ? '' : esc(FIT_LABEL[f][1])}</span>` : `<span class="link-btn">Get · ${(m.sizeMB / 1024).toFixed(1)} GB</span>`}</span>
+      <span class="e-right">${m.kind === 'cloud' ? (m.installed ? 'Cloud<br><span>uses credits</span>' : '<span class="link-btn">Add API key</span>') : m.installed ? `${esc(speed(m))}<br><span style="color:var(--${FIT_LABEL[f][0] === 'ok' ? 'mut' : FIT_LABEL[f][0]})">${f === 'great' || f === 'ok' ? '' : esc(FIT_LABEL[f][1])}</span>` : `<span class="link-btn">Get · ${(m.sizeMB / 1024).toFixed(1)} GB</span>`}</span>
     </button>`;
   }).join('');
 
@@ -119,13 +119,12 @@ function renderCompose() {
       <button data-mode="views" class="${mode === 'views' ? 'on' : ''}">${ic('views', 14)}Views</button>
     </div>
     ${input}
-    ${mode === 'image' ? `<div class="opt-row"><div class="grow"><b>Remove background</b><span>Leave on unless the picture is already cut out</span></div><button class="switch ${c.removeBg ? 'on' : ''}" id="swBg"></button></div>` : ''}
+    ${mode === 'image' && eng?.kind !== 'cloud' ? `<div class="opt-row"><div class="grow"><b>Remove background</b><span>Leave on unless the picture is already cut out</span></div><button class="switch ${c.removeBg ? 'on' : ''}" id="swBg"></button></div>` : ''}
     <div class="block-label"><span class="grow">3D engine</span><button class="link-btn" data-go="models">Manage</button></div>
     <div class="engines">${engRows || '<div class="hint">No engines in this group yet.</div>'}</div>
     ${detail.length ? `<div class="field"><label>Detail</label><div class="seg full" id="detailSeg">${detail.map((d) => `<button data-d="${d.id}" class="${c.detail === d.id ? 'on' : ''}">${d.label}</button>`).join('')}</div></div>` : ''}
-    <div class="field"><label>Surface</label><div class="seg full" id="texSeg"><button data-t="picture" class="${(c.texture || 'picture') === 'picture' ? 'on' : ''}">${ic('paint', 13)}Painted from the picture</button><button data-t="none" class="${c.texture === 'none' ? 'on' : ''}">Plain clay</button></div>
-      <span class="hint">${(c.texture || 'picture') === 'picture' ? 'The picture is projected onto the model as a texture. Sides it can’t see are filled in.' : 'No colour: a clean mesh to paint or sculpt yourself.'}</span></div>
-    ${eng && !eng.colors && (c.texture || 'picture') === 'picture' ? `<div class="opt-row"><div class="grow"><b>Guess the hidden sides</b><span>${canColor ? 'Uses the Fast engine’s colour read for the back and sides. Adds a little time.' : 'Needs the Fast engine (TripoSR) downloaded.'}</span></div><button class="switch ${canColor && c.colorize ? 'on' : ''}" id="swColor" ${canColor ? '' : 'disabled'}></button></div>` : ''}
+    ${surfaceBlock(c, eng)}
+    ${eng && eng.kind !== 'cloud' && !eng.colors && (c.texture || 'picture') === 'picture' ? `<div class="opt-row"><div class="grow"><b>Guess the hidden sides</b><span>${canColor ? 'Uses the Fast engine’s colour read for the back and sides. Adds a little time.' : 'Needs the Fast engine (TripoSR) downloaded.'}</span></div><button class="switch ${canColor && c.colorize ? 'on' : ''}" id="swColor" ${canColor ? '' : 'disabled'}></button></div>` : ''}
     ${c.mode === 'prompt' && c.style === 'character' ? `<div class="note info">${ic('person', 15)}<div>Character sketches ask for a full-body A-pose, which rigs best. Pick a sketch with the feet in frame and the arms away from the body.</div></div>` : ''}
     <button class="adv-toggle ${st.adv ? 'open' : ''}" id="advT">${ic('arrow', 13)}More options</button>
     <div class="adv" ${st.adv ? '' : 'hidden'}>
@@ -135,6 +134,25 @@ function renderCompose() {
     </div>`;
   wireCompose(box);
   renderFoot();
+}
+
+function surfaceBlock(c, eng) {
+  if (eng?.kind === 'cloud') {
+    const t = S.settings.tripo || {};
+    return `<div class="note info">${ic('paint', 15)}<div>Tripo paints full PBR textures itself (colour, metal, roughness, normal). Model: <b>${esc(t.model?.startsWith('v3.0') ? 'H3.0 (Tripo 3.0)' : t.model?.startsWith('P1') ? 'P1 low-poly' : 'H3.1')}</b>. <button class="link-btn" data-focus="tripo">Change</button></div></div>`;
+  }
+  const tex = c.texture || 'picture';
+  const painter = model('hy3d-paint');
+  const hasPainter = !!painter?.installed;
+  const hint = tex === 'picture' ? 'The picture is projected onto the model as a texture. Sides it can’t see are filled in from what it can.'
+    : tex === 'ai' ? `Hunyuan3D Paint imagines the sides the picture can’t show and paints every side to match. ${esc(speed(painter) || '')} here.`
+      : 'No colour: a clean mesh to paint or sculpt yourself.';
+  return `<div class="field"><label>Surface</label><div class="seg full" id="texSeg">
+      <button data-t="picture" class="${tex === 'picture' ? 'on' : ''}">From picture</button>
+      <button data-t="ai" class="${tex === 'ai' ? 'on' : ''}" title="${hasPainter ? '' : 'Download Hunyuan3D Paint in Models'}">${ic('sparkle', 12)}AI-painted${hasPainter ? '' : ' ↓'}</button>
+      <button data-t="none" class="${tex === 'none' ? 'on' : ''}">Clay</button></div>
+    <span class="hint">${hint}</span></div>
+    ${tex === 'ai' && hasPainter ? `<div class="field"><label>Paint quality</label><div class="seg full" id="pqSeg"><button data-q="fast" class="${c.paintQuality === 'fast' ? 'on' : ''}">Fast · 1K texture</button><button data-q="standard" class="${c.paintQuality !== 'fast' ? 'on' : ''}">Standard · 2K texture</button></div></div>` : ''}`;
 }
 
 function dropZone(slot, path, title, sub, small = false) {
@@ -148,7 +166,7 @@ function wireCompose(box) {
     const mode = b.dataset.mode;
     const patch = { mode };
     // pick an engine that fits the mode
-    const list = S.models.filter((m) => m.kind === 'shape' && !!m.multiview === (mode === 'views'));
+    const list = S.models.filter((m) => (m.kind === 'shape' && !!m.multiview === (mode === 'views')) || (m.kind === 'cloud' && mode !== 'views'));
     if (!list.some((m) => m.id === C().engine && m.installed)) { const first = list.find((m) => m.installed); if (first) patch.engine = first.id; }
     await setC(patch);
     renderCompose(); renderStage();
@@ -163,12 +181,17 @@ function wireCompose(box) {
   for (const b of $$('#ideaCount button', box)) b.onclick = async () => { await setC({ ideas: Number(b.dataset.n) }); renderCompose(); };
   for (const b of $$('[data-eng]', box)) b.onclick = async () => {
     const m = model(b.dataset.eng);
-    if (!m.installed) { go('models', { focus: m.id }); return; }
+    if (!m.installed) { go('models', { focus: m.id }); if (m.kind === 'cloud') setTimeout(() => document.querySelector('[data-tripo]')?.click(), 200); return; }
     await setC({ engine: m.id }); renderCompose();
   };
   for (const b of $$('#detailSeg button', box)) b.onclick = async () => { await setC({ detail: b.dataset.d }); renderCompose(); };
   const sc = $('#swColor', box); if (sc) sc.onclick = async () => { await setC({ colorize: !C().colorize }); renderCompose(); };
-  for (const b of $$('#texSeg button', box)) b.onclick = async () => { await setC({ texture: b.dataset.t }); renderCompose(); };
+  for (const b of $$('#texSeg button', box)) b.onclick = async () => {
+    if (b.dataset.t === 'ai' && !installed('hy3d-paint')) { go('models', { focus: 'hy3d-paint' }); return; }
+    await setC({ texture: b.dataset.t }); renderCompose();
+  };
+  for (const b of $$('#pqSeg button', box)) b.onclick = async () => { await setC({ paintQuality: b.dataset.q }); renderCompose(); };
+  for (const b of $$('[data-focus]', box)) b.onclick = (e) => { e.stopPropagation(); go('models', { focus: b.dataset.focus }); };
   for (const sb of $$('#swBg', box)) sb.onclick = async () => { await setC({ removeBg: !C().removeBg }); renderCompose(); };
   $('#advT', box).onclick = () => { st.adv = !st.adv; renderCompose(); };
   const fs = $('#faces', box); if (fs) fs.onchange = () => setC({ faces: Number(fs.value) });
@@ -202,9 +225,11 @@ function setSlot(slot, p) {
 function readiness() {
   const c = C();
   const eng = currentEngine();
+  if (eng?.kind === 'cloud') return { ok: true, eng };
   if (!S.engine?.installed) return { ok: false, why: 'Set up the 3D engine first', fix: 'models' };
   if (!eng) return { ok: false, why: 'Download a 3D engine first', fix: 'models' };
   if (c.removeBg && !installed('cutout')) return { ok: false, why: 'Download the background remover', fix: 'models' };
+  if (c.texture === 'ai' && !installed('hy3d-paint')) return { ok: false, why: 'Download Hunyuan3D Paint for AI painting', fix: 'models' };
   return { ok: true, eng };
 }
 
@@ -220,6 +245,9 @@ function renderFoot() {
     if (hasPick) {
       main = `<button class="btn primary lg block" id="goMake" ${r.ok && !busy ? '' : 'disabled'}>${ic('gem', 17)}Make 3D from this idea</button>`;
       alt = `<button class="btn block" id="goIdeas" ${st.prompt.trim() && imgReady && !busy ? '' : 'disabled'}>${ic('sparkle', 15)}Sketch new ideas</button>`;
+    } else if (r.eng?.kind === 'cloud') {
+      main = `<button class="btn primary lg block" id="goMake" ${st.prompt.trim() && !busy ? '' : 'disabled'}>${ic('gem', 17)}Make 3D with Tripo</button>`;
+      alt = `<button class="btn block" id="goIdeas" ${st.prompt.trim() && imgReady && S.engine?.installed && !busy ? '' : 'disabled'}>${ic('sparkle', 15)}Sketch ideas first</button>`;
     } else {
       main = `<button class="btn primary lg block" id="goIdeas" ${st.prompt.trim() && imgReady && S.engine?.installed && !busy ? '' : 'disabled'}>${ic('sparkle', 17)}Sketch ideas</button>`;
     }
@@ -227,7 +255,7 @@ function renderFoot() {
     const has = c.mode === 'image' ? !!st.image : !!st.views.front;
     main = `<button class="btn primary lg block" id="goMake" ${has && r.ok && !busy ? '' : 'disabled'}>${ic('gem', 17)}Make 3D</button>`;
   }
-  if (r.eng) est = `<div class="est"><span>${esc(r.eng.label)} · ${esc(r.eng.name)}</span><span>${esc(speed(r.eng))} here</span></div>`;
+  if (r.eng) est = `<div class="est"><span>${esc(r.eng.label)} · ${esc(r.eng.name)}</span><span>${r.eng.kind === 'cloud' ? 'uses Tripo credits' : esc(speed(r.eng)) + ' here'}</span></div>`;
   const fix = !r.ok ? `<div class="est"><span style="color:var(--warn)">${esc(r.why)}</span><button class="link-btn" data-go="models">Open Models</button></div>` : '';
   foot.innerHTML = `${main}${alt}${fix || est}<div class="est"><span>${c.mode === 'prompt' ? `<span class="kbd">${S.info.platform === 'darwin' ? '⌘' : 'Ctrl'} Enter</span> to go` : 'Drop, paste or browse for pictures'}</span><span></span></div>`;
   const gi = $('#goIdeas', foot); if (gi) gi.onclick = sketch;
@@ -236,7 +264,7 @@ function renderFoot() {
 }
 
 function primary() {
-  if (C().mode === 'prompt' && !st.pick) sketch(); else make();
+  if (C().mode === 'prompt' && !st.pick && currentEngine()?.kind !== 'cloud') sketch(); else make();
 }
 
 /* ───────────────────────── actions ───────────────────────── */
@@ -258,14 +286,18 @@ async function make() {
   const r = readiness();
   if (!r.ok) { go(r.fix); return; }
   let views;
-  if (c.mode === 'prompt') { if (!st.pick) return; views = { front: st.pick }; }
+  if (c.mode === 'prompt') {
+    if (st.pick) views = { front: st.pick };
+    else if (r.eng.kind === 'cloud' && st.prompt.trim()) views = {};
+    else return;
+  }
   else if (c.mode === 'image') { if (!st.image) return; views = { front: st.image }; }
   else { if (!st.views.front) return; views = Object.fromEntries(Object.entries(st.views).filter(([, v]) => v)); }
   try {
     st.making = { image: views.front, pct: 0, msg: 'Waiting for the engine', stage: 'queued', started: Date.now(), engine: r.eng };
     st.stage = 'making';
     st.makeJob = await F.create.make({
-      mode: c.mode, views, prompt: c.mode === 'prompt' ? st.ideas?.prompt : null, style: c.style, imageModel: c.imageModel,
+      mode: c.mode, views, prompt: c.mode === 'prompt' ? (st.pick ? st.ideas?.prompt : st.prompt.trim()) : null, paintQuality: c.paintQuality || 'standard', style: c.style, imageModel: c.imageModel,
       engine: r.eng.id, detail: c.detail, faces: c.faces, colorize: c.colorize, removeBg: c.removeBg, seed: c.seed, texture: c.texture || 'picture'
     });
     renderStage(); renderFoot();
@@ -286,7 +318,10 @@ function onJob(j) {
   }
   if (j.id === st.makeJob) {
     st.making = { ...st.making, pct: j.pct, msg: j.msg, stage: j.stage, image: j.image || st.making?.image };
-    if (j.status === 'done') { st.makeJob = null; showResult(j.project); }
+    if (j.status === 'done') {
+      st.makeJob = null; showResult(j.project);
+      if (j.project?.stats?.paintError) toast('The AI painter didn’t work this time', `${j.project.stats.paintError} The model was painted from the picture instead; the engine log has details.`, 'bad', 12000);
+    }
     else if (j.status !== 'running') {
       st.makeJob = null;
       if (j.status === 'failed') { st.stage = 'error'; st.error = { title: 'That didn’t work', text: j.error }; }

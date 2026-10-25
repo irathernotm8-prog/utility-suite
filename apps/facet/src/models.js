@@ -40,6 +40,7 @@ function isInstalled(m) {
 function list() {
   const cat = core.catalog();
   return cat.models.map(m => {
+    if (m.kind === 'cloud') return { ...m, installed: !!core.get().tripo?.key, bytes: 0, downloading: null, error: null };
     const a = active.get(m.id);
     const man = readManifest(m);
     return {
@@ -52,7 +53,7 @@ function list() {
   });
 }
 const get = (id) => core.catalog().models.find(m => m.id === id);
-const installed = (id) => { const m = get(id); return !!m && !active.has(id) && isInstalled(m); };
+const installed = (id) => { const m = get(id); if (m?.kind === 'cloud') return !!core.get().tripo?.key; return !!m && !active.has(id) && isInstalled(m); };
 
 async function download(id) {
   const m = get(id);

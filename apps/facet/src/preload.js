@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('facet', {
   saveTemp: (name, bytes) => call('app:saveTemp', name, bytes),
   pathFor: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
   hw: () => call('hw:detect'),
+  tripo: { setKey: (k) => call('tripo:key', k), models: () => call('tripo:models') },
   engine: {
     status: () => call('engine:status'), install: (o) => call('engine:install', o), cancel: () => call('engine:cancel'),
     hello: () => call('engine:hello'), restart: () => call('engine:restart'), log: () => call('engine:log'), size: () => call('engine:size')

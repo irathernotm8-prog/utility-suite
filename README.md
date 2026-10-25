@@ -12,7 +12,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Decomp** | Takes any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, on every core | `apps/decomp` |
 | **Docket** | Meeting notes: on-device transcription of Zoom, Teams and Meet calls, AI summaries, one to-do list | `apps/docket` |
 | **Droid** | Virtual Android phones and tablets: pick the look, Android version and hardware, run several at once, drag in apps and files | `apps/droid` |
-| **Facet** | 3D models from a prompt or a picture, generated on this computer's own GPU: concept sketches, photo and multi-view to mesh, painted textures, character rigging with test animations, export for Unity, Unreal, Godot, Blender, Roblox, three.js and 3D printing | `apps/facet` |
+| **Facet** | 3D models from a prompt or a picture, generated on this computer's own GPU: concept sketches, photo and multi-view to mesh, textures painted from the picture or by an AI painter (Hunyuan3D Paint), optional Tripo cloud engine with your own key, character rigging with test animations, export for Unity, Unreal, Godot, Blender, Roblox, three.js and 3D printing | `apps/facet` |
 | **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
 | **Glean** | Collects every photo and video from Instagram, Facebook, Patreon or any page at full size, grouped by post with captions; keeps each account up to date | `apps/glean` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |

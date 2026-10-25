@@ -1,7 +1,7 @@
 {
   "name": "facet",
   "productName": "Facet",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Make 3D models from a prompt or a picture, generated entirely on this computer: no accounts, no tokens, no uploads.",
   "main": "src/main.js",
   "author": "Bilal",

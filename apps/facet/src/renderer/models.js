@@ -1,7 +1,7 @@
 // Facet — Models: this computer, the Python engine, and every model with its size, licence and fit.
-import { $, $$, esc, toast, menu, fmtBytes, fmtMB, confirmSheet } from './util.js';
+import { $, $$, esc, toast, menu, fmtBytes, fmtMB, confirmSheet, sheet } from './util.js';
 import { ic } from './icons.js';
-import { S, onChange, go, fit, FIT_LABEL, speed, deviceLabel, refreshModels, refreshEngine, saveSettings } from './app.js';
+import { S, onChange, go, fit, FIT_LABEL, speed, deviceLabel, refreshModels, refreshEngine, refreshSettings, saveSettings } from './app.js';
 
 const F = window.facet;
 let root = null, wired = false, showLog = false, logLines = [], focusId = null;
@@ -24,9 +24,9 @@ export function show(pane, arg) {
 }
 export function hide() {}
 
-const KIND = { shape: ['3D engines', 'Turn a picture into a mesh.'], image: ['Sketch models', 'Turn a prompt into pictures to build from.'], helper: ['Helpers', 'Needed by every engine.'] };
-const KCOL = { triposr: 'a-teal', 'hy3d-mini-turbo': 'a-violet', 'hy3d-mini': 'a-violet', 'hy3d-turbo': 'a-sky', 'hy3d-mv-turbo': 'a-rose', 'sd-turbo': 'a-amber', 'sdxl-turbo': 'a-amber', cutout: 'a-slate' };
-const KICO = { shape: 'cube', image: 'sparkle', helper: 'wand' };
+const KIND = { shape: ['3D engines', 'Turn a picture into a mesh.'], painter: ['Texture painter', 'Paints every side of a model, on this computer.'], cloud: ['Cloud engine (optional)', 'Runs on the provider’s servers with your own account.'], image: ['Sketch models', 'Turn a prompt into pictures to build from.'], helper: ['Helpers', 'Needed by every engine.'] };
+const KCOL = { 'hy3d-paint': 'a-rose', tripo: 'a-lime', triposr: 'a-teal', 'hy3d-mini-turbo': 'a-violet', 'hy3d-mini': 'a-violet', 'hy3d-turbo': 'a-sky', 'hy3d-mv-turbo': 'a-rose', 'sd-turbo': 'a-amber', 'sdxl-turbo': 'a-amber', cutout: 'a-slate' };
+const KICO = { shape: 'cube', image: 'sparkle', helper: 'wand', painter: 'paint', cloud: 'external' };
 
 function render() {
   const d = deviceLabel();
@@ -34,7 +34,7 @@ function render() {
   const e = S.engine || {};
   const accelTxt = S.settings.device === 'cpu' ? 'Set to CPU only in Settings.' : hw?.accel === 'cuda' ? 'PyTorch will use CUDA on your NVIDIA card.' : hw?.accel === 'mps' ? 'PyTorch will use Metal on the Apple GPU.' : 'No CUDA or Metal GPU found, so models run on the processor. TripoSR is the quickest choice here.';
   const total = S.models.filter((m) => m.installed).reduce((n, m) => n + (m.bytes || 0), 0);
-  const groups = ['shape', 'image', 'helper'].map((k) => {
+  const groups = ['shape', 'painter', 'cloud', 'image', 'helper'].map((k) => {
     const list = S.models.filter((m) => m.kind === k);
     return `<div class="section-title"><span class="grow">${KIND[k][0]} <span class="muted" style="font-weight:500">· ${KIND[k][1]}</span></span></div><div class="mlist">${list.map(row).join('')}</div>`;
   }).join('');
@@ -64,7 +64,11 @@ function row(m) {
   const [cls, label] = FIT_LABEL[f];
   const dl = m.downloading;
   let act;
-  if (dl) {
+  if (m.kind === 'cloud') {
+    act = m.installed
+      ? `<span class="pill ok">${ic('check', 12)}Key saved</span><div class="row"><button class="btn sm" data-tripo>${ic('edit', 13)}Settings</button></div>`
+      : `<button class="btn sm primary" data-tripo>${ic('plus', 14)}Add API key</button><span class="small muted">From platform.tripo3d.ai</span>`;
+  } else if (dl) {
     const pct = dl.total ? dl.got / dl.total : 0;
     act = `<div class="small muted" data-prog="${m.id}">${fmtBytes(dl.got)} of ${fmtBytes(dl.total)}</div><div class="bar"><i data-bar="${m.id}" style="width:${Math.round(pct * 100)}%"></i></div><button class="btn xs" data-cancel="${m.id}">${ic('x', 12)}Stop</button>`;
   } else if (m.installed) {
@@ -76,7 +80,7 @@ function row(m) {
     <span class="kicon ${KCOL[m.id] || 'a-violet'}">${ic(KICO[m.kind], 18)}</span>
     <div class="grow"><div class="m-title"><b>${esc(m.name)}</b><span class="pill acc">${esc(m.label)}</span>${m.colors ? '<span class="pill info">Colour</span>' : ''}${m.multiview ? '<span class="pill">2–4 photos</span>' : ''}</div>
       <div class="m-blurb">${esc(m.blurb)}</div>
-      <div class="m-meta"><span class="pill ${cls}">${esc(label)}</span>${speed(m) ? `<span>${ic('clock', 12)} ${esc(speed(m))}</span>` : ''}<a href="#" data-lic="${esc(m.licenseUrl)}">${esc(m.license)} licence</a>${m.licenseNote ? `<span>${esc(m.licenseNote)}</span>` : ''}</div>
+      <div class="m-meta">${m.kind === 'cloud' ? '<span class="pill warn">Uploads your picture · uses credits</span>' : `<span class="pill ${cls}">${esc(label)}</span>`}${speed(m) ? `<span>${ic('clock', 12)} ${esc(speed(m))}</span>` : ''}<a href="#" data-lic="${esc(m.licenseUrl)}">${esc(m.license)} licence</a>${m.licenseNote ? `<span>${esc(m.licenseNote)}</span>` : ''}</div>
     </div>
     <div class="m-act">${act}</div></div>`;
 }
@@ -112,6 +116,7 @@ function wire() {
       } }
     ]);
   };
+  for (const b of $$('[data-tripo]', root)) b.onclick = () => tripoSheet();
   $('#openModels', root).onclick = () => F.openPath(S.info.paths.models);
   $('#mvModels', root).onclick = async () => {
     if (S.models.some((m) => m.downloading)) { toast('Wait for downloads to finish', '', 'info'); return; }
@@ -121,5 +126,31 @@ function wire() {
     await saveSettings({ modelsDir: dir });
     S.info = await F.info();
     refreshModels();
+  };
+}
+
+async function tripoSheet() {
+  const t = S.settings.tripo || {};
+  const models = await F.tripo.models();
+  const s = sheet({
+    title: 'Tripo cloud engine',
+    sub: 'Optional. Facet sends the picture (or prompt) to Tripo and downloads the finished model. Each model uses credits from your Tripo account.',
+    body: `<div class="field"><label>API key</label><input class="input" id="tpKey" type="password" placeholder="${t.hasKey ? 'Saved. Paste a new key to replace it' : 'tsk_…'}" autocomplete="off"><span class="hint">Create one at <a href="#" id="tpLink">platform.tripo3d.ai</a> › API Keys. It is stored encrypted on this computer.</span></div>
+      <div class="field"><label>Model</label><select class="select" id="tpModel">${models.map((m) => `<option value="${m.id}" ${m.id === t.model ? 'selected' : ''}>${esc(m.label)} · ${esc(m.note)}</option>`).join('')}</select></div>
+      <div class="field"><label>Texture quality</label><div class="seg full" id="tpQ">${[['standard', 'Standard'], ['detailed', 'Detailed'], ['extreme', '8K (more credits)']].map(([k, l]) => `<button data-q="${k}" class="${(t.quality || 'standard') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>`,
+    foot: `${t.hasKey ? `<button class="btn ghost danger" id="tpRemove">${ic('trash', 14)}Remove key</button>` : ''}<div class="grow"></div><button class="btn" data-x>Cancel</button><button class="btn primary" id="tpSave">Save</button>`
+  });
+  let q = t.quality || 'standard';
+  for (const b of $$('#tpQ button', s.el)) b.onclick = () => { q = b.dataset.q; for (const x of $$('#tpQ button', s.el)) x.classList.toggle('on', x === b); };
+  $('#tpLink', s.el).onclick = (e) => { e.preventDefault(); F.openExternal('https://platform.tripo3d.ai/'); };
+  $('[data-x]', s.el).onclick = s.close;
+  const rm = $('#tpRemove', s.el); if (rm) rm.onclick = async () => { await F.tripo.setKey(''); await refreshSettings(); await refreshModels(); s.close(); };
+  $('#tpSave', s.el).onclick = async () => {
+    const key = $('#tpKey', s.el).value.trim();
+    if (key) await F.tripo.setKey(key);
+    await saveSettings({ tripo: { model: $('#tpModel', s.el).value, quality: q } });
+    await refreshSettings(); await refreshModels();
+    s.close();
+    toast('Tripo is set up', 'Pick “Tripo” as the engine in Create', 'ok');
   };
 }

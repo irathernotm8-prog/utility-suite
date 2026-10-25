@@ -649,6 +649,7 @@ def cmd_shape(rid, a):
         pass
 
     painted = None
+    paint_error = None
     if mode == "picture":
         views_dirs = [(prepared["front"], [0.0, 0.0, 1.0])]
         V, F = np.asarray(mesh.vertices), np.asarray(mesh.faces)
@@ -664,6 +665,34 @@ def cmd_shape(rid, a):
         prog = lambda m: send({"id": rid, "type": "progress", "stage": "paint", "pct": steps.get(m, 0.9), "msg": m})
         size = int(a.get("textureSize") or 2048)
         mesh, painted = tex.bake(mesh, views_dirs, fallback=fallback, size=size, progress=prog)
+    elif mode == "ai":
+        # Hunyuan3D Paint: a diffusion model paints all sides, guided by the picture and the mesh itself
+        if not os.path.exists(os.path.join(model_dir("tencent/Hunyuan3D-2"), "hunyuan3d-paint-v2-0-turbo", "unet")):
+            raise RuntimeError("Download Hunyuan3D Paint in Models first.")
+        for k in [k for k in LOADED if k.startswith("shape:") or k.startswith("img:")]:
+            LOADED.pop(k, None)
+        empty_cache()
+        send({"id": rid, "type": "progress", "stage": "paint", "pct": 0.82, "msg": "Loading Hunyuan3D Paint"})
+        import paint
+        q = a.get("paintQuality") or "standard"
+        key = "paint:" + q
+        if key not in LOADED:
+            LOADED.pop("paint:fast", None); LOADED.pop("paint:standard", None)
+            LOADED[key] = paint.load(MODELS, device(), q)
+        send({"id": rid, "type": "progress", "stage": "paint", "pct": 0.85, "msg": "Painting every side (de-lighting, six views, baking)"})
+        try:
+            mesh = paint.paint(LOADED[key], mesh, prepared["front"])
+            painted = 1.0
+        except Exception as e:  # noqa: BLE001
+            # never lose the model over the painter: fall back to painting from the picture
+            traceback.print_exc()
+            paint_error = friendly(e)
+            LOADED.pop(key, None)
+            empty_cache()
+            send({"id": rid, "type": "progress", "stage": "paint", "pct": 0.88, "msg": "AI painter failed; painting from the picture instead"})
+            mesh, painted = tex.bake(mesh, [(prepared["front"], [0.0, 0.0, 1.0])], fallback=fallback, size=2048)
+        if not KEEP:
+            LOADED.pop(key, None)
     elif mode == "none":
         import trimesh
         mesh.visual = trimesh.visual.ColorVisuals(mesh)
@@ -677,6 +706,10 @@ def cmd_shape(rid, a):
     s.update(seconds=round(time.time() - t0, 1), seed=seed, engine=engine, device=device(), front=front_key, fit=round(float(front_iou), 3))
     if painted is not None:
         s["painted"] = round(painted, 3)
+    if mode == "ai":
+        s["painter"] = "hunyuan3d-paint" if not paint_error else "picture (fallback)"
+    if paint_error:
+        s["paintError"] = paint_error
     return {"glb": glb, "stats": s}
 
 
@@ -694,6 +727,38 @@ def cmd_export(rid, a):
         m.apply_scale(float(a["heightM"]) / h)
     out = export_mesh(m, a["out"], a.get("format"), a.get("heightMm"))
     return {"path": out, "stats": stats(m)}
+
+
+def cmd_orient(rid, a):
+    """Takes a GLB from elsewhere (Tripo), turns it to face +z, stands it on the floor at Facet's scale; keeps materials."""
+    import trimesh
+    import texture as tex
+    scene = trimesh.load(a["src"], force="scene")
+    flat = scene.dump(concatenate=True) if hasattr(scene, "dump") else scene
+    key = a.get("assume") or "+x"
+    iou = None
+    if a.get("image") and os.path.exists(a["image"]):
+        try:
+            img = load_input(a["image"], remove_bg=os.path.exists(os.path.join(os.environ["U2NET_HOME"], "isnet-general-use.onnx")))
+            key, iou = tex.find_front(img, np.asarray(flat.vertices), np.asarray(flat.faces))
+        except Exception:
+            traceback.print_exc()
+    turns = {"+z": 0, "+x": -1, "-z": 2, "-x": 1}[key]
+    if turns:
+        scene.apply_transform(trimesh.transformations.rotation_matrix(turns * math.pi / 2, [0, 1, 0]))
+    b = scene.bounds
+    size = float((b[1] - b[0]).max()) or 1.0
+    c = (b[0] + b[1]) / 2
+    T = trimesh.transformations.scale_matrix(1.0 / size) @ trimesh.transformations.translation_matrix([-c[0], -b[0][1], -c[2]])
+    scene.apply_transform(T)
+    data = trimesh.exchange.gltf.export_glb(scene, include_normals=True)
+    with open(a["out"], "wb") as f:
+        f.write(data)
+    flat = scene.dump(concatenate=True)
+    s = {"vertices": int(len(flat.vertices)), "faces": int(len(flat.faces)), "colors": True, "texture": True, "watertight": bool(flat.is_watertight), "front": key}
+    if iou is not None:
+        s["fit"] = round(float(iou), 3)
+    return {"path": a["out"], "stats": s}
 
 
 def cmd_repaint(rid, a):
@@ -760,7 +825,7 @@ def cmd_unload(rid, a):
 
 
 COMMANDS = {"hello": cmd_hello, "imagine": cmd_imagine, "cutout": cmd_cutout, "shape": cmd_shape, "export": cmd_export, "unload": cmd_unload,
-            "rig_guess": cmd_rig_guess, "rig": cmd_rig, "repaint": cmd_repaint}
+            "rig_guess": cmd_rig_guess, "rig": cmd_rig, "repaint": cmd_repaint, "orient": cmd_orient}
 
 
 def friendly(e):

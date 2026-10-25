@@ -13,7 +13,7 @@ const cat = JSON.parse(fs.readFileSync(path.join(ROOT, 'engine/catalog.json'), '
 t('every model has the fields the app reads', () => {
   for (const m of cat.models) {
     for (const k of ['id', 'kind', 'name', 'short', 'label', 'tagline', 'blurb', 'sizeMB', 'license', 'licenseUrl', 'needs']) assert(m[k] != null, `${m.id} is missing ${k}`);
-    assert(m.url ? m.dest : (m.repo && m.allow?.length), `${m.id} needs repo+allow or url+dest`);
+    assert(m.kind === 'cloud' || (m.url ? m.dest : (m.repo && m.allow?.length)), `${m.id} needs repo+allow or url+dest`);
   }
 });
 t('ids are unique', () => assert.strictEqual(new Set(cat.models.map(m => m.id)).size, cat.models.length));

@@ -9,6 +9,21 @@ const setup = require('./setup');
 const models = require('./models');
 const worker = require('./worker');
 const library = require('./library');
+const tripo = require('./tripo');
+const { safeStorage } = require('electron');
+
+function tripoKey() {
+  const v = core.get().tripo?.key;
+  if (!v) return '';
+  try { if (v.startsWith('enc:')) return safeStorage.decryptString(Buffer.from(v.slice(4), 'base64')); if (v.startsWith('b64:')) return Buffer.from(v.slice(4), 'base64').toString(); } catch {}
+  return '';
+}
+function publicSettings() {
+  const s = JSON.parse(JSON.stringify(core.get()));
+  s.tripo = { ...(s.tripo || {}), hasKey: !!s.tripo?.key };
+  delete s.tripo.key;
+  return s;
+}
 
 const isMac = process.platform === 'darwin';
 let win = null;
@@ -59,7 +74,7 @@ const buildPrompt = (text, style) => (STYLES[style] || STYLES.object)(String(tex
 const jobs = new Map();
 function jobUpdate(job, patch) {
   Object.assign(job, patch);
-  const { _req, _meta, ...pub } = job;
+  const { _req, _meta, _abort, ...pub } = job;
   send('job', pub);
 }
 function detailParams(engineId, detailId) {
@@ -104,7 +119,55 @@ function startRig(id, markers, opts = {}) {
   return jid;
 }
 
+function startTripo(a) {
+  const key = tripoKey();
+  if (!key) throw new Error('Add your Tripo API key first (Models › Tripo).');
+  const views = a.views || {};
+  const image = views.front || null;
+  if (!image && !String(a.prompt || '').trim()) throw new Error('Add a picture or a prompt first.');
+  if (image && !/\.(png|jpe?g|webp)$/i.test(image)) throw new Error('Tripo takes PNG, JPG or WebP pictures.');
+  const t = core.get().tripo || {};
+  const name = (a.name || '').trim() || (a.prompt && !image ? library.nameFrom(a.prompt) : library.nameFrom(path.basename(image || 'model', path.extname(image || '')).replace(/[-_]+/g, ' ')));
+  const params = { faces: a.faces || 0, model: t.model, quality: t.quality, texture: 'tripo' };
+  const source = { mode: a.mode, prompt: a.prompt || null, style: a.style || null, views: image ? ['front'] : [], cloud: 'tripo' };
+  const meta = library.create({ name, source, engine: 'tripo', params });
+  if (image) { try { fs.copyFileSync(image, path.join(meta.dir, 'input' + path.extname(image).toLowerCase())); meta.files.input = 'input' + path.extname(image).toLowerCase(); } catch {} }
+  else meta.files.input = null;
+  const id = crypto.randomUUID();
+  const job = { id, kind: 'make', status: 'running', stage: 'cloud', pct: 0, msg: 'Contacting Tripo', name, engine: 'tripo', image, startedAt: Date.now() };
+  jobs.set(id, job);
+  const abort = new AbortController();
+  job._abort = abort;
+  jobUpdate(job, {});
+  const stageFor = (p) => (p < 0.08 ? 'cutout' : p < 0.6 ? 'shape' : p < 0.9 ? 'mesh' : 'export');
+  (async () => {
+    const res = await tripo.run(key, { image, prompt: image ? null : a.prompt, model: t.model, quality: t.quality, faces: a.faces || 0 }, meta.dir,
+      (p, msg) => jobUpdate(job, { pct: p, msg, stage: stageFor(p) }), abort.signal);
+    jobUpdate(job, { pct: 0.94, msg: 'Facing it forward', stage: 'clean' });
+    let stats = { engine: 'tripo', texture: true, colors: true, credits: res.credits, task: res.task };
+    try {
+      const o = await worker.request('orient', { src: res.glb, out: path.join(meta.dir, 'model.glb'), image }).promise;
+      stats = { ...stats, ...o.stats };
+      fs.unlinkSync(res.glb);
+    } catch {
+      fs.renameSync(res.glb, path.join(meta.dir, 'model.glb'));   // engine not set up: keep Tripo's file as it came
+    }
+    if (!meta.files.input && res.preview) meta.files.input = path.basename(res.preview);
+    stats.seconds = Math.round((Date.now() - job.startedAt) / 100) / 10;
+    stats.device = 'cloud';
+    const saved = library.finish(meta, stats);
+    jobUpdate(job, { status: 'done', pct: 1, msg: 'Done', project: saved });
+    send('library', { type: 'added', id: saved.id });
+  })().catch((e) => {
+    library.abandon(meta);
+    const stopped = abort.signal.aborted;
+    jobUpdate(job, { status: stopped ? 'stopped' : 'failed', error: stopped ? null : e.message, msg: stopped ? 'Stopped' : e.message });
+  });
+  return id;
+}
+
 function startMake(a) {
+  if (a.engine === 'tripo') return startTripo(a);
   const eng = models.get(a.engine);
   if (!eng || eng.kind !== 'shape') throw new Error('Choose a 3D engine.');
   if (!models.installed(a.engine)) throw new Error(`Download ${eng.name} first (Models).`);
@@ -114,6 +177,7 @@ function startMake(a) {
   for (const v of Object.values(views)) if (v && !fs.existsSync(v)) throw new Error('A picture could not be found: ' + v);
 
   const name = (a.name || '').trim() || (a.prompt ? library.nameFrom(a.prompt) : library.nameFrom(path.basename(views.front, path.extname(views.front)).replace(/[-_]+/g, ' ')));
+  if (a.texture === 'ai' && !models.installed('hy3d-paint')) throw new Error('Download Hunyuan3D Paint first (Models).');
   const params = { detail: a.detail, faces: a.faces || 0, colorize: !!a.colorize && !eng.colors, removeBg: a.removeBg !== false, seed: a.seed ?? -1, texture: a.texture || 'picture' };
   const source = { mode: a.mode, prompt: a.prompt || null, style: a.style || null, imageModel: a.prompt ? a.imageModel : null, views: Object.keys(views).filter(k => views[k]) };
   const meta = library.create({ name, source, engine: a.engine, params });
@@ -128,7 +192,7 @@ function startMake(a) {
   const dp = detailParams(a.engine, a.detail);
   const r = worker.request('shape', {
     engine: a.engine, views, outDir: meta.dir, removeBg: params.removeBg, seed: params.seed, faces: params.faces,
-    colorize: params.colorize, resolution: dp.resolution, octree: dp.octree, steps: dp.steps, texture: params.texture
+    colorize: params.colorize, resolution: dp.resolution, octree: dp.octree, steps: dp.steps, texture: params.texture, paintQuality: a.paintQuality || 'standard'
   }, (p) => jobUpdate(job, { stage: p.stage, pct: p.pct, msg: p.msg, ...(p.image ? { image: p.image } : {}) }));
   job._req = r.id;
   r.promise.then((res) => {
@@ -152,15 +216,16 @@ function handle(ch, fn) {
 function registerIpc() {
   handle('app:info', async () => ({
     version: app.getVersion(), platform: process.platform, arch: process.arch, demo: !!process.env.FACET_DEMO,
-    settings: core.get(), paths: { models: core.modelsDir(), output: core.outputDir(), engine: core.engineRoot(), defaultModels: core.defaultModelsDir(), defaultOutput: core.defaultOutputDir() }
+    settings: publicSettings(), paths: { models: core.modelsDir(), output: core.outputDir(), engine: core.engineRoot(), defaultModels: core.defaultModelsDir(), defaultOutput: core.defaultOutputDir() }
   }));
   handle('settings:patch', async (p) => {
     const before = core.get();
     const restartEngine = ('device' in p && p.device !== before.device) || ('keepLoaded' in p && p.keepLoaded !== before.keepLoaded) || ('modelsDir' in p);
+    if (p.tripo) delete p.tripo.key;   // the key only changes through tripo:key
     core.patch(p);
     if ('theme' in p) applyTheme();
     if (restartEngine && !worker.busy()) worker.restart();
-    return core.get();
+    return publicSettings();
   });
   handle('app:openExternal', async (url) => { if (/^https?:\/\//.test(url)) await shell.openExternal(url); });
   handle('app:reveal', async (p) => { if (p && fs.existsSync(p)) shell.showItemInFolder(p); });
@@ -201,8 +266,18 @@ function registerIpc() {
 
   handle('create:imagine', async (a) => startImagine(a));
   handle('create:make', async (a) => startMake(a));
-  handle('create:cancel', async (id) => { const j = jobs.get(id); if (j?._req) worker.cancel(j._req); });
-  handle('create:jobs', async () => [...jobs.values()].map(({ _req, _meta, ...j }) => j));
+  handle('create:cancel', async (id) => { const j = jobs.get(id); if (j?._req) worker.cancel(j._req); j?._abort?.abort(); });
+  handle('create:jobs', async () => [...jobs.values()].map(({ _req, _meta, _abort, ...j }) => j));
+  handle('tripo:key', async (key) => {
+    const k = String(key || '').trim();
+    let enc = null;
+    if (k) { try { enc = safeStorage.isEncryptionAvailable() ? 'enc:' + safeStorage.encryptString(k).toString('base64') : 'b64:' + Buffer.from(k).toString('base64'); } catch { enc = 'b64:' + Buffer.from(k).toString('base64'); } }
+    core.get().tripo = { ...(core.get().tripo || {}), key: enc };
+    core.save(true);
+    send('models', { type: 'cloud' });
+    return publicSettings();
+  });
+  handle('tripo:models', async () => tripo.MODELS);
 
   handle('library:list', () => library.list());
   handle('library:get', async (id) => library.find(id));

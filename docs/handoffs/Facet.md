@@ -23,13 +23,16 @@ To ship: bump `version` in `package.json`, `./utility note facet "…"`, `./util
 - **Orientation:** after clean-up every model is turned so the side in the front picture faces +z (`texture.face_front`, by silhouette overlap), and stands on y = 0. Rigging and the engine presets rely on that.
 - **Textures:** `texture.bake` unwraps with xatlas and paints from the pictures; models with a texture are capped at 150k faces (`TEXTURED_MAX_FACES`) because unwrapping very dense meshes is slow. "Guess the hidden sides" (`colorize`) only supplies the fill colour for unseen areas.
 - **Rigging:** joint names are Mixamo's (`mixamorig:*`) — keep them; Unity/Unreal/Mixamo mapping depends on it. The character's left is +x. Skin weights come from surface (graph) distance, so loose capes and long hair near an arm can follow the arm; the marker editor is the user's fix for odd guesses. A rigged export with a face limit (Roblox) re-rigs a reduced copy with the saved markers.
+- **Hunyuan3D Paint (`texture: 'ai'`):** `engine/paint.py` runs hy3dgen's texgen with `torch_raster` registered as `custom_rasterizer` (no CUDA compile). The UNet loader that ships with the weights (`hunyuan3d-paint-v2-0-turbo/unet/modules.py`) is patched once, marked `# Facet v2`, to read the 3.7 GB safetensors instead of the 7 GB .bin (strict=False; missing tensors still fail). Shape models are unloaded before painting; cards under 14 GB use CPU offload. Meshes must face +z (Hunyuan's convention) — they do after `face_front`.
+- **Tripo (`engine: 'tripo'`):** `src/tripo.js` talks to `https://openapi.tripo3d.com/v3` with the user's key (encrypted in `facet.json` › `tripo.key`, never sent to the window). The downloaded GLB goes through the worker's `orient` (face +z, floor, unit size, materials kept); without the engine it is kept as delivered. `FACET_TRIPO_BASE` points it at a mock for testing.
 - **Vertex colours:** Facet keeps sRGB internally and writes linear colours into GLB (glTF's rule); `load_mesh` converts back when reading a GLB. OBJ/PLY get sRGB.
 - **Memory:** one big model in memory at a time (two on ≥20 GB GPUs). Hunyuan is built directly in half precision. CPU-only machines with under 20 GB RAM use bfloat16 (slow on CPUs without native bf16, but it fits). Stopping a job kills the worker; the next request restarts it.
 - No native Node modules. The Python side compiles nothing (all wheels).
 
 ## Not done yet / ideas
 
-- Generated (not projected) textures for the hidden back: Hunyuan3D-Paint would do it but needs a CUDA-compiled rasterizer, so NVIDIA-only.
+- Hunyuan3D 2.1 PBR paint (metal/roughness maps) — same approach as 2.0 paint, bigger download.
+- Tripo multi-view and text-to-image inputs; showing the account's credit balance.
 - Finger bones, and rig types for quadrupeds or props.
 - AMD GPUs on Windows run on the CPU (no DirectML path).
 - Batch mode (a folder of pictures → a folder of models).

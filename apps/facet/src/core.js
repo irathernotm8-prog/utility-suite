@@ -23,9 +23,11 @@ const DEFAULTS = {
     removeBg: true,
     colorize: true,
     texture: 'picture',
+    paintQuality: 'standard',
     seed: -1
   },
   export: { format: 'glb', stlHeight: 100 },
+  tripo: { key: null, model: 'v3.1-20260211', quality: 'standard' },
   window: { width: 1380, height: 880 }
 };
 
