@@ -14,7 +14,7 @@ function sources(m) { return m.url ? [] : [{ repo: m.repo, allow: m.allow }, ...
 
 // Every file a model needs: [{ repo, file, size, url, dest }]
 async function plan(m) {
-  if (m.url) return [{ file: path.basename(m.dest), url: m.url, dest: path.join(core.modelsDir(), ...m.dest.split('/')), size: m.sizeMB * 1048576 }];
+  if (m.url) return [{ file: path.basename(m.dest), url: m.url, dest: path.join(core.modelsDir(), ...m.dest.split('/')), size: 0 }];   // sizeMB is only an estimate; the real size is recorded after download
   const out = [];
   for (const s of sources(m)) {
     const tree = await tools.fetchJson(`https://huggingface.co/api/models/${s.repo}/tree/main?recursive=true`);
@@ -34,7 +34,7 @@ function readManifest(m) { try { return JSON.parse(fs.readFileSync(manifestPath(
 function isInstalled(m) {
   const man = readManifest(m);
   if (!man) return false;
-  return man.files.every(f => { try { return fs.statSync(path.join(core.modelsDir(), f.rel)).size === f.size || !f.size; } catch { return false; } });
+  return man.files.every(f => { try { const n = fs.statSync(path.join(core.modelsDir(), f.rel)).size; return m.url ? n > 0 : (!f.size || n === f.size); } catch { return false; } });
 }
 
 function list() {
@@ -64,19 +64,20 @@ async function download(id) {
   try {
     const files = await plan(m);
     st.total = files.reduce((n, f) => n + (f.size || 0), 0) || st.total;
+    const est = !files.some((f) => f.size);   // direct downloads report their real size as they go
     let done = 0;
     for (const f of files) {
       if (st.abort.signal.aborted) throw new Error('Stopped');
       st.file = f.file;
       let ok = false;
-      try { ok = f.size && fs.statSync(f.dest).size === f.size; } catch {}
+      try { const n = fs.statSync(f.dest).size; ok = f.size ? n === f.size : n > 0; } catch {}
       if (!ok) {
         // a few retries cover flaky Wi-Fi; .part files make each retry resume
         for (let attempt = 1; ; attempt++) {
           try {
             await tools.downloadFile(f.url, f.dest, {
               signal: st.abort.signal, expectedSize: f.size,
-              onProgress: (got) => { st.got = done + got; emit({ id, type: 'progress', got: st.got, total: st.total, file: f.file }); }
+              onProgress: (got, total) => { if (est && total) st.total = done + total; st.got = done + got; emit({ id, type: 'progress', got: st.got, total: st.total, file: f.file }); }
             });
             break;
           } catch (e) {
@@ -85,12 +86,12 @@ async function download(id) {
           }
         }
       }
-      done += f.size || 0;
+      done += f.size || (() => { try { return fs.statSync(f.dest).size; } catch { return 0; } })();
       st.got = done;
       emit({ id, type: 'progress', got: st.got, total: st.total, file: f.file });
     }
     const root = core.modelsDir();
-    const man = { id, at: Date.now(), bytes: done, files: files.map(f => ({ rel: path.relative(root, f.dest), size: f.size })) };
+    const man = { id, at: Date.now(), bytes: done, files: files.map(f => ({ rel: path.relative(root, f.dest), size: (() => { try { return fs.statSync(f.dest).size; } catch { return f.size; } })() })) };
     core.ensureDir(path.dirname(manifestPath(m)));
     fs.writeFileSync(manifestPath(m), JSON.stringify(man, null, 2));
     active.delete(id);
