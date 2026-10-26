@@ -14,6 +14,8 @@ const UDP_PORT = 47820;
 const MAGIC = 'BEAM1 ';
 const EVERY = 3000;
 const GONE = 11000;
+const SWEEP = 30000;          // ask every address on our own networks directly this often
+const SWEEP_MAX = 1022;       // …on networks up to a /22 (1,022 addresses)
 
 const VIRTUAL = /^(lo|utun|awdl|llw|bridge|vmnet|vboxnet|docker|veth|br-|virbr|zt|tailscale|vEthernet|VirtualBox|VMware|Hyper-V|Loopback|isatap|Teredo|anpi|ap\d)/i;
 
@@ -43,9 +45,10 @@ function sameSubnet(a, b, mask) {
 
 class Discovery extends EventEmitter {
   // me(): { id, name, os, dev, port, pub, visible } — read fresh each time so renames show at once.
-  constructor({ me, udpPort = UDP_PORT, group = GROUP, every = EVERY, gone = GONE, extraTargets = () => [] }) {
+  constructor({ me, udpPort = UDP_PORT, group = GROUP, every = EVERY, gone = GONE, sweepEvery = SWEEP, extraTargets = () => [] }) {
     super();
-    this.me = me; this.udpPort = udpPort; this.group = group; this.every = every; this.gone = gone;
+    this.me = me; this.udpPort = udpPort; this.group = group; this.every = every; this.gone = gone; this.sweepEvery = sweepEvery;
+    this.lastSweep = 0; this.ifKey = '';
     this.extraTargets = extraTargets;
     this.peers = new Map();
     this.joined = new Set();
@@ -64,6 +67,7 @@ class Discovery extends EventEmitter {
         try { s.setMulticastLoopback(true); } catch {}
         this.joinAll();
         this.send('q');
+        this.sweep();
         this.timer = setInterval(() => this.tick(), this.every);
         resolve();
       });
@@ -108,11 +112,38 @@ class Discovery extends EventEmitter {
     for (const i of ifs) go(i.broadcast);
     go('255.255.255.255');
     for (const a of this.extraTargets()) go(a);
+    // and straight to every device we already know, so we stay visible to each other even where
+    // the network drops multicast and broadcast between Wi-Fi and wired (many mesh systems and APs do)
+    for (const p of this.peers.values()) for (const a of p.addrs.keys()) go(a);
+  }
+
+  // Ask every address on our own networks “who's there?” with a tiny unicast packet. Unicast gets
+  // through where multicast/broadcast between Wi-Fi and Ethernet is filtered; Beam answers back the same way.
+  sweep() {
+    if (!this.sock) return;
+    this.lastSweep = Date.now();
+    const buf = this.packet('q');
+    const toInt = (a) => a.split('.').reduce((n, x) => (n * 256) + Number(x), 0);
+    const toIp = (n) => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+    const seen = new Set();
+    for (const i of interfaces()) {
+      if (i.virtual) continue;
+      const ip = toInt(i.address), mask = toInt(i.netmask) >>> 0;
+      const net = (ip & mask) >>> 0, size = (~mask >>> 0) + 1;
+      if (size - 2 > SWEEP_MAX || size < 4) continue;
+      for (let h = net + 1; h < net + size - 1; h++) {
+        if (h === ip || seen.has(h)) continue;
+        seen.add(h);
+        try { this.sock.send(buf, this.udpPort, toIp(h)); } catch {}
+      }
+    }
   }
 
   tick() {
     this.joinAll();
     this.send('hi');
+    const key = interfaces().map(i => i.address + '/' + i.netmask).join(',');
+    if (key !== this.ifKey || Date.now() - this.lastSweep > this.sweepEvery) { this.ifKey = key; this.sweep(); }
     const now = Date.now();
     for (const [id, p] of this.peers) {
       if (now - p.seen > this.gone) { this.peers.delete(id); this.emit('lost', p); }

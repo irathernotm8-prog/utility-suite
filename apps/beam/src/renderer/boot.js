@@ -80,7 +80,7 @@ function welcome() {
   B.on('phone', (p) => { S.phone = p; refresh(['phone']); });
   B.on('theme', () => applyTheme());
 
-  for (const t of st.asking || []) S.asking.push({ t, meta: { list: [], code: '' } });
+  for (const a of st.asking || []) S.asking.push(a);
   if (!S.settings.onboarded && !S.demo) welcome();
   else if (S.asking.length) askSheet(S.asking[0]);
   // keep “3 min ago” and speeds fresh

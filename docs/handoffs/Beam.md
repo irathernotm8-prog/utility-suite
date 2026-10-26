@@ -8,7 +8,7 @@ Beam is the Utility Package's AirDrop: it sends files, folders, text and links s
 cd ~/Downloads/Utility\ Package/apps/beam
 npm install
 npm start          # BEAM_DEMO=1 npm start shows a pretend neighbourhood
-npm test           # 16 Node checks, no Electron
+npm test           # 17 Node checks, no Electron
 ```
 
 To ship a change, bump `version` in `package.json`, then from the Utility Package folder:
@@ -27,7 +27,7 @@ Pull before starting work. Stay inside `apps/beam`; `tools/`, `suite.json` and `
 - **Not yet run on a real Mac or Windows PC.** Check these first:
   1. **Mac Local Network permission.** macOS 15+ asks once to let Beam find devices on the local network (`NSLocalNetworkUsageDescription` is set). If two Macs don't see each other, check System Settings › Privacy & Security › Local Network. Ad-hoc-signed apps sometimes don't get the prompt until the app is opened from /Applications.
   2. **Windows Firewall.** The first launch shows the Windows Defender Firewall prompt; Beam needs **Private networks** allowed (UDP 47820 for discovery, TCP 47821 for transfers). The network itself must be set to Private. Settings › About explains this on Windows.
-  3. **Mac ↔ Windows discovery** on the same router: both multicast (239.255.77.21) and broadcast are sent; if a router filters both, Add by address works (unicast hello + HTTP probe).
+  3. **Mac ↔ Windows, Wi-Fi ↔ Ethernet** on the same router: multicast (239.255.77.21) and broadcast are sent, plus (since 0.1.2) a unicast sweep of the local subnet every 30 s and direct unicast hellos to known devices, for mesh systems/APs that filter multicast between wireless and wired. Guest Wi-Fi / client isolation blocks everything. Separate subnets need Add by address (adding on one side is enough: the saved address gets unicast hellos, so the other side learns this one). Double NAT (a mesh or second router in router mode) only works from the inner side outwards; the fix is putting that router in bridge/AP mode.
   4. **Dock / Open With / Send to.** Drop files on the Dock icon or use Open With › Beam (`CFBundleDocumentTypes` for `public.item`/`public.folder`); on Windows, Explorer's Send to › Beam (`%APPDATA%\Microsoft\Windows\SendTo\Beam.lnk`, only written in packaged builds) passes `--send <files>` to the running copy.
   5. **Notification buttons** (Accept / Decline) are macOS only; on Windows the notification opens the window.
   6. **Speed on real hardware.** Localhost with both ends on one 2-core Linux box does ~100–220 MB/s; each real machine only does one side. Settings › Speed lets you force 2/4/8 connections.

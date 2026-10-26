@@ -547,7 +547,8 @@ class Engine extends EventEmitter {
     if (isTrusted && st.autoAcceptTrusted !== false) accepted = true;
     else {
       this.update(t, true);
-      this.emit('incoming', this.snap(t), { keyChanged: t.keyChanged, code: C.safetyCode(this.identity.pub, from.pub), tops: t.tops, list: t.topList || [] });
+      t.askMeta = { keyChanged: t.keyChanged, code: C.safetyCode(this.identity.pub, from.pub), tops: t.tops, list: t.topList || [] };
+      this.emit('incoming', this.snap(t), t.askMeta);
       [accepted, reason, trust] = await new Promise((resolve) => {
         t.decide = (a, r, tr) => { t.decide = null; clearTimeout(timer); resolve([a, r, tr]); };
         const timer = setTimeout(() => t.decide && t.decide(false, 'timeout'), ASK_TIMEOUT);

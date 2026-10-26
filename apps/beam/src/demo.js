@@ -44,7 +44,8 @@ function install(engine) {
     const a = { tid: 'demo-ask', dir: 'in', kind: 'files', peer: { ...peer(peers[1]) }, names: ['Wedding photos', 'Playlist.m3u'], tops: 2, count: 342, total: 6.2e9, bytes: 0, status: 'asking', started: Date.now() };
     engine.transfers.set(a.tid, a);
     engine.update(a, true);
-    engine.emit('incoming', engine.snap(a), { keyChanged: false, code: '482 913', tops: 2, list: [{ name: 'Wedding photos', dir: true, count: 341, size: 6.19e9 }, { name: 'Playlist.m3u', dir: false, count: 1, size: 4200 }] });
+    a.askMeta = { keyChanged: false, code: '482 913', tops: 2, list: [{ name: 'Wedding photos', dir: true, count: 341, size: 6.19e9 }, { name: 'Playlist.m3u', dir: false, count: 1, size: 4200 }] };
+    engine.emit('incoming', engine.snap(a), a.askMeta);
     a.decide = (ok) => { a.decide = null; engine.emit('asked', a.tid); if (ok) { a.bytes = a.total; a.activeSince = a.started; } engine.finishT(a, ok ? 'done' : 'declined'); };
   }, Number(process.env.BEAM_DEMO_ASK_MS) || 2500);
 }

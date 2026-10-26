@@ -8,20 +8,19 @@ const liveFor = (id) => [...S.transfers.values()].filter(t => t.peer.id === id &
 // (so they keep their order as others come and go) and spread evenly; the outer ring sits half a step
 // round from the inner one so the two never line up.
 function layout(peers, w, h, avoid = []) {
-  const R = Math.min(w, h * 1.25);
-  const rings = [Math.max(150, R * .3), Math.max(205, R * .43)];
+  const rings = circles(w, h);
   const groups = [peers.filter(p => p.trusted), peers.filter(p => !p.trusted)].map(g => g.slice().sort((x, y) => hash(x.id) - hash(y.id)));
   const ring = (ri, start) => {
     const items = groups[ri], n = items.length, r = rings[ri];
-    const rx = Math.min(r, w / 2 - 74), ry = Math.min(r * .82, h / 2 - 62);
-    return items.map((p, i) => { const a = start + i * (Math.PI * 2) / n; return { id: p.id, x: w / 2 + Math.cos(a) * rx, y: h / 2 + Math.sin(a) * ry }; });
+    return items.map((p, i) => { const a = start + i * (Math.PI * 2) / n; return { id: p.id, x: w / 2 + Math.cos(a) * r, y: h / 2 + Math.sin(a) * r }; });
   };
   // how cramped a placement is: the closest two devices, or a device under something on top of the field
   const score = (pts) => {
     let m = Infinity;
     for (let i = 0; i < pts.length; i++) {
+      m = Math.min(m, Math.hypot(pts[i].x - w / 2, pts[i].y + 48 - (h / 2 + 18)) + 8);   // its name clear of this computer
       for (const b of avoid) if (pts[i].x > b.x0 - 60 && pts[i].x < b.x1 + 60 && pts[i].y > b.y0 - 50 && pts[i].y < b.y1 + 50) m = Math.min(m, 20);
-      for (let j = i + 1; j < pts.length; j++) m = Math.min(m, Math.hypot(pts[i].x - pts[j].x, (pts[i].y - pts[j].y) * 1.3));
+      for (let j = i + 1; j < pts.length; j++) m = Math.min(m, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
     }
     return m;
   };
@@ -43,6 +42,16 @@ function layout(peers, w, h, avoid = []) {
     if (bestScore >= 150) break;
   }
   return { out: new Map((best || []).map(p => [p.id, p])), rings };
+}
+
+// three true circles sized to the field: the outer one for the sweep, two inside it for devices.
+// Each device needs ~74 px sideways and ~62 px below for its name, so the device rings stay that far in.
+function circles(w, h) {
+  const room = Math.min(w / 2 - 74, h / 2 - 62);
+  const outer = Math.max(120, Math.min(room, 300));
+  const inner = Math.max(115, outer * .64);
+  const edge = Math.max(outer + 30, Math.min(outer + 80, w / 2 - 12, h / 2 - 8));
+  return [inner, outer, edge];
 }
 
 VIEWS.nearby = {
@@ -87,12 +96,9 @@ VIEWS.nearby = {
     const fr = f.getBoundingClientRect();
     const avoid = [...f.querySelectorAll('.live-stack .xfer, .staged')].map(el => { const r = el.getBoundingClientRect(); return { x0: r.left - fr.left, x1: r.right - fr.left, y0: r.top - fr.top, y1: r.bottom - fr.top }; });
     const { out, rings } = layout(S.peers, w, h, avoid);
-    $('#rings').innerHTML = [...rings, rings[1] + 80].map((r, i) => {
-      const rx = Math.min(r, w / 2 - (i === 2 ? 20 : 74)), ry = Math.min(r * .82, h / 2 - (i === 2 ? 10 : 62));
-      return `<div class="ring r${i + 1}" style="width:${rx * 2}px;height:${ry * 2}px"></div>`;
-    }).join('');
+    $('#rings').innerHTML = rings.map((r, i) => `<div class="ring r${i + 1}" style="width:${r * 2}px;height:${r * 2}px"></div>`).join('');
     const sw = $('#sweep');
-    sw.style.width = Math.min(rings[1] + 80, w / 2 - 20) * 2 + 'px'; sw.style.height = Math.min((rings[1] + 80) * .82, h / 2 - 10) * 2 + 'px';
+    sw.style.width = sw.style.height = rings[2] * 2 + 'px';
     const host = $('#peers');
     const seen = new Set();
     for (const p of S.peers) {
@@ -119,7 +125,7 @@ VIEWS.nearby = {
     host.querySelectorAll('.peer').forEach(el => { if (!seen.has(el.dataset.id)) el.remove(); });
     $('#field').classList.toggle('has-peers', S.peers.length > 0);
     const empty = $('#fieldEmpty');
-    empty.innerHTML = S.peers.length ? '' : `<div class="field-empty"><b>Looking for devices…</b><span>Open Beam on your other Mac or PC on the same network and it shows up here. On a different network or VLAN? Add it by its address.</span>
+    empty.innerHTML = S.peers.length ? '' : `<div class="field-empty"><b>Looking for devices…</b><span>Open Beam on your other Mac or PC and it shows up here — on Wi-Fi or plugged in, as long as it’s the same router. On a separate network, VLAN or guest Wi-Fi? Add it by its address.</span>
       <div class="row"><button class="btn sm" id="emAdd"><span data-icon="plus" data-size="15"></span>Add by address</button><button class="btn sm" id="emPhone"><span data-icon="qr" data-size="15"></span>Phone or tablet</button></div></div>`;
     if (!S.peers.length) { $('#emAdd').onclick = addAddressSheet; $('#emPhone').onclick = () => go('phone'); hydrateIcons(empty); }
     this.drawBeams();

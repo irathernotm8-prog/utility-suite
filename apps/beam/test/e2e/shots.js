@@ -13,7 +13,7 @@ fs.mkdirSync(OUT, { recursive: true });
   for (const theme of ['dark', 'light']) {
     const ud = fs.mkdtempSync(path.join(os.tmpdir(), 'beam-shots-'));
     fs.writeFileSync(path.join(ud, 'settings.json'), JSON.stringify({ theme, onboarded: true, name: 'Bilal’s MacBook Pro', receiveDir: path.join(ud, 'Received') }));
-    const app = await electron.launch({ executablePath: require(path.join(ROOT, 'node_modules', 'electron')), args: [ROOT, '--no-sandbox'], env: { ...process.env, BEAM_DEMO: '1', BEAM_USER_DATA: ud, BEAM_PORT: String(48100 + (theme === 'dark' ? 0 : 1)) } });
+    const app = await electron.launch({ executablePath: require(path.join(ROOT, 'node_modules', 'electron')), args: [ROOT, '--no-sandbox'], env: { ...process.env, BEAM_DEMO: '1', BEAM_DEMO_ASK_MS: '4000', BEAM_USER_DATA: ud, BEAM_PORT: String(48100 + (theme === 'dark' ? 0 : 1)) } });
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 1180, height: 760 });
     page.on('console', m => { if (m.type() === 'error') console.log('console:', m.text()); });

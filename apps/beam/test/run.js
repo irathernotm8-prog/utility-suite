@@ -305,6 +305,31 @@ const final = (e, tid) => until(() => { const h = e.history.find(x => x.tid === 
     } finally { d1.stop(); d2.stop(); }
   });
 
+  await check('discovery asks every address on its own networks directly (Wi-Fi ↔ Ethernet)', async () => {
+    const real = os.networkInterfaces;
+    os.networkInterfaces = () => ({
+      en0: [{ family: 'IPv4', address: '192.168.1.20', netmask: '255.255.255.0', internal: false }],
+      en7: [{ family: 'IPv4', address: '10.0.4.9', netmask: '255.255.252.0', internal: false }],
+      vEthernet: [{ family: 'IPv4', address: '172.20.0.1', netmask: '255.255.255.0', internal: false }],
+      corp: [{ family: 'IPv4', address: '10.200.0.5', netmask: '255.255.0.0', internal: false }],
+    });
+    try {
+      const sent = [];
+      const d = new Discovery({ me: () => ({ id: 'me', name: 'me', port: 1, pub: C.newKeys().pub, visible: true }) });
+      d.sock = { send: (b, port, addr) => sent.push(addr) };
+      d.sweep();
+      const lan = sent.filter(a => a.startsWith('192.168.1.'));
+      assert.strictEqual(lan.length, 253);
+      assert.ok(!lan.includes('192.168.1.20') && !lan.includes('192.168.1.0') && !lan.includes('192.168.1.255'));
+      assert.strictEqual(sent.filter(a => a.startsWith('10.0.')).length, 1021, 'a /22 is swept');
+      assert.ok(!sent.some(a => a.startsWith('172.20.') || a.startsWith('10.200.')), 'virtual adapters and huge networks are skipped');
+      // known devices are also greeted directly on every round
+      d.peers.set('p', { id: 'p', addrs: new Map([['192.168.1.77', Date.now()]]) });
+      sent.length = 0; d.send('hi');
+      assert.ok(sent.includes('192.168.1.77'));
+    } finally { os.networkInterfaces = real; }
+  });
+
   await fsp.rm(ROOT, { recursive: true, force: true }).catch(() => {});
   const bad = results.filter(r => !r[0]);
   console.log(`\n${results.length - bad.length}/${results.length} passed`);

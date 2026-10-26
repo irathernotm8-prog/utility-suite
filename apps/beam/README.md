@@ -10,6 +10,7 @@ AirDrop for Macs, PCs and phones. Send files, whole folders, text and links stra
 - **Doesn't lose work.** A dropped connection retries each piece; a failed transfer can be retried and only the missing pieces are sent (the receiver keeps them for an hour). Nothing is ever overwritten: a second “Holiday” arrives as “Holiday 2”. Modified dates are kept.
 - **Private.** Each device has an X25519 key. Two devices derive a shared AES-256-GCM key; every message and every 1 MB frame of file data is sealed. A changed, reordered or cut-short stream is rejected. Each pair has a 6-digit **safety code** to compare when trusting. If a trusted device's key ever changes, Beam warns instead of auto-accepting.
 - **Phones and tablets, no app.** Phone & tablet shows a QR code. The phone opens a Beam page in its browser: send photos, videos, files and text to the computer, and download files or text the computer put up for it. The link is secret, works only on your network, and “New link” retires the old one.
+- **Wi-Fi and Ethernet.** Wired and wireless computers on the same router find each other, including on mesh systems and access points that filter multicast/broadcast between the two (Beam also asks every address on the network directly).
 - **Other networks.** A computer on another subnet/VLAN can be added by its address (Settings › About shows it). Beam remembers it and checks it every 10 seconds.
 - **Receiving: Everyone / Trusted / Off.** Off also hides the computer.
 - **Everywhere.** Menu bar (Mac) / tray (Windows) with send-to menus and receiving mode; drop on the Dock icon, the menu bar icon, or “Open With › Beam”; Windows Explorer **Send to › Beam**. Keeps the computer awake while files move. Runs in the background so others can send to you; optional open at login.
@@ -20,7 +21,7 @@ AirDrop for Macs, PCs and phones. Send files, whole folders, text and links stra
 npm install
 npm start
 BEAM_DEMO=1 npm start            # a pretend neighbourhood: devices, history, a live transfer and a request
-npm test                          # 16 Node checks: encryption, the plan, safe names, two engines over localhost (folders, retry, cancel, decline, trust, text, phone page), discovery
+npm test                          # 17 Node checks: encryption, the plan, safe names, two engines over localhost (folders, retry, cancel, decline, trust, text, phone page), discovery
 xvfb-run -a node test/e2e/pair.js # two real copies of the app find each other over UDP and send 1.5 GB through the window
 xvfb-run -a node test/e2e/shots.js# every screen in dark and light → test/e2e/out
 node test/e2e/phone.js            # the phone page in an iPhone-sized browser
@@ -39,7 +40,7 @@ sender                                          receiver
   POST /v1/finish                            ─▶  every job there? set dates, move into the receive folder
 ```
 
-Discovery: UDP 47820, multicast group 239.255.77.21 + each network's broadcast address, hello every 3 s, gone after 11 s. Transfers and the phone page: TCP 47821 (the next free port if taken).
+Discovery: UDP 47820. Hello every 3 s to multicast group 239.255.77.21, each network's broadcast address, saved addresses and, by unicast, every device already known; gone after 11 s. Every 30 s (and when the network changes) a tiny unicast “who's there?” goes to every address on this computer's own networks (up to a /22), so Wi-Fi and wired computers on the same router find each other even where the access point or mesh drops multicast and broadcast between them. Transfers and the phone page: TCP 47821 (the next free port if taken).
 
 ## Code map
 

@@ -284,7 +284,7 @@ const api = {
     me: engine.me(), settings, peers: engine.peerList(), transfers: engine.list(), history: engine.history,
     staged, platform: process.platform, home: os.homedir(), version: app.getVersion(), receiveDir: engine.receiveDir(),
     addresses: engine.addresses(), port: engine.port, demo: DEMO,
-    asking: engine.list().filter(t => t.status === 'asking'),
+    asking: [...engine.transfers.values()].filter(t => t.status === 'asking').map(t => ({ t: engine.snap(t), meta: t.askMeta || { list: [], code: '' } })),
   }),
   set: (patch) => { const ok = ['name', 'receiveDir', 'receive', 'autoAcceptTrusted', 'streams', 'openAtLogin', 'background', 'theme', 'notify', 'copyText', 'openFolderWhenDone', 'keepAwake', 'sendTo', 'onboarded'];
     const p = {}; for (const k of ok) if (k in patch) p[k] = patch[k];
