@@ -679,9 +679,10 @@ def cmd_shape(rid, a):
         if key not in LOADED:
             LOADED.pop("paint:fast", None); LOADED.pop("paint:standard", None)
             LOADED[key] = paint.load(MODELS, device(), q)
-        send({"id": rid, "type": "progress", "stage": "paint", "pct": 0.85, "msg": "Painting every side (de-lighting, six views, baking)"})
+        send({"id": rid, "type": "progress", "stage": "paint", "pct": 0.85, "msg": "Painting every side"})
         try:
-            mesh = paint.paint(LOADED[key], mesh, prepared["front"])
+            prog = lambda f, m: send({"id": rid, "type": "progress", "stage": "paint", "pct": 0.85 + 0.1 * f, "msg": m})
+            mesh = paint.paint(LOADED[key], mesh, prepared["front"], progress=prog)
             painted = 1.0
         except Exception as e:  # noqa: BLE001
             # never lose the model over the painter: fall back to painting from the picture

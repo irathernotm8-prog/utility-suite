@@ -13,6 +13,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 STEPS = {"fast": (15, 25), "standard": (30, 50)}          # (multi-view steps, de-lighting steps)
 SIZES = {"fast": 1024, "standard": 2048}                   # render and texture resolution
+# Hunyuan's own app paints a 40k-face mesh. Unwrapping grows much faster than the face count (40k faces: ~1 s,
+# 150k: ~1 min, a raw 1M-face Hunyuan mesh: far longer), so painting always works on a lighter copy.
+PAINT_MAX_FACES = 60000
 
 
 class _StepsProxy:
@@ -20,13 +23,34 @@ class _StepsProxy:
 
     def __init__(self, pipe, steps):
         self._pipe, self._steps = pipe, steps
+        self.on_step = None
 
     def __getattr__(self, name):
         return getattr(self._pipe, name)
 
     def __call__(self, *a, **k):
         k["num_inference_steps"] = self._steps
-        return self._pipe(*a, **k)
+        sched = getattr(self._pipe, "scheduler", None)
+        cb = self.on_step
+        if sched is None or cb is None:
+            return self._pipe(*a, **k)
+        orig, count = sched.step, [0]
+
+        def step(*sa, **sk):
+            count[0] += 1
+            try:
+                cb(count[0], self._steps)
+            except Exception:
+                pass
+            return orig(*sa, **sk)
+        sched.step = step
+        try:
+            return self._pipe(*a, **k)
+        finally:
+            try:
+                del sched.step      # back to the class method
+            except AttributeError:
+                sched.step = orig
 
 
 def load(models_root, device, quality="standard", progress=None):
@@ -49,6 +73,10 @@ def load(models_root, device, quality="standard", progress=None):
         self.render_size = size
         self.texture_size = size
     P.Hunyuan3DTexGenConfig.__init__ = config_init
+
+    # hy3dgen's gap filler falls back to a pure-Python loop when its C++ module is not compiled (always, for Facet);
+    # on a dense mesh with large unseen areas that loop can run for most of an hour. Same result, vectorised.
+    MR.meshVerticeInpaint = fast_vertex_inpaint
 
     real_render = MR.MeshRender
     P.MeshRender = lambda **kw: real_render(device=device, **kw)
@@ -153,10 +181,95 @@ def _patch_from_pretrained(dtype=None, custom=None):
     base.from_pretrained = classmethod(patched)
 
 
-def paint(pipe, mesh, image):
-    """mesh: trimesh facing +z (Hunyuan's own convention). image: RGBA cut-out. Returns a textured trimesh."""
+def fast_vertex_inpaint(texture, mask, vtx_pos, vtx_uv, pos_idx, uv_idx, method="smooth"):
+    """Vectorised version of hy3dgen's meshVerticeInpaint_smooth: vertices whose texel was not painted by any view
+    take the distance-weighted colour of painted neighbours, spreading outward ring by ring; those vertex colours are
+    then written back into the texture so the image inpainting that follows has seeds inside every hole."""
+    import numpy as np
+    H, W, C = texture.shape
+    vtx_pos = np.asarray(vtx_pos, np.float64)
+    vtx_uv = np.asarray(vtx_uv, np.float64)
+    pos_idx = np.asarray(pos_idx, np.int64)
+    uv_idx = np.asarray(uv_idx, np.int64)
+    n = len(vtx_pos)
+    rows = np.clip(np.rint((1.0 - vtx_uv[uv_idx, 1]) * (H - 1)).astype(np.int64), 0, H - 1)
+    cols = np.clip(np.rint(vtx_uv[uv_idx, 0] * (W - 1)).astype(np.int64), 0, W - 1)
+    seen = mask[rows, cols] > 0
+    colored = np.zeros(n, bool)
+    color = np.zeros((n, C), np.float64)
+    color[pos_idx[seen]] = texture[rows[seen], cols[seen]]
+    colored[pos_idx[seen]] = True
+    a = pos_idx.reshape(-1)
+    b = np.roll(pos_idx, -1, axis=1).reshape(-1)
+    src = np.concatenate([a, b])
+    dst = np.concatenate([b, a])
+    w = 1.0 / np.maximum(np.linalg.norm(vtx_pos[src] - vtx_pos[dst], axis=1), 1e-4) ** 2
+    while True:
+        e = (~colored[src]) & colored[dst]
+        if not e.any():
+            break
+        s, ww, d = src[e], w[e], dst[e]
+        total = np.bincount(s, ww, n)
+        acc = np.stack([np.bincount(s, ww * color[d, c], n) for c in range(C)], 1)
+        new = total > 0
+        color[new] = acc[new] / total[new, None]
+        colored |= new
+    out_tex = texture.copy()
+    out_mask = mask.copy()
+    hit = colored[pos_idx]
+    out_tex[rows[hit], cols[hit]] = color[pos_idx[hit]].astype(texture.dtype)
+    out_mask[rows[hit], cols[hit]] = 255
+    return out_tex, out_mask
+
+
+def paint(pipe, mesh, image, progress=None):
+    """mesh: trimesh facing +z (Hunyuan's own convention). image: RGBA cut-out. Returns a textured trimesh.
+    The same steps as Hunyuan3DPaintPipeline.__call__, run one by one so each can report progress
+    (progress(fraction 0..1, message))."""
+    import numpy as np
     import trimesh
+    from hy3dgen.texgen.utils.uv_warp_utils import mesh_uv_wrap
+    say = progress or (lambda f, m: None)
+
     m = mesh.copy()
     m.visual = trimesh.visual.ColorVisuals(m)
-    out = pipe(m, image)
-    return out
+    if len(m.faces) > PAINT_MAX_FACES:
+        say(0.0, "Lightening the mesh for painting")
+        try:
+            m = m.simplify_quadric_decimation(face_count=PAINT_MAX_FACES)
+        except TypeError:
+            m = m.simplify_quadric_decimation(PAINT_MAX_FACES)
+
+    dl = pipe.models["delight_model"]
+    mv = pipe.models["multiview_model"]
+    dl.pipeline.on_step = lambda i, n: say(0.02 + 0.13 * i / n, f"Removing lighting from the picture ({i}/{n})")
+    mv.pipeline.on_step = lambda i, n: say(0.25 + 0.55 * i / n, f"Painting six views ({i}/{n})")
+
+    say(0.02, "Removing lighting from the picture")
+    prompt = dl(pipe.recenter_image(image))
+
+    say(0.15, "Unwrapping the surface")
+    m = mesh_uv_wrap(m)
+    pipe.render.load_mesh(m)
+
+    say(0.2, "Rendering guide views")
+    cfg = pipe.config
+    elevs, azims, weights = cfg.candidate_camera_elevs, cfg.candidate_camera_azims, cfg.candidate_view_weights
+    normals = pipe.render_normal_multiview(elevs, azims, use_abs_coor=True)
+    positions = pipe.render_position_multiview(elevs, azims)
+    camera_info = [(((azim // 30) + 9) % 12) // {-20: 1, 0: 1, 20: 1, -90: 3, 90: 3}[elev]
+                   + {-20: 0, 0: 12, 20: 24, -90: 36, 90: 40}[elev] for azim, elev in zip(azims, elevs)]
+
+    say(0.25, "Painting six views")
+    views = mv([prompt], normals + positions, camera_info)
+    views = [v.resize((cfg.render_size, cfg.render_size)) for v in views]
+
+    say(0.82, "Baking the views onto the model")
+    texture, mask = pipe.bake_from_multiview(views, elevs, azims, weights, method=cfg.merge_method)
+
+    say(0.92, "Filling the gaps between views")
+    mask_np = (mask.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
+    texture = pipe.texture_inpaint(texture, mask_np)
+    pipe.render.set_texture(texture)
+    say(0.98, "Finishing the texture")
+    return pipe.render.save_mesh()
