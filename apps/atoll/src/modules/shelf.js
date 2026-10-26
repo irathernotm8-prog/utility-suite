@@ -39,15 +39,21 @@ class Shelf extends EventEmitter {
   get(id) { return this.items.find((i) => i.id === id) || null; }
 
   // ---------------------------------------------------------------- clipboard
-  watch() {
+  // Electron 44 made clipboard reads asynchronous in the main process (readText returns a Promise), so every
+  // read is awaited and coerced to a string; older Electrons (and the tests) still return a plain string.
+  async read() { try { const v = await this.cb.readText(); return typeof v === 'string' ? v : v == null ? '' : String(v); } catch (_) { return null; } }
+  async watch() {
     clearInterval(this.timer);
     if (!this.cb) return;
-    try { this.lastClip = this.cb.readText(); } catch (_) {}
-    this.timer = setInterval(() => this.sample(), 1000);
+    const first = await this.read(); if (first != null) this.lastClip = first;
+    this.timer = setInterval(() => { this.sample().catch(() => {}); }, 1000);
   }
-  sample() {
+  async sample() {
     if (!this.enabled()) { if (this.clips.length) { this.clips = []; this.emit('change'); } return; }
-    let t = ''; try { t = this.cb.readText(); } catch (_) { return; }
+    if (this.reading) return;
+    this.reading = true;
+    let t;
+    try { t = await this.read(); } finally { this.reading = false; }
     if (!t || t === this.lastClip) return;
     this.lastClip = t;
     if (this.skipNext === t) { this.skipNext = null; return; }
@@ -56,9 +62,10 @@ class Shelf extends EventEmitter {
     this.clips = [{ id: Math.random().toString(36).slice(2, 9), text, at: Date.now() }, ...this.clips.filter((c) => c.text !== text)].slice(0, Math.max(1, this.size()));
     this.emit('change');
   }
-  copy(id) {
+  async copy(id) {
     const c = this.clips.find((x) => x.id === id); if (!c || !this.cb) return;
-    this.skipNext = null; this.lastClip = c.text; this.cb.writeText(c.text);
+    this.lastClip = c.text;
+    try { await this.cb.writeText(c.text); } catch (_) {}
     this.clips = [c, ...this.clips.filter((x) => x.id !== id)];
     this.emit('change');
   }

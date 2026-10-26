@@ -43,5 +43,6 @@ Pull before starting work. Stay inside `apps/atoll`; `tools/`, `suite.json` and 
 - **Be polite to FotMob.** The live match polls every 20 s only while it's live, a few minutes before kick-off, and 15–20 min otherwise; the shared cache and pacing in `vendor/http.js` do the rest.
 - **Timers live in the main process** (`src/modules/timers.js`, pure apart from `setTimeout`) and are saved to `state.json`, so they survive the island reloading and Atoll restarting.
 - **Clipboard history stays in memory.** Never write it to disk.
+- **Electron 44's clipboard is asynchronous in the main process** (`clipboard.readText()` returns a Promise). Always `await` it; 0.1.0 didn't, which crashed with "text.trim is not a function" every second. Uncaught errors are now logged to `atoll.log` in the app-data folder instead of showing a dialog.
 - **Linux is only for tests.** It uses the pretend player (`media/demo.js`) and a pretend clipboard; `ATOLL_DEMO=1` does the same on a Mac or PC.
 - No native modules and no runtime npm dependencies, so nothing special for Windows cross-builds.

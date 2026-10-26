@@ -26,6 +26,8 @@ const DEMO = !!process.env.ATOLL_DEMO || (!IS_MAC && process.platform !== 'win32
 const ROOT = path.join(__dirname, '..');
 
 crests.registerScheme();
+// Never let one module's error take the app down with a dialog every second: log it and keep going.
+process.on('uncaughtException', (e) => { console.error('[atoll] uncaught', (e && e.stack) || e); try { fs.appendFileSync(path.join(app.getPath('userData'), 'atoll.log'), `${new Date().toISOString()} ${(e && e.stack) || e}\n`); } catch (_) {} });
 process.on('unhandledRejection', (e) => { console.error('[atoll] unhandled', (e && e.stack) || e); if (process.env.ATOLL_E2E) require('fs').appendFileSync('/tmp/atoll-dbg.log', String((e && e.stack) || e) + '\n'); });
 
 let store, island, settingsWin = null, tray = null, timers, media, match, shelf, glance, quitting = false, persistTimer = null;
@@ -107,7 +109,7 @@ function persistSoon() { clearTimeout(persistTimer); persistTimer = setTimeout((
 // For screenshots and the e2e run: a pretend afternoon with things going on.
 function seedDemo() {
   shelf.add([path.join(ROOT, 'build', 'icon.png'), path.join(ROOT, 'README.md'), path.join(ROOT, 'package.json')]);
-  for (const t of ['https://www.fotmob.com/matches', 'Q4 paid social: +18% sign-ups week over week', 'git push origin main']) { shelf.cb.writeText(t); shelf.sample(); }
+  for (const t of ['https://www.fotmob.com/matches', 'Q4 paid social: +18% sign-ups week over week', 'git push origin main']) { shelf.cb.writeText(t); shelf.lastClip = null; shelf.clips.unshift({ id: Math.random().toString(36).slice(2, 9), text: t, at: Date.now() }); }
 }
 
 // ---------------------------------------------------------------- island
@@ -130,7 +132,7 @@ function openSettings(section) {
   settingsWin = new BrowserWindow({
     width: 860, height: 620, minWidth: 720, minHeight: 520, show: false, title: 'Atoll Settings',
     backgroundColor: dark ? '#0c0c10' : '#f6f6f8',
-    ...(IS_MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: dark ? '#e8e8ee' : '#222228', height: 44 } }),
+    ...(IS_MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { titleBarStyle: 'hidden', titleBarOverlay: { color: dark ? '#0c0c10' : '#f6f6f8', symbolColor: dark ? '#e8e8ee' : '#222228', height: 44 } }),
     icon: path.join(ROOT, 'build', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
   });
@@ -144,7 +146,7 @@ function openSettings(section) {
 function settingsChrome() {
   if (!settingsWin || IS_MAC || process.platform !== 'win32') return;
   const dark = settings().theme === 'dark' || (settings().theme === 'system' && nativeTheme.shouldUseDarkColors);
-  try { settingsWin.setTitleBarOverlay({ color: '#00000000', symbolColor: dark ? '#e8e8ee' : '#222228', height: 44 }); } catch (_) {}
+  try { settingsWin.setTitleBarOverlay({ color: dark ? '#0c0c10' : '#f6f6f8', symbolColor: dark ? '#e8e8ee' : '#222228', height: 44 }); } catch (_) {}
 }
 
 // ---------------------------------------------------------------- tray / menu bar

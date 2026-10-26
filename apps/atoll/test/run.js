@@ -138,6 +138,17 @@ test('match: following a team finds today’s game, notices goals, kick-off and 
   W.clear(); assert.equal(follow, null);
 });
 
+test('shelf: Electron 44 async clipboard (readText returns a Promise) and odd values never crash', async () => {
+  let text = Promise.resolve('hello'); const cb = { readText: () => text, writeText: async (t) => { text = Promise.resolve(t); } };
+  const S = new Shelf({ clipboard: cb, size: () => 5 });
+  await S.sample(); assert.deepEqual(S.clips.map((c) => c.text), ['hello']);
+  text = Promise.resolve({}); await S.sample();
+  text = Promise.resolve(null); await S.sample();
+  cb.readText = () => { throw new Error('busy'); }; await S.sample();
+  cb.readText = () => Promise.reject(new Error('busy')); await S.sample();
+  assert.equal(S.clips.length, 2); // '[object Object]' is text too, but nothing threw
+});
+
 test('shelf: keeps paths, skips duplicates and missing files, prunes moved ones', () => {
   const d = tmp(); const a = path.join(d, 'a.png'), b = path.join(d, 'notes.md');
   fs.writeFileSync(a, 'x'); fs.writeFileSync(b, 'y');
@@ -148,12 +159,12 @@ test('shelf: keeps paths, skips duplicates and missing files, prunes moved ones'
   assert.equal(kindOf('x.MOV'), 'video'); assert.equal(kindOf('x', true), 'folder');
 });
 
-test('shelf: clipboard history, newest first, no repeats, copy back without re-adding', () => {
+test('shelf: clipboard history, newest first, no repeats, copy back without re-adding', async () => {
   let text = ''; const cb = { readText: () => text, writeText: (t) => { text = t; } };
   const S = new Shelf({ clipboard: cb, size: () => 3 });
-  for (const t of ['one', 'two', 'three', 'two', 'four']) { text = t; S.sample(); }
+  for (const t of ['one', 'two', 'three', 'two', 'four']) { text = t; await S.sample(); }
   assert.deepEqual(S.clips.map((c) => c.text), ['four', 'two', 'three']);
-  const three = S.clips.find((c) => c.text === 'three'); S.copy(three.id); S.sample();
+  const three = S.clips.find((c) => c.text === 'three'); await S.copy(three.id); await S.sample();
   assert.equal(text, 'three'); assert.deepEqual(S.clips.map((c) => c.text), ['three', 'four', 'two']);
 });
 
