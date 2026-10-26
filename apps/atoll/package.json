@@ -1,0 +1,39 @@
+{
+  "name": "atoll",
+  "productName": "Atoll",
+  "version": "0.1.0",
+  "description": "A Dynamic Island for your desktop: timers and focus, music controls, one live football match from Touchline, a file and clipboard shelf, weather and system glance, tucked into the top of your screen on Mac and Windows.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "sync-touchline": "node tools/sync-touchline.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.atoll",
+    "productName": "Atoll",
+    "copyright": "Personal use",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "build/trayTemplate.png", "build/trayTemplate@2x.png", "build/tray.png", "package.json"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSAppleEventsUsageDescription": "Atoll uses Apple Events to show what Music or Spotify is playing and to play, pause and skip from the island."
+      }
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

@@ -24,6 +24,7 @@
 | App | Folder | Handoff |
 |---|---|---|
 | Assist | `apps/assist` | `docs/handoffs/Assist.md` |
+| Atoll | `apps/atoll` | `docs/handoffs/Atoll.md` (vendors Touchline's data layer: `npm run sync-touchline`; no native modules) |
 | Beam | `apps/beam` | `docs/handoffs/Beam.md` (no native modules; needs Local Network on Mac and Private-network firewall access on Windows) |
 | Waypoint | `apps/waypoint` | `docs/handoffs/Waypoint.md` (no native modules; phone hand-off needs Private-network firewall access on Windows) |
 | Cadence | `apps/cadence` | `docs/handoffs/Cadence.md` (MCP plugin for Claude/Codex; no native modules) |

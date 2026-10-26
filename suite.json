@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -217,6 +217,14 @@
       "id": "facet",
       "name": "Facet",
       "description": "Make 3D models from a prompt or a picture, generated on this computer with its own GPU: sketch ideas from a prompt, turn photos into meshes, view, and export GLB, OBJ, STL and PLY. No accounts, no tokens, no uploads.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
+    },
+    {
+      "id": "atoll",
+      "name": "Atoll",
+      "description": "A Dynamic Island for your desktop: timers and focus sessions, music controls, one live football match from Touchline, a shelf for files and recent copies, weather and a system glance, tucked into the notch on a MacBook and floating at the top of the screen everywhere else.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
