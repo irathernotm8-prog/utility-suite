@@ -199,7 +199,8 @@
     if (p.ratios.length) bits.push(`${p.ratios.length} rate${p.ratios.length > 1 ? 's' : ''}`);
     const weighted = p.ratios.filter((r) => r.derived);
     if (weighted.length) bits.push(`${weighted.map((r) => r.name).slice(0, 2).join(' and ')} worked out from the totals`);
-    if (p.dims.length) bits.push(`groups: ${p.dims.map((d) => d.name).slice(0, 2).join(', ')}`);
+    const gd = DS.goodDims(p);
+    if (gd.length) bits.push(`groups: ${gd.map((d) => d.name).slice(0, 3).join(', ')}`);
     if (p.grain !== 'row') bits.push(`summarised by ${p.grain}`);
     const skipped = p.cols.filter((x) => ['constant', 'empty'].includes(x.role)).length;
     if (skipped) bits.push(`${skipped} column${skipped > 1 ? 's' : ''} that never change set aside`);
@@ -228,8 +229,18 @@
     return out;
   };
 
+  // "Number of records": lets lists with nothing to add up (sign-ups, tickets, leads…) be counted, grouped and trended
+  const RECORD_WORDS = [[/sign.?ups?/i, 'Sign-ups'], [/\bleads?\b/i, 'Leads'], [/\borders?\b/i, 'Orders'], [/tickets?/i, 'Tickets'], [/applications?|applicants?/i, 'Applications'], [/registrations?/i, 'Registrations'], [/bookings?|reservations?/i, 'Bookings'], [/subscri/i, 'Subscribers'], [/enrol/i, 'Enrollments'], [/\bcalls?\b/i, 'Calls'], [/visits?/i, 'Visits'], [/installs?/i, 'Installs'], [/customers?/i, 'Customers'], [/responses?|survey/i, 'Responses'], [/hires?|candidates?/i, 'Candidates'], [/deals?/i, 'Deals'], [/transactions?/i, 'Transactions'], [/incidents?|issues?|cases?/i, 'Cases']];
+  DS.recordsName = (p) => {
+    const hay = [p.sheet && p.sheet.name, p.sheet && p.sheet.dataset && (p.sheet.dataset.dir || '')].filter(Boolean).join(' ');
+    for (const [re, nm] of RECORD_WORDS) if (re.test(hay)) return nm;
+    return 'Records';
+  };
+  const countMetric = (p) => ({ key: 'n', count: true, name: DS.recordsName(p), role: 'measure', fmt: null, money: false, lowerBetter: false, allPositive: true, sum: p.n, max: 1, min: 1, avg: 1, first: 1, last: 1, col: { vals: Array(p.n).fill(1) } });
+
   DS.metrics = (p, calcDefs = []) => {
     const list = [...p.measures, ...p.ratios].sort((a, b) => a.c - b.c).map(metricOfCol);
+    list.push(countMetric(p));
     for (const d of calcDefs) {
       const a = p.cols.find((x) => x.c === d.a), b = p.cols.find((x) => x.c === d.b);
       if (!a || !b) continue;
@@ -283,6 +294,11 @@
         if (helpers[m.key]) return helpers[m.key];
         const c0 = block(1);
         set(0, c0, m.name, hdr);
+        if (m.count) { // one per row, so sums and sorts count records
+          for (let i = 0; i < p.n; i++) set(i + 1, c0, 1);
+          sheet.colWidths[c0] = 90;
+          return (helpers[m.key] = rng(1, c0, p.n));
+        }
         const d = m.def;
         for (let i = 0; i < p.n; i++) {
           const a = `${q(src)}!${A(p.r0 + i, d.a)}`, b = `${q(src)}!${A(p.r0 + i, d.b)}`;
@@ -300,7 +316,10 @@
   // expressions for one metric: per-row range, whole-table total, and conditional total
   function exprs(p, calc) {
     const rows = (m) => (m.c != null ? colRng(p, m.c) : calc.helper(m));
+    // records are counted on the fullest column, so a blank cell elsewhere doesn't lose a row
+    const anchor = [...p.cols].sort((a, b) => (b.n || 0) - (a.n || 0))[0];
     const agg = (m) => {
+      if (m.count) return `COUNTA(${colRng(p, anchor.c)})`;
       if (m.def) {
         const a = colRng(p, m.def.a), b = colRng(p, m.def.b);
         if (m.def.op === '/') return `IFERROR(SUM(${a})/SUM(${b})${m.def.k !== 1 ? '*' + m.def.k : ''},0)`;
@@ -315,6 +334,7 @@
       return m.role === 'ratio' ? `AVERAGE(${rows(m)})` : `SUM(${rows(m)})`;
     };
     const aggIf = (m, crit) => {
+      if (m.count) return `COUNTIFS(${crit})`;
       const S = (r) => `SUMIFS(${r},${crit})`;
       if (m.def) {
         const a = colRng(p, m.def.a), b = colRng(p, m.def.b);
@@ -333,8 +353,16 @@
   }
 
   // ------------------------------------------------------------------ suggestions (the plain-language questions)
+  // categories worth breaking things down by: well filled, a handful to a few dozen values, named like a grouping
+  DS.goodDims = (p) => {
+    const score = (c) => ((c.n || 0) / Math.max(1, p.n)) * 2 + (c.distinct <= 12 ? 1.5 : c.distinct <= 40 ? 1 : 0.2) + (/market|region|source|channel|status|type|category|segment|area|team|city|state|stage|product|plan|rep|owner|country/i.test(c.name) ? 0.8 : 0) - (/^column [a-z]+$/i.test(c.name) ? 2 : 0);
+    const personal = /first.?name|last.?name|full.?name|^name$|e-?mail|phone|mobile|street|address|zip|postal|\bid\b|number$|notes?|comment|description|url|link/i;
+    const timeish = /^(worksheet|worksheet tab|period|source file|file|sheet)$/i;
+    return p.dims.filter((c) => c.distinct >= 2 && c.distinct <= 60 && (c.n || 0) >= p.n * 0.3 && !personal.test(c.name) && !(p.time && timeish.test(c.name))).sort((a, b) => score(b) - score(a));
+  };
   DS.pickMain = (p, metrics) => {
-    const ms = metrics.filter((m) => m.role === 'measure');
+    const ms0 = metrics.filter((m) => m.role === 'measure');
+    const ms = ms0.some((m) => !m.count) ? ms0.filter((m) => !m.count) : ms0;
     const rs = metrics.filter((m) => m.role === 'ratio');
     const revenue = ms.find((m) => RX.revenue.test(m.name));
     const spend = ms.find((m) => RX.spend.test(m.name) && m.money) || ms.find((m) => RX.spend.test(m.name));
@@ -353,6 +381,21 @@
     const groupMany = p.entity ? N.many : p.dims[0] ? DS.noun(p.dims[0].name).many : '';
     const prim = k.primary;
     if (!prim) return out;
+    const dims = DS.goodDims(p);
+    if (prim.count) {
+      // a list of records: how many, when, from where, and how the groups split
+      const R = lower(prim.name), d0 = dims[0], d1 = dims[1], d2 = dims[2];
+      const dated = p.time && p.time.type === 'date' && p.grain !== 'row';
+      if (dated) add('trend', `How many ${R} come in each ${p.grain}?`, `${prim.name} per ${p.grain}, with the latest ${p.grain} against the one before.`, { kind: 'trend', metrics: ['n'] }, true);
+      if (d0) add('rank', `Which ${DS.noun(d0.name).one} brings the most ${R}?`, `${prim.name} by ${d0.name}, most first, with each one's share.`, { kind: 'rank', by: d0.c, metrics: ['n'] }, true);
+      if (d1) add('share', `How do ${R} split by ${lower(d1.name)}?`, `Each ${DS.noun(d1.name).one}'s share of all ${R}.`, { kind: d1.distinct <= 8 ? 'share' : 'rank', by: d1.c, metrics: ['n'] }, true);
+      if (d0 && d1) add('cross', `${d0.name} broken down by ${lower(d1.name)}`, `Stacked bars: each ${DS.noun(d0.name).one}, split by ${d1.name}.`, { kind: 'cross', by: d0.c, by2: d1.c, metrics: ['n'] }, true);
+      if (d2) add('rank2', `And by ${lower(d2.name)}?`, `${prim.name} by ${d2.name}.`, { kind: 'rank', by: d2.c, metrics: ['n'] }, false);
+      if (d0) add('table', `Totals by ${lower(d0.name)}`, `A table of every ${DS.noun(d0.name).one} with its ${R} and share.`, { kind: 'table', by: d0.c, metrics: ['n'] }, true);
+      else add('table', 'Show me the detail', 'The latest rows as a table.', { kind: 'table' }, true);
+      return out;
+    }
+    if (dims[0] && dims[1] && p.mode !== 'trend') out.push({ id: 'cross', q: `${dims[0].name} broken down by ${lower(dims[1].name)}`, why: `${prim.name} for each ${DS.noun(dims[0].name).one}, stacked by ${dims[1].name}.`, view: { kind: 'cross', by: dims[0].c, by2: dims[1].c, metrics: [prim.key] }, rec: false });
     if (p.mode === 'trend') {
       add('trend', `How has ${lower(prim.name)} changed over time?`, `Charts ${prim.name} for each ${p.grain === 'row' ? 'period' : p.grain}, with the latest compared to the one before.`, { kind: 'trend', metrics: [prim.key] }, true);
       if (k.secondary) add('trend2', `Is ${lower(k.secondary.name)} keeping pace?`, `${k.secondary.name} over the same periods${k.secondary.lowerBetter ? ' (lower is better)' : ''}.`, { kind: 'trend', metrics: [k.secondary.key], chartType: 'line' }, true);
@@ -384,6 +427,12 @@
     const k = DS.pickMain(p, metrics);
     const list = [];
     const push = (x) => { if (x && !list.includes(x)) list.push(x); };
+    if (k.primary && k.primary.count) {
+      push('n');
+      if (p.time && p.time.type === 'date' && p.grain !== 'row') push('latest:n');
+      DS.goodDims(p).slice(0, 2).forEach((d) => push('top:' + d.c));
+      return list.slice(0, 4);
+    }
     if (p.mode === 'trend') {
       if (k.primary) { push(k.primary.key); push('latest:' + k.primary.key); }
       if (k.secondary) push('latest:' + k.secondary.key);
@@ -413,6 +462,8 @@
 
     // --- time series (period table when dates repeat)
     let period = null;
+    const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const shortDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const periodTable = () => {
       if (period) return period;
       if (p.grain === 'row' || !p.time) return (period = { rows: false });
@@ -437,7 +488,20 @@
         calc.set(r, c0 + 3 + used.length, `=COUNTIFS(${crit})`);
       });
       calc.sheet.colWidths[c0] = 110; calc.sheet.colWidths[c0 + 1] = 96; calc.sheet.colWidths[c0 + 2] = 96;
-      return (period = { rows: true, c0, n: periods.length, col: (m) => c0 + 3 + used.indexOf(m), has: (m) => used.includes(m) });
+      // the latest period still running (data through Oct 11 of October): compare it with the same days of the one before
+      let partial = null;
+      const last = periods[periods.length - 1];
+      const spanDays = Math.round((startOfDay(last[1]) - startOfDay(last[0])) / 86400000) + 1;
+      const covered = Math.round((startOfDay(hi) - startOfDay(last[0])) / 86400000) + 1;
+      if (periods.length >= 2 && spanDays - covered >= Math.max(2, Math.ceil(spanDays * 0.1))) {
+        const days = covered - 1;
+        const ps = periods[periods.length - 2][0], pe = new Date(ps.getFullYear(), ps.getMonth(), ps.getDate() + days);
+        const w0 = calc.block(2);
+        calc.set(0, w0, 'Same days, prior', calc.hdr); calc.set(0, w0 + 1, 'to', calc.hdr);
+        calc.set(1, w0, F().isoDate(ps), { fmt: 'date' }); calc.set(1, w0 + 1, F().isoDate(pe < periods[periods.length - 2][1] ? pe : periods[periods.length - 2][1]), { fmt: 'date' });
+        partial = { through: hi, days: days + 1, crit: `${dR},">="&${calc.ref(1, w0)},${dR},"<="&${calc.ref(1, w0 + 1)}` };
+      }
+      return (period = { rows: true, c0, n: periods.length, col: (m) => c0 + 3 + used.indexOf(m), has: (m) => used.includes(m), partial });
     };
     const series = (m) => {
       const pt = periodTable();
@@ -473,20 +537,22 @@
       const c0 = calc.block(2 + metricsIn.length);
       calc.set(0, c0, d.name, calc.hdr);
       metricsIn.forEach((m, i) => calc.set(0, c0 + 1 + i, m.name, calc.hdr));
-      calc.set(0, c0 + 1 + metricsIn.length, 'Rows', calc.hdr);
+      // when records are already counted, the last column is each group's share instead of a second count
+      const cm = metricsIn.find((m) => m.count), ci = metricsIn.indexOf(cm);
+      calc.set(0, c0 + 1 + metricsIn.length, cm ? 'Share' : 'Rows', calc.hdr);
       const dR = colRng(p, d.c);
       top.forEach((k2, i) => {
         const r = i + 1;
         calc.set(r, c0, k2);
         metricsIn.forEach((m, j) => calc.set(r, c0 + 1 + j, '=' + X.aggIf(m, `${dR},${A(r, c0)}`), cellFmt(m)));
-        calc.set(r, c0 + 1 + metricsIn.length, `=COUNTIFS(${dR},${A(r, c0)})`);
+        calc.set(r, c0 + 1 + metricsIn.length, cm ? `=IFERROR(${A(r, c0 + 1 + ci)}/${X.agg(cm)},0)` : `=COUNTIFS(${dR},${A(r, c0)})`, cm ? { fmt: 'pct' } : null);
       });
       let rows = top.length;
       if (other) {
         const r = top.length + 1;
         calc.set(r, c0, `Other (${cats.length - top.length})`);
         metricsIn.forEach((m, j) => calc.set(r, c0 + 1 + j, `=${X.agg(m)}-SUM(${A(1, c0 + 1 + j)}:${A(r - 1, c0 + 1 + j)})`, cellFmt(m)));
-        calc.set(r, c0 + 1 + metricsIn.length, `=COUNTA(${dR})-SUM(${A(1, c0 + 1 + metricsIn.length)}:${A(r - 1, c0 + 1 + metricsIn.length)})`);
+        calc.set(r, c0 + 1 + metricsIn.length, cm ? `=IFERROR(${A(r, c0 + 1 + ci)}/${X.agg(cm)},0)` : `=COUNTA(${dR})-SUM(${A(1, c0 + 1 + metricsIn.length)}:${A(r - 1, c0 + 1 + metricsIn.length)})`, cm ? { fmt: 'pct' } : null);
         rows++;
       }
       calc.sheet.colWidths[c0] = 150;
@@ -512,7 +578,9 @@
       if (latest && p.time) {
         const s = series(m); const u = unit();
         if (s.count < 2) continue;
-        story.kpis.push({ label: `${m.name} · latest ${u}`, expr: `=INDEX(${s.vals},${s.count})`, compareExpr: `=INDEX(${s.vals},${s.count - 1})`, compareLabel: `vs prior ${u}`, lowerIsBetter: m.lowerBetter, format: kfmt(m) });
+        const pt = periodTable();
+        if (pt.rows && pt.partial && X.additive(m)) story.kpis.push({ label: `${m.name} · ${u} so far`, expr: `=INDEX(${s.vals},${s.count})`, compareExpr: '=' + X.aggIf(m, pt.partial.crit), compareLabel: `vs the same ${pt.partial.days} days of last ${u}`, lowerIsBetter: m.lowerBetter, format: kfmt(m) });
+        else story.kpis.push({ label: `${m.name} · latest ${u}`, expr: `=INDEX(${s.vals},${s.count})`, compareExpr: `=INDEX(${s.vals},${s.count - 1})`, compareLabel: `vs prior ${u}`, lowerIsBetter: m.lowerBetter, format: kfmt(m) });
       } else {
         const label = m.role === 'ratio' ? (m.derived || m.def ? `${m.name} · overall` : (/^(avg|average|mean)\b/i.test(m.name) ? m.name : `Avg ${m.name}`)) : `Total ${m.name}`;
         story.kpis.push({ label, expr: '=' + X.agg(m), format: kfmt(m) });
@@ -568,6 +636,7 @@
           const d = dimCol(v.by);
           if (!d || !m) continue;
           const isEnt = !grouped(v.by);
+          if (isEnt && m.count) continue; // every row counts once: nothing to rank
           const dn = DS.noun(d.name);
           const dir = v.dir || (m.role === 'ratio' && m.lowerBetter ? 'asc' : 'desc');
           const list = v.kind === 'compare' ? (ms.length >= 2 ? ms.slice(0, 3) : [m, metrics.find((x) => x !== m && x.role === 'ratio')].filter(Boolean)) : [m];
@@ -597,9 +666,37 @@
             } else {
               sec.insights.push(`{{${first}}} leads ${dn.many} on ${lower(m.name)} with ${T(firstV, m)}${b.n > 1 ? `, ahead of {{${calc.ref(2, b.c0)}}} (${T(calc.ref(2, b.col(m)), m)})` : ''}.`);
               if (isEnt && X.additive(m) && p.n >= 6) sec.insights.push(`The top 3 ${dn.many} account for {{TEXT(SUM(TAKE(SORTBY(${X.rows(m)},${X.rows(m)},-1),3))/${X.agg(m)},"0%")}} of all ${lower(m.name)}.`);
+              if (!isEnt && X.additive(m) && b.n >= 5) sec.insights.push(`The top 3 ${dn.many} make up {{TEXT(SUM(${calc.ref(1, b.col(m))}:${A(3, b.col(m))})/${X.agg(m)},"0%")}} of all ${lower(m.name)}; the other ${d.distinct - 3} share the rest.`);
+              if (!isEnt && m.count && b.n >= 3 && d.distinct <= (v.top || 12)) sec.insights.push(`{{${calc.ref(b.n, b.c0)}}} has the fewest ${lower(m.name)} of the ${dn.many} shown, with ${T(calc.ref(b.n, b.col(m)), m)}.`);
               if (v.kind === 'compare' && list[1] && list[1].role === 'ratio') sec.insights.push(`Among them, ${list[1].name.toLowerCase()} ranges from ${T(`MIN(${b.vals(list[1])})`, list[1])} to ${T(`MAX(${b.vals(list[1])})`, list[1])}.`);
             }
           }
+        } else if (v.kind === 'cross') {
+          // one category down the side, a second one stacked inside each bar (sign-ups by market, split by source)
+          const d = dimCol(v.by), d2 = dimCol(v.by2);
+          if (!d || !d2 || d === d2 || !m || m.role !== 'measure') continue;
+          const tally = (dd) => { const g = new Map(); dd.vals.forEach((x, i) => { if (blank(x)) return; const k2 = String(x); const add = m.count ? 1 : isNum(m.col.vals[i]) ? m.col.vals[i] : 0; g.set(k2, (g.get(k2) || 0) + add); }); return [...g.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0]); };
+          const rowsK = tally(d).slice(0, v.top || 10), colsAll = tally(d2), colsK = colsAll.slice(0, 6);
+          if (rowsK.length < 2 || colsK.length < 2) continue;
+          const other = colsAll.length > colsK.length;
+          const nc = colsK.length + (other ? 1 : 0);
+          const c0 = calc.block(1 + nc);
+          const dR = colRng(p, d.c), d2R = colRng(p, d2.c);
+          calc.set(0, c0, d.name, calc.hdr);
+          colsK.forEach((k2, j) => calc.set(0, c0 + 1 + j, k2, calc.hdr));
+          if (other) calc.set(0, c0 + 1 + colsK.length, `Other ${lower(d2.name)}`, calc.hdr);
+          rowsK.forEach((k1, i) => {
+            const r = i + 1;
+            calc.set(r, c0, k1);
+            colsK.forEach((k2, j) => calc.set(r, c0 + 1 + j, '=' + X.aggIf(m, `${dR},${A(r, c0)},${d2R},${A(0, c0 + 1 + j)}`), cellFmt(m)));
+            if (other) calc.set(r, c0 + 1 + colsK.length, `=${X.aggIf(m, `${dR},${A(r, c0)}`)}-SUM(${A(r, c0 + 1)}:${A(r, c0 + colsK.length)})`, cellFmt(m));
+          });
+          calc.sheet.colWidths[c0] = 150;
+          const dn = DS.noun(d.name), dn2 = DS.noun(d2.name);
+          sec.charts.push({ title: v.title || `${m.name} by ${dn.one} and ${dn2.one}`, link: { sheetId: calc.sheet.id, range: `${A(0, c0)}:${A(rowsK.length, c0 + nc)}` }, chartType: v.chartType || 'stacked', showValues: false, size: 'wide', tall: rowsK.length > 8 });
+          const row1 = `${calc.ref(1, c0 + 1)}:${A(1, c0 + nc)}`, hdr = `${calc.ref(0, c0 + 1)}:${A(0, c0 + colsK.length)}`, row1k = `${calc.ref(1, c0 + 1)}:${A(1, c0 + colsK.length)}`;
+          sec.insights.push(`Most of {{${calc.ref(1, c0)}}}'s ${lower(m.name)} come from {{INDEX(${hdr},MATCH(MAX(${row1k}),${row1k},0))}} ({{TEXT(MAX(${row1k})/SUM(${row1}),"0%")}}).`);
+          sec.insights.push(`Across the ${dn.many} shown, {{${calc.ref(0, c0 + 1)}}} is the biggest ${dn2.one}: {{TEXT(SUM(${calc.ref(1, c0 + 1)}:${A(rowsK.length, c0 + 1)})/SUM(${calc.ref(1, c0 + 1)}:${A(rowsK.length, c0 + nc)}),"0%")}} of their ${lower(m.name)}.`);
         } else if (v.kind === 'scatter') {
           const [mx, my] = ms.length >= 2 ? ms : [];
           if (!mx || !my) continue;
@@ -619,16 +716,18 @@
           if (p.entity && my.role === 'measure' && mx.role === 'measure' && mx.allPositive) sec.insights.push(`Most ${lower(my.name)} per ${lower(mx.name).replace(/\s*\(.*\)/, '')}: {{INDEX(${colRng(p, p.entity.c)},MATCH(MAX(${X.rows(my)}/${X.rows(mx)}),${X.rows(my)}/${X.rows(mx)},0))}}.`);
         } else if (v.kind === 'table') {
           const d = dimCol(v.by);
-          if (d && p.mode !== 'trend') {
+          if (d && (p.mode !== 'trend' || (v.by != null && grouped(v.by)))) {
             const list = (ms.length ? ms : [main.primary, main.spend, main.efficiency].filter(Boolean)).filter((x, i, a) => a.indexOf(x) === i);
             const extra = metrics.filter((x) => !list.includes(x) && (x.role === 'measure' || x.derived || x.def)).slice(0, Math.max(0, 6 - list.length));
             const all = [...list, ...extra];
             const isEnt = !grouped(v.by);
             const b = isEnt ? rankBlock(all, all[0], all[0].role === 'ratio' && all[0].lowerBetter ? 'asc' : 'desc', p.n) : groupBlock(d, all, all[0], 'desc', 20);
-            story.tables.push({ title: v.title || `${DS.noun(d.name).many[0].toUpperCase()}${DS.noun(d.name).many.slice(1)}, ranked by ${lower(all[0].name)}`, link: linkOf(b, all), rows: b.n + 1 });
+            story.tables.push({ title: v.title || `${DS.noun(d.name).many[0].toUpperCase()}${DS.noun(d.name).many.slice(1)}, ranked by ${lower(all[0].name)}`, link: linkOf(b, all, !isEnt && all.some((x) => x.count)), rows: b.n + 1 });
           } else {
             const top = p.hasHeader ? p.hr : p.r0;
-            const keep = p.cols.filter((x) => !['constant', 'empty', 'ignored'].includes(x.role)).map((x) => x.c);
+            // the columns that say most: time, names, categories and numbers first; at most 9 so the table stays readable
+            const rank = (x) => (x === p.time ? 0 : x === p.entity ? 1 : ['measure', 'ratio'].includes(x.role) ? 2 : x.role === 'dimension' ? 3 : 4);
+            const keep = p.cols.filter((x) => !['constant', 'empty', 'ignored'].includes(x.role) && (x.n || 0) >= p.n * 0.3).sort((a, b) => rank(a) - rank(b) || a.c - b.c).slice(0, 9).map((x) => x.c).sort((a, b) => a - b);
             const area = (r1, r2) => contiguous(keep).map(([a, b]) => `${A(r1, a)}:${A(r2, b)}`);
             const lastN = Math.min(p.n, 12);
             const latest = p.n > 12 && p.time;
@@ -653,9 +752,18 @@
       const v = s.vals, n = s.count, last = `INDEX(${v},${n})`, prev = `INDEX(${v},${n - 1})`;
       const lab = s.labels;
       const best = m.lowerBetter ? 'MIN' : 'MAX', worst = m.lowerBetter ? 'MAX' : 'MIN';
-      out.push(`${m.name} ${m.role === 'ratio' ? 'averaged' : 'totaled'} ${T(m.role === 'ratio' ? X.agg(m) : `SUM(${v})`, m)} across ${n} ${u}s, {{IF(SLOPE(${v},SEQUENCE(${n}))${m.lowerBetter ? '<' : '>'}0,"trending in the right direction","trending the wrong way")}}.`);
-      if (lab) out.push(`Latest ${u} ({{INDEX(${lab},${n})}}): ${T(last, m)}, {{IF(${last}>=${prev},"up","down")}} {{TEXT(ABS(PCTCHANGE(${last},${prev})),"0.0%")}} on the prior ${u} and {{IF(${last}>=AVERAGE(${v}),"above","below")}} the ${n}-${u} average of ${T(`AVERAGE(${v})`, m)}.`);
-      if (lab) out.push(`Best ${u}: {{INDEX(${lab},MATCH(${best}(${v}),${v},0))}} at ${T(`${best}(${v})`, m)}. Weakest: {{INDEX(${lab},MATCH(${worst}(${v}),${v},0))}} at ${T(`${worst}(${v})`, m)}.`);
+      const pt = periodTable();
+      const part = pt.rows && pt.partial && X.additive(m) && n >= 3 ? pt.partial : null;
+      // best / weakest / trend look at complete periods only
+      const vv = part ? `DROP(${v},-1)` : v, nn = part ? n - 1 : n;
+      out.push(`${m.name} ${m.role === 'ratio' ? 'averaged' : 'totaled'} ${T(m.role === 'ratio' ? X.agg(m) : `SUM(${v})`, m)} across ${n} ${u}s, {{IF(SLOPE(${vv},SEQUENCE(${nn}))${m.lowerBetter ? '<' : '>'}0,"trending in the right direction","trending the wrong way")}}${part ? ` (counting complete ${u}s)` : ''}.`);
+      if (lab && part) {
+        // don't call a half-finished period a drop: compare it with the same stretch of the previous one
+        const pv = X.aggIf(m, part.crit);
+        out.push(`So far this ${u} ({{INDEX(${lab},${n})}}, through ${shortDate(part.through)}): ${T(last, m)}, {{IF(${last}>=${pv},"up","down")}} {{TEXT(ABS(PCTCHANGE(${last},${pv})),"0.0%")}} on the same ${part.days} days of the prior ${u} (${T(pv, m)}).`);
+        if (n >= 3) out.push(`Last full ${u} ({{INDEX(${lab},${n - 1})}}): ${T(prev, m)}, {{IF(${prev}>=INDEX(${v},${n - 2}),"up","down")}} {{TEXT(ABS(PCTCHANGE(${prev},INDEX(${v},${n - 2}))),"0.0%")}} on the ${u} before.`);
+      } else if (lab) out.push(`Latest ${u} ({{INDEX(${lab},${n})}}): ${T(last, m)}, {{IF(${last}>=${prev},"up","down")}} {{TEXT(ABS(PCTCHANGE(${last},${prev})),"0.0%")}} on the prior ${u} and {{IF(${last}>=AVERAGE(${v}),"above","below")}} the ${n}-${u} average of ${T(`AVERAGE(${v})`, m)}.`);
+      if (lab) out.push(`Best ${u}: {{INDEX(${lab},MATCH(${best}(${vv}),${vv},0))}} at ${T(`${best}(${vv})`, m)}. Weakest${part ? ' full ' + u : ''}: {{INDEX(${lab},MATCH(${worst}(${vv}),${vv},0))}} at ${T(`${worst}(${vv})`, m)}.`);
       if (n >= 3 && m.role !== 'ratio' && (m.first || 0) > 0) out.push(`From first to latest ${u}, ${lower(m.name)} changed {{TEXT(PCTCHANGE(${last},INDEX(${v},1)),"+0.0%;-0.0%")}}.`);
       return out;
     }
@@ -799,7 +907,7 @@
   // o: { layout, title, views, kpiKeys, calcMetrics, roles, grain, insights, table, showKpis, silent }
   DS.build = (sheet, range, o = {}) => {
     const p = DS.profile(sheet, range, o.roles || {});
-    if (!p.measures.length && !p.ratios.length && !(o.calcMetrics || []).length) { D.toast('No numeric columns found in that range', 'warn'); return null; }
+    if (!p.hasHeader && !p.measures.length && !p.ratios.length) { D.toast('Couldn’t find a header row - select the table (headers included) and try again', 'warn', 5000); return null; }
     if (p.n < 2) { D.toast('Need at least two rows of data', 'warn'); return null; }
     if (o.grain && o.grain !== 'auto') p.grain = o.grain;
     if (!p.time || p.time.type !== 'date') p.grain = 'row';
@@ -889,7 +997,7 @@
   DS.facts = (sheet, range) => {
     range = range || D.links.autoRange(sheet);
     const p = DS.profile(sheet, range);
-    if (!p.measures.length && !p.ratios.length) return { p, lines: [], kpis: [] };
+    if (p.n < 2) return { p, lines: [], kpis: [] };
     const metrics = DS.metrics(p, DS.autoMetrics(p));
     const views = DS.suggest(p, metrics).map((s) => s.view).filter((v) => v.kind !== 'table');
     const story = plan(p, { views, kpiKeys: [...DS.defaultKpis(p, metrics), ...metrics.filter((m) => m.def).map((m) => m.key)] }, metrics);

@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-26 17:03 — **Datum 1.6.0** — Delete projects and remove them from Recent, no more failure when a recent folder is gone, fill a formula down a whole data set in one go, Quick report counts lists of records (sign-ups, leads), dashboard widgets hold their place, crash protection
 - 2026-10-26 01:13 — **Atoll 0.1.1** — Fixes the "text.trim is not a function" error that kept popping up on Mac and Windows: clipboard history now reads the clipboard the way Electron 44 expects, and any future error is logged quietly instead of showing a dialog. Tidier settings title bar on Windows.
 - 2026-10-26 00:51 — **Atoll 0.1.0** — First release: the island with live activities around the notch, music controls with system volume, timers, focus sessions and a stopwatch, one live match from Touchline with goal moments, a file and clipboard shelf, weather and a system glance
 - 2026-10-25 23:59 — **Facet 0.3.1** — Fixes the AI painter getting stuck at 85% ("Painting every side"). It now paints a lighter copy of the model and fills the gaps between views in seconds, not hours, and the progress bar shows each stage as it goes (removing lighting, unwrapping, painting six views with a step count, baking).

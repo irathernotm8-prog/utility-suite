@@ -706,15 +706,22 @@
         this.paintSel(false);
       }, () => { this._fillPrev = null; if (tgt) this.fillSeries(base, tgt, { copy: e.altKey }); else this.paintSel(false); });
     }
-    // double-click the handle: fill down as far as the column beside it goes (like Excel)
+    // the last row of the table around the selection: rows go on while any nearby column has something in them
+    // (a sparse column next door - blanks in a "Notes" column - doesn't stop it short, unlike Excel)
+    tableEnd(b) {
+      const lo = Math.max(0, b.c1 - 30), hi = Math.min(this.cols - 1, b.c2 + 30);
+      const rowHas = (r) => { const row = this.sheet.cells[r]; if (!row) return false; for (let c = lo; c <= hi; c++) { if (c >= b.c1 && c <= b.c2) continue; const v = row[c]; if (v !== '' && v != null) return true; } return false; };
+      let last = b.r2;
+      while (last + 1 < this.rows && (rowHas(last + 1) || (last + 2 < this.rows && rowHas(last + 2)))) last++;
+      while (last > b.r2 && !rowHas(last)) last--;
+      return last;
+    }
+    // double-click the handle: fill down to the end of the table
     fillToEnd() {
       const b = { ...this.sel };
-      const filled = (r, c) => c >= 0 && c < this.cols && this.raw(r, c) !== '';
-      const side = [b.c1 - 1, b.c2 + 1].find((c) => filled(b.r2 + 1, c));
-      if (side == null) return;
-      let last = b.r2;
-      while (last + 1 < this.rows && filled(last + 1, side)) last++;
+      const last = this.tableEnd(b);
       if (last > b.r2) this.fillSeries(b, { r1: b.r1, r2: last, c1: b.c1, c2: b.c2, dir: 'down' });
+      else D.toast('Nothing below to fill down to', 'info');
     }
     fillSeries(base, tgt, opt = {}) {
       const s = this.sheet;
@@ -853,6 +860,7 @@
         { label: 'Paste', kbd: 'Ctrl+V', onClick: () => navigator.clipboard.readText().then((t) => this.pasteText(t)).catch(() => D.toast('Use Ctrl+V to paste', 'warn')) },
         { label: 'Clear contents', kbd: 'Del', onClick: () => this.clear() },
         { label: 'Clear formatting', onClick: () => this.clearFormatting() },
+        { label: 'Fill down to the end of the table', icon: 'arrowDown', kbd: 'Dbl-click ◢', onClick: () => this.fillToEnd() },
         { sep: true },
         { label: `Send ${range} to…`, icon: 'send', onClick: () => D.links.sendTo({ x: e.clientX, y: e.clientY }, this.sheet.id, this.selRange(true)) },
         { label: 'Copy reference', icon: 'link', onClick: () => { navigator.clipboard.writeText(`${F().quoteSheet(this.sheet.name)}!${range}`); D.toast('Reference copied - paste it into any formula or {{live value}}', 'ok'); } },
@@ -949,8 +957,24 @@
       this.editor.remove(); this.editor = null; this.editing = null;
       this.hint && this.hint.remove(); this.hint = null;
       this.tbody.querySelectorAll('td.refsel').forEach((t) => t.classList.remove('refsel'));
-      if (v !== this.raw(r, c)) this.setCell(r, c, v);
+      if (v !== this.raw(r, c)) {
+        this.setCell(r, c, v);
+        if (/^=./.test(v)) this.offerFill(r, c);
+      }
       this.scroller.focus({ preventScroll: true });
+    }
+    // a formula typed at the top of an empty column of a table: offer to fill it down the whole table in one go
+    offerFill(r, c) {
+      const below = this.raw(r + 1, c);
+      if (below !== '') return;
+      const end = this.tableEnd({ r1: r, r2: r, c1: c, c2: c });
+      if (end - r < 2) return;
+      const rows = end - r;
+      D.toast(`Fill this formula down ${rows.toLocaleString()} more row${rows > 1 ? 's' : ''} to the end of the table?`, 'info', 9000, { label: 'Fill down', onClick: () => {
+        if (this.raw(r, c) === '' || D.active() !== this.sheet) return;
+        this.fillSeries({ r1: r, r2: r, c1: c, c2: c }, { r1: r, r2: end, c1: c, c2: c, dir: 'down' });
+        D.toast(`Filled down to row ${(end + 1).toLocaleString()}`, 'ok');
+      } });
     }
     cancelEdit() {
       if (!this.editor) return;

@@ -161,9 +161,10 @@
       { label: 'New project', icon: 'plus', sub: D.templates.list.map((t) => ({ label: t.name, onClick: () => D.io.newProject(t.id).then(() => D.templates.after(D.project())) })) },
       rec.length ? { sep: true } : null,
       rec.length ? { header: 'Recent' } : null,
-      ...rec.slice(0, 6).map((r) => ({ label: r.name, icon: 'folder', onClick: () => D.io.openFolder(r.path) })),
+      ...rec.filter((r) => !r.missing).slice(0, 6).map((r) => ({ label: r.name, icon: 'folder', onClick: () => D.io.openFolder(r.path) })),
       D.project() ? { sep: true } : null,
-      D.project() ? { label: 'Close project', icon: 'x', onClick: () => D.io.closeProject() } : null
+      D.project() ? { label: 'Close project', icon: 'x', onClick: () => D.io.closeProject() } : null,
+      D.project() && D.project().dir ? { label: 'Delete this project…', icon: 'trash', danger: true, onClick: () => D.io.deleteProject(D.project().dir, D.project().name) } : null
     ]));
   }
   function exportMenu(anchor) {
@@ -279,10 +280,19 @@
           h('div', { class: 'tpl-grid' }, D.templates.list.map(tplCard))),
         h('div', { class: 'home-col narrow' },
           h('div', { class: 'home-h' }, 'Recent projects'),
-          rec.length ? h('div', { class: 'recent' }, rec.map((r) => h('button', { class: 'recent-row', onclick: () => D.io.openFolder(r.path), title: r.path },
-            h('span', { class: 'rr-ic', html: D.icon('folder', 16) }),
-            h('span', { class: 'rr-main' }, h('span', { class: 'rr-name' }, r.name), h('span', { class: 'rr-path' }, r.path)),
-            h('span', { class: 'rr-time' }, D.fmtTime(r.openedAt))))) : h('div', { class: 'recent-empty' }, 'Projects you save or open show up here. Drop any folder or files onto this window to open them.'))),
+          rec.length ? h('div', { class: 'recent' }, rec.map((r) => {
+            const more = h('span', { class: 'rr-more', role: 'button', title: 'More', html: D.icon('more', 15), onclick: (e) => { e.stopPropagation(); D.menu(e.currentTarget, [
+              r.missing ? { label: 'Find it…', icon: 'folderOpen', onClick: () => D.io.openFolder() } : { label: 'Open', icon: 'folderOpen', onClick: () => D.io.openFolder(r.path) },
+              r.missing ? null : { label: navigator.platform.startsWith('Mac') ? 'Show in Finder' : 'Show in folder', icon: 'folder', onClick: () => D.native.reveal(r.path) },
+              { sep: true },
+              { label: 'Remove from Recent', icon: 'x', onClick: () => D.io.forgetRecent(r.path, r.name) },
+              r.missing ? null : { label: 'Delete project…', icon: 'trash', danger: true, onClick: () => D.io.deleteProject(r.path, r.name) }
+            ]); } });
+            return h('div', { class: `recent-row${r.missing ? ' is-missing' : ''}`, role: 'button', tabindex: 0, onclick: () => (r.missing ? D.io.missingFolder(r.path, r.name) : D.io.openFolder(r.path)), title: r.missing ? `Not found: ${r.path}` : r.path },
+              h('span', { class: 'rr-ic', html: D.icon('folder', 16) }),
+              h('span', { class: 'rr-main' }, h('span', { class: 'rr-name' }, r.name), h('span', { class: 'rr-path' }, r.missing ? 'Folder not found · ' + r.path : r.path)),
+              h('span', { class: 'rr-time' }, D.fmtTime(r.openedAt)), more);
+          }), rec.some((r) => r.missing) ? h('button', { class: 'link-btn rr-clear', onclick: async () => { await D.native.recentClearMissing(); A.renderHome(); } }, 'Remove folders that no longer exist') : null) : h('div', { class: 'recent-empty' }, 'Projects you save or open show up here. Drop any folder or files onto this window to open them.'))),
       h('div', { class: 'home-h' }, 'Four sheets, one project'),
       h('div', { class: 'type-cards' }, ['data', 'slide', 'docu', 'report', 'dash'].map((t) => typeCard(t, async () => { await D.io.newProject('blank'); if (D.project()) { D.project().sheets = []; A.addSheet(t); } })))
     ));

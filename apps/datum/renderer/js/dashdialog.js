@@ -8,6 +8,7 @@
     rank: { label: 'Ranking', icon: 'chart' },
     share: { label: 'Share of total', icon: 'pie' },
     compare: { label: 'Bar + line', icon: 'chart' },
+    cross: { label: 'Breakdown (stacked)', icon: 'chart' },
     scatter: { label: 'Scatter', icon: 'line' },
     table: { label: 'Table', icon: 'table' }
   };
@@ -118,17 +119,20 @@
       st.charts.forEach((v, i) => {
         const k = v.kind;
         const needsBy = ['rank', 'share', 'compare', 'table'].includes(k) && byOpts().length;
+        const dimOpts = (skip) => p.dims.filter((d) => String(d.c) !== String(skip)).map((d) => [String(d.c), d.name]);
+        if (k === 'cross' && p.dims.length >= 2) { if (v.by == null || !p.dims.some((d) => String(d.c) === String(v.by))) v.by = String(p.dims[0].c); if (v.by2 == null || String(v.by2) === String(v.by)) v.by2 = dimOpts(v.by)[0][0]; }
         const two = k === 'compare' || k === 'scatter' || k === 'trend';
         const m1 = (v.metrics || [])[0] || (metrics[0] && metrics[0].key);
         const m2 = (v.metrics || [])[1] || '';
         const update = (patch) => { Object.assign(v, patch); draw(); };
-        const typeOpts = { trend: [['', 'Auto'], ['bar', 'Columns'], ['line', 'Line'], ['area', 'Area'], ['combo', 'Bars + line']], rank: [['', 'Auto'], ['hbar', 'Bars'], ['bar', 'Columns'], ['doughnut', 'Doughnut'], ['line', 'Line']], share: [['', 'Doughnut'], ['pie', 'Pie'], ['hbar', 'Bars']], compare: [['', 'Bars + line'], ['bar', 'Grouped columns'], ['hbar', 'Grouped bars']], scatter: [['', 'Scatter']], table: [['', 'Table']] }[k] || [['', 'Auto']];
+        const typeOpts = { trend: [['', 'Auto'], ['bar', 'Columns'], ['line', 'Line'], ['area', 'Area'], ['combo', 'Bars + line']], rank: [['', 'Auto'], ['hbar', 'Bars'], ['bar', 'Columns'], ['doughnut', 'Doughnut'], ['line', 'Line']], share: [['', 'Doughnut'], ['pie', 'Pie'], ['hbar', 'Bars']], compare: [['', 'Bars + line'], ['bar', 'Grouped columns'], ['hbar', 'Grouped bars']], scatter: [['', 'Scatter']], table: [['', 'Table']], cross: [['', 'Stacked columns'], ['bar', 'Grouped columns'], ['hbar', 'Grouped bars']] }[k] || [['', 'Auto']];
         rows.append(h('div', { class: 'dash-row' },
           h('span', { class: 'dr-n' }, String(i + 1)),
           sel(Object.entries(KIND).filter(([id]) => id !== 'trend' || p.time || true).map(([id, x]) => [id, x.label]), k, (val) => update({ kind: val, chartType: undefined, by: v.by || (byOpts()[0] || [])[0] }), 'sm'),
           k === 'table' && !needsBy ? h('span', { class: 'muted small dr-fill' }, p.time ? 'Latest rows of your data' : 'Your rows') : sel(metricOpts(), m1, (val) => update({ metrics: [val, ...(v.metrics || []).slice(1)].filter(Boolean) }), 'sm'),
           two ? sel([['', k === 'trend' ? '+ another line (optional)' : 'second metric…'], ...metricOpts((m) => m.key !== m1)], m2, (val) => update({ metrics: [m1, val].filter(Boolean) }), 'sm') : null,
           needsBy ? sel(byOpts(), v.by != null ? v.by : byOpts()[0][0], (val) => update({ by: val }), 'sm') : null,
+          k === 'cross' ? (p.dims.length >= 2 ? h('span', { class: 'dr-pair' }, sel(dimOpts(null), String(v.by), (val) => update({ by: val, by2: String(val) === String(v.by2) ? undefined : v.by2 }), 'sm'), h('span', { class: 'muted small' }, ' split by '), sel(dimOpts(v.by), String(v.by2), (val) => update({ by2: val }), 'sm')) : h('span', { class: 'muted small dr-fill' }, 'Needs two category columns')) : null,
           ['rank'].includes(k) ? sel([['desc', 'Highest first'], ['asc', 'Lowest first']], v.dir || 'desc', (val) => update({ dir: val }), 'sm xs') : null,
           k !== 'table' && k !== 'scatter' ? sel(typeOpts, v.chartType || '', (val) => update({ chartType: val || undefined }), 'sm') : null,
           h('button', { class: 'icon-btn ghost', title: 'Remove', html: D.icon('x', 14), onclick: () => { st.charts.splice(i, 1); draw(); } })));

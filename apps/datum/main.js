@@ -20,6 +20,10 @@ const userData = () => app.getPath('userData');
 const recentFile = () => path.join(userData(), 'recent.json');
 const recoveryFile = () => path.join(userData(), 'recovery.datum');
 
+// a mistake in the main process is logged, never a crash dialog that takes the app down
+process.on('uncaughtException', (err) => { console.error('Uncaught:', err); });
+process.on('unhandledRejection', (err) => { console.error('Unhandled rejection:', err); });
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1480,
@@ -44,8 +48,15 @@ function createWindow() {
     if (/^https?:/.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  // if the page itself crashes, reload it: unsaved work comes back from the 30-second recovery copy
+  win.webContents.on('render-process-gone', (_e, d) => {
+    console.error('Renderer gone:', d && d.reason);
+    if (d && d.reason !== 'clean-exit' && !win.isDestroyed() && !win.__forceClose) { win.__crashes = (win.__crashes || 0) + 1; if (win.__crashes <= 3) setTimeout(() => { if (!win.isDestroyed()) win.reload(); }, 400); }
+  });
+  win.on('unresponsive', () => { win.__hung = true; });
+  win.on('responsive', () => { win.__hung = false; });
   win.on('close', (e) => {
-    if (win.__forceClose) return;
+    if (win.__forceClose || win.__hung || win.webContents.isCrashed()) return;
     e.preventDefault();
     win.webContents.send('app:before-close');
   });
@@ -119,8 +130,48 @@ async function htmlToPng(html, w, h) {
 ipcMain.handle('render:png', (_e, { html, w, h }) => htmlToPng(html, w, h));
 ipcMain.handle('app:close-confirmed', () => { win.__forceClose = true; win.close(); });
 ipcMain.handle('app:recent', async () => {
+  // folders that were moved or deleted stay listed (marked missing) so they can be removed or found again
   const list = await readRecent();
-  return list.filter((r) => fs.existsSync(r.path));
+  return list.map((r) => ({ ...r, missing: !fs.existsSync(r.path) }));
+});
+ipcMain.handle('app:recent-remove', async (_e, dir) => {
+  const list = (await readRecent()).filter((r) => r.path !== dir);
+  await fsp.mkdir(userData(), { recursive: true });
+  await writeAtomic(recentFile(), JSON.stringify(list, null, 2), 'utf8');
+  return true;
+});
+ipcMain.handle('app:recent-clear-missing', async () => {
+  const list = (await readRecent()).filter((r) => fs.existsSync(r.path));
+  await writeAtomic(recentFile(), JSON.stringify(list, null, 2), 'utf8');
+  return true;
+});
+// what a project folder holds, before deleting it
+ipcMain.handle('project:describe', async (_e, dir) => {
+  try {
+    if (!fs.existsSync(dir)) return { exists: false };
+    const names = await fsp.readdir(dir);
+    const isProject = names.includes('project.datum');
+    const files = names.filter((f) => !f.startsWith('.') && f !== 'project.datum');
+    return { exists: true, isProject, files: files.length, sample: files.slice(0, 6) };
+  } catch (err) { return { exists: false, error: err.message }; }
+});
+// Delete a project: only folders Datum saved (they hold project.datum). They go to the Trash / Recycle Bin, so it can be undone there.
+ipcMain.handle('project:delete', async (_e, dir) => {
+  try {
+    if (!dir || !fs.existsSync(dir)) {
+      const list = (await readRecent()).filter((r) => r.path !== dir);
+      await writeAtomic(recentFile(), JSON.stringify(list, null, 2), 'utf8');
+      return { ok: true, gone: true };
+    }
+    if (!fs.existsSync(path.join(dir, 'project.datum'))) return { ok: false, error: 'This folder wasn’t saved by Datum, so it won’t be deleted. You can still remove it from Recent.' };
+    const home = app.getPath('home');
+    const res = path.resolve(dir);
+    if (res === path.parse(res).root || res === home || res === app.getPath('downloads') || res === app.getPath('documents') || res === app.getPath('desktop')) return { ok: false, error: 'That folder is too important to delete from here.' };
+    await shell.trashItem(res);
+    const list = (await readRecent()).filter((r) => r.path !== dir);
+    await writeAtomic(recentFile(), JSON.stringify(list, null, 2), 'utf8');
+    return { ok: true };
+  } catch (err) { return { ok: false, error: err.message }; }
 });
 ipcMain.handle('app:recovery-read', async () => {
   try { return await fsp.readFile(recoveryFile(), 'utf8'); } catch { return null; }
@@ -300,6 +351,8 @@ ipcMain.handle('project:save', async (_e, { project, parentDir, folder, exports 
 
 // Open a folder: manifest if present (merging newer external Excel edits), else import each file
 ipcMain.handle('project:open-folder', async (_e, dir) => {
+  // a recent project that was deleted, renamed or moved (or a drive that isn't plugged in)
+  try { if (!dir || !fs.statSync(dir).isDirectory()) return { missing: true, dir }; } catch { return { missing: true, dir }; }
   const manifestPath = path.join(dir, 'project.datum');
   let m = null;
   const notes = [];
@@ -316,7 +369,8 @@ ipcMain.handle('project:open-folder', async (_e, dir) => {
       if (!f) continue;
       const fp = path.join(dir, f);
       if (!fs.existsSync(fp)) continue;
-      const mtime = (await fsp.stat(fp)).mtimeMs;
+      let mtime = 0;
+      try { mtime = (await fsp.stat(fp)).mtimeMs; } catch { continue; }
       if (sheet.type === 'data' && mtime > m.savedAt + 3000) {
         try {
           const imported = await formats.importFile(fp);
@@ -331,7 +385,7 @@ ipcMain.handle('project:open-folder', async (_e, dir) => {
     // pick up new files dropped into the folder
     const known = new Set(Object.values(m.files || {}).map((f) => f.toLowerCase()));
     const extra = [];
-    for (const f of await fsp.readdir(dir)) {
+    for (const f of await fsp.readdir(dir).catch(() => [])) {
       if (known.has(f.toLowerCase()) || f === 'project.datum' || f.startsWith('~$') || f.startsWith('.')) continue;
       if (!formats.isSupported(f)) continue;
       try { extra.push(...(await formats.importFile(path.join(dir, f)))); } catch (err) { console.error(err); }
@@ -345,7 +399,7 @@ ipcMain.handle('project:open-folder', async (_e, dir) => {
     if (f.startsWith('~$') || f.startsWith('.')) continue;
     const fp = path.join(dir, f);
     if (f === 'project.datum' || f.endsWith('.tmp')) continue;
-    if ((await fsp.stat(fp)).isDirectory()) continue;
+    try { if ((await fsp.stat(fp)).isDirectory()) continue; } catch { continue; }
     if (!formats.isSupported(f)) { skipped.push(f); continue; }
     try { sheets.push(...(await formats.importFile(fp))); } catch (err) { skipped.push(f); console.error(err); }
   }

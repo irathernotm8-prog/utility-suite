@@ -684,13 +684,19 @@
       const findRef = (n) => {
         if (!n) return null;
         if (n.k === 'ref') return n;
-        if (n.k === 'fn') { for (const a of n.args) { const r = findRef(a); if (r) return r; } }
+        if (n.k === 'fn') {
+          // counts never take a cell's format (=COUNTIFS(dates, ">="&start) is a number, not a date)
+          if (/^(COUNT|COUNTA|COUNTIF|COUNTIFS|COUNTBLANK|ROWS|COLUMNS|COUNTUNIQUE|LEN|MATCH|XMATCH|RANK|RANK\.EQ|PCTCHANGE|GROWTH|CORREL|SLOPE)$/.test(n.name)) return { none: true };
+          // SUMIFS/AVERAGEIFS/MAXIFS take the format of the values summed (their first argument), not the criteria
+          const args = /^(SUMIFS|AVERAGEIFS|MAXIFS|MINIFS)$/.test(n.name) ? n.args.slice(0, 1) : /^(SUMIF|AVERAGEIF)$/.test(n.name) ? [n.args[2] || n.args[0]] : n.args;
+          for (const a of args) { const r = findRef(a); if (r) return r; }
+        }
         if (n.k === 'bin') return findRef(n.l) || findRef(n.r);
         if (n.k === 'neg') return findRef(n.e);
         return null;
       };
       const ref = findRef(ast);
-      if (!ref) return null;
+      if (!ref || ref.none) return null;
       const sh = resolveSheet(ref.sheet, null);
       const g = F.parseRange(ref.ref);
       if (ast.k === 'fn' && ['COUNT', 'COUNTA', 'COUNTIF'].includes(ast.name)) return 'int';
@@ -701,6 +707,8 @@
   F.displayExpr = (expr, fmt) => {
     const v = F.safeEval(expr);
     const f = fmt && fmt !== 'auto' ? fmt : F.exprFormat(expr);
+    // text a formula already shaped (TEXT(…), names, labels) is shown as is, never re-read as a date or number
+    if (typeof v === 'string' && !(f === 'date' && /^\d{4}-\d{2}-\d{2}/.test(v))) return v;
     if (typeof v === 'number' && !f) return F.format(v, Math.abs(v) >= 1000 ? 'int' : null);
     return F.format(v, f);
   };

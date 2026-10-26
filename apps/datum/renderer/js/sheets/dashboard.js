@@ -419,11 +419,22 @@
 
   // ---- layout helpers (gridstack-style: moved items push others down, then everything floats up)
   const overlap = (a, b) => a !== b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  // Make room for `moved` (just dragged, resized, added or duplicated): whatever it now covers moves down just
+  // far enough, and whatever that covers in turn. Every other widget stays exactly where it was put.
   function settle(list, moved) {
-    const push = (it, depth = 0) => { if (depth > 200) return; for (const o of list) if (o !== it && overlap(o, it)) { o.y = it.y + it.h; push(o, depth + 1); } };
-    if (moved) push(moved);
+    if (!moved) return;
+    const queue = [moved];
+    let guard = 0;
+    while (queue.length && guard++ < 5000) {
+      const it = queue.shift();
+      const hits = list.filter((o) => o !== it && o !== moved && overlap(o, it)).sort((a, b) => a.y - b.y || a.x - b.x);
+      for (const o of hits) { o.y = it.y + it.h; queue.push(o); }
+    }
+  }
+  // close the gaps (used for the PDF, where filter controls are left out)
+  function compact(list) {
     const sorted = [...list].sort((a, b) => a.y - b.y || a.x - b.x);
-    for (const it of sorted) { while (it.y > 0) { it.y--; if (list.some((o) => overlap(o, it))) { it.y++; break; } } }
+    for (const it of sorted) { while (it.y > 0) { it.y--; if (list.some((o) => o !== it && overlap(o, it))) { it.y++; break; } } }
   }
 
   // =================================================================== view
@@ -455,6 +466,7 @@
         addBtn,
         D.btn('data', 'Choose the Data Sheets or data set this dashboard reads', () => this.pickSources(), { label: this.sourceLabel() }),
         D.btn('sparkles', 'Lay out a starter dashboard from the data', () => this.autoBuild(), { label: 'Build from data' }),
+        D.btn('rows', 'Close the empty gaps between widgets (they otherwise stay exactly where you put them)', () => { compact(this.sheet.widgets); this.commit(); this.render(); }, { label: 'Tidy' }),
         this.dupButton(),
         D.sep(),
         D.btn('x', 'Clear every filter', () => { this.sheet.filters = { date: this.sheet.filters.date ? { ...this.sheet.filters.date, preset: 'all' } : null, vals: {} }; this.commit(); this.render(); }, { label: 'Clear filters' }),
@@ -568,7 +580,7 @@
           { label: 'Edit…', icon: 'edit', onClick: () => this.edit(w) },
           { label: 'Duplicate', icon: 'copy', onClick: () => { const c = { ...D.clone(w), id: uid(), y: w.y + w.h }; this.sheet.widgets.push(c); settle(this.sheet.widgets, c); this.commit(); this.render(); } },
           { sep: true },
-          { label: 'Remove', icon: 'trash', danger: true, onClick: () => { this.sheet.widgets = this.sheet.widgets.filter((x) => x !== w); settle(this.sheet.widgets); this.commit(); this.render(); } }
+          { label: 'Remove', icon: 'trash', danger: true, onClick: () => { this.sheet.widgets = this.sheet.widgets.filter((x) => x !== w); this.commit(); this.render(); } }
         ]); } }));
       const body = h('div', { class: 'db-body' });
       el.append(head, body, h('div', { class: 'db-resize', title: 'Drag to resize' }));
@@ -589,8 +601,23 @@
       const place = (g) => { const p = M.px(g); Object.assign(ph.style, { left: p.left + 'px', top: p.top + 'px', width: p.width + 'px', height: p.height + 'px' }); };
       let target = { ...w };
       place(target);
+      const st0 = this.scroll.scrollTop;
+      // the others slide out of the way live, so you can see what will move before letting go
+      this.gridEl.classList.add('arranging');
+      const preview = () => {
+        const trial = this.sheet.widgets.map((x) => (x === w ? { ...x, ...target } : { ...x }));
+        settle(trial, trial[this.sheet.widgets.indexOf(w)]);
+        trial.forEach((x) => {
+          if (x.id === w.id) return;
+          const card = this.gridEl.querySelector(`.db-card[data-id="${x.id}"]`);
+          if (card) { const p = M.px(x); card.style.top = p.top + 'px'; card.style.left = p.left + 'px'; }
+        });
+        const bottom = Math.max(...trial.map((x) => M.px(x).top + M.px(x).height)) + 40;
+        if (bottom > this.gridEl.offsetHeight) this.gridEl.style.height = bottom + 'px';
+      };
+      let lastKey = '';
       const move = (ev) => {
-        const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+        const dx = ev.clientX - start.x, dy = ev.clientY - start.y + (this.scroll.scrollTop - st0);
         if (mode === 'move') {
           el.style.transform = `translate(${dx}px, ${dy}px)`;
           target = { ...w, x: Math.max(0, Math.min(COLS - w.w, start.w.x + Math.round(dx / (M.colW + GAP)))), y: Math.max(0, start.w.y + Math.round(dy / (ROW + GAP))) };
@@ -602,11 +629,16 @@
           target = { ...w, w: nw, h: nh };
         }
         place(target);
+        const key = `${target.x},${target.y},${target.w},${target.h}`;
+        if (key !== lastKey) { lastKey = key; preview(); }
         const sr = this.scroll.getBoundingClientRect();
         if (ev.clientY > sr.bottom - 30) this.scroll.scrollTop += 14; else if (ev.clientY < sr.top + 30) this.scroll.scrollTop -= 14;
       };
       const up = () => {
         window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+        this.gridEl.classList.remove('arranging');
+        // a click on the header, or a drag back to where it started, changes nothing
+        if (target.x === w.x && target.y === w.y && target.w === w.w && target.h === w.h) { this.render(); return; }
         Object.assign(w, { x: target.x, y: target.y, w: target.w, h: target.h });
         settle(this.sheet.widgets, w);
         this.commit(); this.render();
@@ -913,7 +945,7 @@
     let maxY = 0;
     // filter controls don't print (the active filters are in the subtitle), so close the gaps they leave
     const printed = (sheet.widgets || []).filter((w) => !['daterange', 'filter', 'sheetfilter'].includes(w.kind)).map((w) => ({ ...w }));
-    settle(printed);
+    compact(printed);
     for (const w of printed) {
       const p = px(w); maxY = Math.max(maxY, p.top + p.height);
       let inner = '';

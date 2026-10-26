@@ -60,13 +60,52 @@
   };
 
   // ---------- open
+  // a recent project whose folder was deleted, renamed or moved
+  IO.missingFolder = (dir, name) => {
+    const nm = name || String(dir).split(/[\\/]/).filter(Boolean).pop();
+    D.modal({ title: 'Folder not found', width: 480,
+      body: D.h('p', null, `“${nm}” isn’t at ${dir} any more. It may have been deleted, renamed or moved, or it’s on a drive that isn’t connected.`),
+      actions: [
+        { label: 'Keep in Recent' },
+        { label: 'Find it…', onClick: () => { setTimeout(() => IO.openFolder(), 0); } },
+        { label: 'Remove from Recent', primary: true, onClick: async () => { await N().recentRemove(dir); D.toast(`Removed “${nm}” from Recent`, 'ok'); if (!D.project()) D.app.renderHome(); } }
+      ] });
+  };
+  IO.forgetRecent = async (dir, name) => { await N().recentRemove(dir); D.toast(`Removed “${name}” from Recent. The folder itself wasn’t touched.`, 'ok', 4000); if (!D.project()) D.app.renderHome(); };
+  // delete a project folder Datum saved (it goes to the Trash / Recycle Bin)
+  IO.deleteProject = async (dir, name) => {
+    const info = await N().describeProject(dir);
+    if (!info.exists) return IO.forgetRecent(dir, name);
+    if (!info.isProject) {
+      return D.modal({ title: 'Not a Datum project folder', width: 480, body: D.h('p', null, `${dir} wasn’t saved by Datum (it has no project.datum), so Datum won’t delete it. You can remove it from Recent instead.`),
+        actions: [{ label: 'Cancel' }, { label: 'Remove from Recent', primary: true, onClick: () => { IO.forgetRecent(dir, name); } }] });
+    }
+    const open = D.project() && D.project().dir && D.project().dir.replace(/[\\/]+$/, '') === String(dir).replace(/[\\/]+$/, '');
+    D.modal({ title: `Delete “${name}”?`, width: 500,
+      body: D.h('div', null,
+        D.h('p', null, `The project folder and the ${info.files} file${info.files === 1 ? '' : 's'} in it go to the ${navigator.platform.startsWith('Win') ? 'Recycle Bin' : 'Trash'}, so you can still get them back from there.`),
+        info.sample.length ? D.h('p', { class: 'muted small' }, info.sample.join(' · ') + (info.files > info.sample.length ? ' …' : '')) : null,
+        D.h('p', { class: 'muted small' }, dir),
+        open ? D.h('p', { class: 'muted small' }, 'It’s open now, so it will be closed first. Unsaved changes are discarded.') : null),
+      actions: [{ label: 'Cancel' }, { label: 'Delete project', danger: true, primary: true, onClick: async () => {
+        if (open) { D.state.project = null; D.state.dirty = false; N().recoveryWrite(null); D.app.renderAll(); }
+        const r = await N().deleteProject(dir);
+        if (!r.ok) return D.toast(`Couldn’t delete it: ${r.error}`, 'err', 7000);
+        D.toast(`“${name}” moved to the ${navigator.platform.startsWith('Win') ? 'Recycle Bin' : 'Trash'}`, 'ok', 4500);
+        if (!D.project()) D.app.renderHome();
+      } }] });
+  };
+
   IO.openFolder = async (dir) => {
     if (!dir) dir = await N().openFolder();
     if (!dir) return;
+    const pre = await N().describeProject(dir).catch(() => ({ exists: true }));
+    if (!pre.exists) return IO.missingFolder(dir);
     if (!(await IO.guardUnsaved())) return;
     D.app.busy('Opening folder…');
     try {
       const r = await N().openProjectFolder(dir);
+      if (r.missing) { IO.missingFolder(dir); return; }
       if (r.project) {
         r.project.dir = r.dir;
         const extra = await IO.prepareImported(r.extra || []);
@@ -89,7 +128,7 @@
       }
     } catch (err) {
       console.error(err);
-      D.toast(`Couldn't open folder: ${err.message}`, 'err', 6000);
+      D.toast(`Couldn't open folder: ${D.errText ? D.errText(err) : err.message}`, 'err', 6000);
     } finally { D.app.busy(false); }
   };
 

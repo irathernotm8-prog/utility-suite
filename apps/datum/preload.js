@@ -5,6 +5,10 @@ const invoke = (ch, ...a) => ipcRenderer.invoke(ch, ...a);
 contextBridge.exposeInMainWorld('native', {
   platform: process.platform,
   recent: () => invoke('app:recent'),
+  recentRemove: (dir) => invoke('app:recent-remove', dir),
+  recentClearMissing: () => invoke('app:recent-clear-missing'),
+  describeProject: (dir) => invoke('project:describe', dir),
+  deleteProject: (dir) => invoke('project:delete', dir),
   recoveryRead: () => invoke('app:recovery-read'),
   recoveryWrite: (json) => invoke('app:recovery-write', json),
   reveal: (p) => invoke('app:reveal', p),

@@ -190,9 +190,10 @@
   };
 
   // ---------- toasts
-  D.toast = (msg, kind = 'info', ms = 3200) => {
+  D.toast = (msg, kind = 'info', ms = 3200, action = null) => {
     let host = document.getElementById('toasts');
-    const t = h('div', { class: `toast ${kind}` }, h('span', { class: 'toast-dot' }), h('span', null, msg));
+    const t = h('div', { class: `toast ${kind}` }, h('span', { class: 'toast-dot' }), h('span', null, msg),
+      action ? h('button', { class: 'toast-act', onclick: () => { t.remove(); action.onClick(); } }, action.label) : null);
     host.append(t);
     requestAnimationFrame(() => t.classList.add('in'));
     setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 300); }, ms);
