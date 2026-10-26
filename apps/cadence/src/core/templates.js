@@ -41,6 +41,28 @@ const TEMPLATES = [
     },
   },
   {
+    id: 'lumen-weekly', name: 'Lumen numbers into your PowerPoint', color: 'lime', icon: 'app',
+    blurb: 'Every Monday: open Lumen, set it to the last 7 days, copy the KPI cards, the campaign table and the daily chart, and fill your own PowerPoint template with them — same look, new numbers.',
+    flow: {
+      name: 'Weekly Lumen deck', description: 'Pull last week’s numbers out of Lumen and drop them into the team’s PowerPoint template.',
+      trigger: { type: 'schedule', every: 'week', days: [1], time: '08:30', catchUp: true },
+      steps: [
+        { id: 'lumen', type: 'app.use', name: 'Copy last week from Lumen', with: { app: 'Lumen', control: 'inside', restart: true, waitFor: '.kpi', afterwards: 'restore', timeout: 120, actions: [
+          { do: 'click', target: '#rpBtn' },
+          { do: 'click', target: 'text=Last 7 days' },
+          { do: 'waitFor', target: '.kpi' },
+          { do: 'extractList', target: '.kpi', fields: 'Metric=.l, Value=.v, Change=.d', name: 'kpis' },
+          { do: 'extractTable', target: '#tbl table', name: 'campaigns' },
+          { do: 'screenshot', target: '#chart', saveAs: 'Daily spend and conversions' },
+        ] } },
+        { id: 'folder', type: 'folder.make', name: 'Folder for this week', with: { path: '~/Documents/Reports/{{week.label}}' } },
+        { id: 'data', type: 'data.write', name: 'Keep the numbers', with: { path: '{{steps.folder.folder}}/Lumen {{lastWeek.start}}.xlsx', sheets: [{ name: 'KPIs', table: '{{steps.lumen.tables.kpis}}' }, { name: 'Campaigns', table: '{{steps.lumen.tables.campaigns}}' }] } },
+        { id: 'deck', type: 'doc.template', name: 'Fill the team template', with: { template: '~/Documents/Templates/Weekly Update.pptx', path: '{{steps.folder.folder}}/Weekly Update {{lastWeek.start}}.pptx', fills: [], repeat: [], tokens: true } },
+        { id: 'tell', type: 'logic.notify', name: 'Tell me', with: { title: 'Weekly deck is ready', body: '{{steps.deck.file | basename}}', open: '{{steps.deck.file}}' } },
+      ],
+    },
+  },
+  {
     id: 'daily-download', name: 'Download a file every morning', color: 'sky', icon: 'download',
     blurb: 'Grab a file from a link each weekday and keep it in a dated folder. Works with export links, APIs that return CSV and shared-drive download links.',
     flow: {

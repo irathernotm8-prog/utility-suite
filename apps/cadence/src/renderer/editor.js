@@ -264,6 +264,8 @@ function stepSummary(s) {
     case 'web.browser': return `${host(w.url) || 'No start page yet'} · ${(w.actions || []).length} action${(w.actions || []).length === 1 ? '' : 's'}${w.profile && w.profile !== 'default' ? ' · ' + w.profile : ''}`;
     case 'web.download': case 'web.request': return host(w.url) || 'No link yet';
     case 'web.post': return w.text || '';
+    case 'app.use': { const n = (w.actions || []).length; const app = String(w.app || 'No app chosen').split(/[\\/]/).pop().replace(/\.app$/, ''); return w.control === 'open' ? `Open ${app}` : `${app} · ${n} action${n === 1 ? '' : 's'}${w.control === 'keys' ? ' · keyboard' : ''}`; }
+    case 'doc.template': { const n = (w.fills || []).length + (w.repeat || []).length; return `${String(w.template || 'No template yet').split(/[\\/]/).pop()} → ${w.path || '…'}${n ? ` · ${n} mapped` : ''}`; }
     case 'folder.make': return w.path || '';
     case 'file.save': return `${w.mode === 'move' ? 'Move' : 'Copy'} into ${w.to || '…'}`;
     case 'file.find': return `${w.pattern || '*'} in ${w.folder || '…'}`;

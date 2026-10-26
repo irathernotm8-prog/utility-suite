@@ -227,6 +227,20 @@ h('record:start', (profile, url) => {
   return true;
 });
 h('record:stop', () => { if (recording) recording.stop(); recording = null; return true; });
+h('apps:list', (fresh) => require('./apps').listApps({ fresh: !!fresh }).map((a) => ({ name: a.name, path: a.path, kind: a.kind, suite: a.suite })));
+h('pptx:inspect', (file) => { const p = String(file || '').replace(/^~/, os.homedir()); return require('./core/pptx').inspect(p); });
+h('pptx:aiMap', async (file, values) => {
+  const p = String(file || '').replace(/^~/, os.homedir());
+  const analysis = require('./core/pptx').inspect(p);
+  return aiBuild.mapTemplate({ analysis, values: values || [], provider: settings.aiProvider || 'auto', secrets: engine.store.secrets, dir: path.join(USER, 'ai-drafts'), log: (m) => send('ai:progress', m) });
+});
+let appRecording = null;
+h('record:startApp', async (app) => {
+  if (appRecording) await appRecording.stop();
+  appRecording = await require('./apps').recordApp(app, (ev) => { send('record:event', ev); if (ev.type === 'done') appRecording = null; });
+  return true;
+});
+h('record:stopApp', async () => { if (appRecording) { const r = appRecording; appRecording = null; await r.stop(); } return true; });
 h('ai:status', () => { const av = ai.available(engine.store.secrets); return { claude: av.claude, codex: av.codex, anthropic: av.anthropic, openai: av.openai }; });
 h('ai:draft', async (description, existing) => {
   const ctx = `Browser profiles: ${engine.store.profiles().map((p) => p.id).join(', ')}. Secrets saved: ${engine.store.secrets.names().join(', ') || 'none'}. Home folder: ${os.homedir()}. Platform: ${process.platform}.`;

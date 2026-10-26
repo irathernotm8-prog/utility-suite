@@ -37,6 +37,12 @@ function seed(engine) {
   const m = engine.save(monthly).flow;
   const digest = tpl('ai-digest'); digest.enabled = false;
   engine.save(digest);
+  if (process.env.CADENCE_DEMO_PPTX) {
+    const lumen = tpl('lumen-weekly'); lumen.enabled = true;
+    lumen.steps.find((s) => s.id === 'deck').with.template = process.env.CADENCE_DEMO_PPTX;
+    lumen.steps.find((s) => s.id === 'folder').with.path = (process.env.CADENCE_DEMO_OUT || '~/Documents/Reports') + '/{{week.label}}';
+    engine.save(lumen);
+  }
   engine.save({ name: 'Clear out old screenshots', trigger: { type: 'manual' }, enabled: false, steps: [{ id: 'tidy', type: 'file.cleanup', name: 'Screenshots older than 30 days', with: { folder: '~/Desktop', pattern: 'Screenshot*.png, Screen Shot*.png', days: 30 } }] });
 
   // a believable history

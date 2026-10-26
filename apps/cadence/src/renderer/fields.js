@@ -29,6 +29,17 @@ function tokensFor(ctx, accepts) {
     const def = S.cat.steps[s.type]; if (!def) continue;
     for (const o of def.outputs) if (want(o.kind)) stepItems.push([`steps.${s.id}.${o.key}`, `${s.name || def.label} › ${o.label}`, o.kind, s.type]);
     if (s.type === 'data.set') for (const r of (s.with.values || [])) if (r.key) stepItems.push([`vars.${r.key}`, `Value › ${r.key}`, 'text', s.type]);
+    if (s.type === 'web.browser' || s.type === 'app.use') for (const a of (s.with.actions || [])) {
+      if (!a || !a.name) continue;
+      const nm = /^\w+$/.test(a.name) ? `.${a.name}` : `["${a.name}"]`;
+      if ((a.do === 'extractTable' || a.do === 'extractList' || a.do === 'clipboard') && want('table')) stepItems.push([`steps.${s.id}.tables${nm}`, `${s.name || def.label} › table “${a.name}”`, 'table', s.type]);
+      if (a.do === 'extractList' && (!accepts || accepts.includes('text'))) {
+        stepItems.push([`steps.${s.id}.values${nm}`, `${s.name || def.label} › “${a.name}” values`, 'object', s.type]);
+        const known = getPath({ steps: ctx.outputs || {} }, `steps.${s.id}.values${nm}`);
+        if (known && typeof known === 'object') for (const k of Object.keys(known).slice(0, 20)) stepItems.push([`steps.${s.id}.values${nm}${/^\w+$/.test(k) ? '.' + k : `["${k}"]`}`, `${s.name || def.label} › ${k}`, 'text', s.type]);
+      }
+      if ((a.do === 'extractText' || a.do === 'script' || a.do === 'appScript' || a.do === 'clipboard') && (!accepts || accepts.includes('text'))) stepItems.push([`steps.${s.id}.text${nm}`, `${s.name || def.label} › text “${a.name}”`, 'text', s.type]);
+    }
   }
   if (ctx.flow.trigger.type === 'watch' && want('file')) stepItems.unshift(['inputs.file', 'The new file', 'file', 'trigger']);
   if (ctx.flow.trigger.type === 'watch' && want('files')) stepItems.unshift(['inputs.files', 'All new files', 'files', 'trigger']);
@@ -90,7 +101,7 @@ let dlSeq = 0;
 
 function labelRow(f, extra) { return h('div', { class: 'f-label' }, h('label', {}, f.label), f.required ? h('span', { class: 'req', title: 'Needed' }, '•') : null, extra || null); }
 function field(f, values, ctx, change, rerender) {
-  const set = (v) => { values[f.key] = v; change(f.key); };
+  const set = (v) => { values[f.key] = v; change(f.key); if (f.key === 'template' && f.kind === 'file') { clearTimeout(PptMap._t); PptMap._t = setTimeout(() => PptMap.reload && PptMap.reload(), 700); } };
   const v = values[f.key] !== undefined ? values[f.key] : f.default;
   const wrap = h('div', { class: 'f', 'data-key': f.key });
   const help = f.help ? h('div', { class: 'hint' }, f.help) : null;
@@ -107,6 +118,8 @@ function field(f, values, ctx, change, rerender) {
   else if (k === 'ref') wrap.append(tokInput({ value: v, placeholder: f.placeholder, ctx, accepts: f.accepts, replace: true, onInput: set }));
   else if (k === 'refs') wrap.append(listEditor(Array.isArray(v) ? v : v ? [v] : [], (arr) => set(arr), (item, upd) => tokInput({ value: item, placeholder: f.placeholder, ctx, accepts: f.accepts, replace: true, onInput: upd }), 'Add', ''));
   else if (k === 'profile') wrap.append(profileField(v, set, f));
+  else if (k === 'app') wrap.append(appField(v, set, values, rerender));
+  else if (k === 'pptmap') wrap.append(PptMap.editor(values, set, ctx));
   else if (k === 'flow') { const sel = h('select', { class: 'select', onchange: () => set(sel.value) }, h('option', { value: '' }, 'Choose…'), ...S.flows.filter((x) => x.id !== ctx.flow.id).map((x) => h('option', { value: x.id, selected: x.id === v }, x.name))); wrap.append(sel); }
   else if (k === 'kv') wrap.append(kvEditor(Array.isArray(v) ? v : v && typeof v === 'object' ? Object.entries(v).map(([key, value]) => ({ key, value })) : [], set, ctx, f));
   else if (k === 'column') { const id = 'dl' + dlSeq++; const cols = columnsOf(ctx, values.table); const i = h('input', { class: 'input', list: id, placeholder: f.placeholder || '', value: v || '' }); i.oninput = () => set(i.value); wrap.append(i); const dl = colList(id, cols); if (dl) wrap.append(dl); }
@@ -227,25 +240,33 @@ const Actions = {
   editor(acts, set, ctx, values) {
     const box = h('div', { class: 'acts' });
     const BA = S.cat.browserActions;
-    const FIELD = { url: 'Address', target: 'What to find', value: 'Value', key: 'Key', timeout: 'Wait up to (s)', seconds: 'Seconds', saveAs: 'Save as (optional)', name: 'Name it', code: 'Script', all: 'Every match', count: 'How many to skip' };
-    const PH = { target: 'text=Export CSV  ·  label=Email  ·  #id', key: 'Enter', name: 'e.g. total' };
+    const step = ctx.flow.steps.find((x) => x.id === ctx.stepId) || {};
+    const isApp = step.type === 'app.use';
+    const mode = isApp ? (values.control || 'inside') : 'web';
+    const scopes = mode === 'keys' ? ['native', 'any'] : mode === 'inside' ? ['page', 'native', 'any'] : ['page', 'any'];
+    const allowed = Object.entries(BA).filter(([, d]) => scopes.includes(d.scope || 'page'));
+    const FIELD = { url: 'Address', target: 'What to find', value: 'Value', key: 'Key', timeout: 'Wait up to (s)', seconds: 'Seconds', saveAs: 'Save as (optional)', name: 'Name it', code: 'Script', all: 'Every match', count: 'How many to skip', fields: 'Fields', keys: 'Shortcut', menu: 'Menu path', wait: 'Then wait (s)' };
+    const PH = { target: 'text=Export CSV  ·  label=Email  ·  #id', key: 'Enter', name: 'e.g. total', fields: 'Label=.label, Value=.value  (blank = each card’s text)', keys: 'cmd+shift+e  ·  ctrl+s  ·  alt+f, x', menu: 'File > Export > CSV…', code: '' };
+    if (mode === 'keys') PH.value = 'Text to type, or a file to open';
     const draw = () => {
       box.innerHTML = '';
-      const head = h('div', { class: 'acts-head' },
-        h('button', { class: 'btn sm rec', title: 'Open the site, click through it, and Cadence writes the steps', onclick: (e) => { e.preventDefault(); Actions.record(acts, set, draw, values); } }, ic('record', 14), 'Record'),
-        h('span', { class: 'hint grow' }, 'Click through the site once; Cadence writes these.'));
-      box.append(head);
+      if (mode !== 'keys') box.append(h('div', { class: 'acts-head' },
+        h('button', { class: 'btn sm rec', title: isApp ? 'Open the app, click through it, and Cadence writes the steps' : 'Open the site, click through it, and Cadence writes the steps', onclick: (e) => { e.preventDefault(); isApp ? Actions.recordApp(acts, set, draw, values) : Actions.record(acts, set, draw, values); } }, ic('record', 14), 'Record'),
+        h('span', { class: 'hint grow' }, isApp ? 'Click through the app once; Cadence writes these.' : 'Click through the site once; Cadence writes these.')));
+      else box.append(h('div', { class: 'hint' }, S.info.platform === 'darwin' ? 'Shortcuts and menus need Cadence switched on in System Settings › Privacy & Security › Accessibility.' : 'Shortcuts are sent to the app’s window. Menus can’t be picked by name on Windows; use their alt-key shortcuts.'));
       acts.forEach((a, i) => {
         const def = BA[a.do] || { label: a.do, fields: [] };
         const body = h('div', { class: 'act-body' });
         for (const k of def.fields) {
           if (k === 'all') { const sw = h('label', { class: 'row small', style: 'gap:6px' }, (() => { const c = h('input', { type: 'checkbox', checked: !!a.all }); c.onchange = () => { a.all = c.checked; set(acts); }; return c; })(), 'Every match'); body.append(sw); continue; }
-          if (k === 'code') { body.append(tokInput({ value: a.code, placeholder: 'return document.title', multiline: true, mono: true, ctx, onInput: (v) => { a.code = v; set(acts); } })); continue; }
-          if (['timeout', 'seconds', 'count'].includes(k)) { const n = h('input', { class: 'input', type: 'number', placeholder: FIELD[k], value: a[k] ?? '', style: 'width:110px', title: FIELD[k] }); n.oninput = () => { a[k] = n.value === '' ? undefined : Number(n.value); set(acts); }; body.append(n); continue; }
+          if (k === 'code') { body.append(tokInput({ value: a.code, placeholder: isApp ? 'window.lumen ? document.title : …' : 'return document.title', multiline: true, mono: true, ctx, onInput: (v) => { a.code = v; set(acts); } })); continue; }
+          if (k === 'code' && a.do === 'appScript') { body.append(tokInput({ value: a.code, placeholder: S.info.platform === 'win32' ? 'PowerShell, e.g. Get-Clipboard' : 'AppleScript, e.g. tell application "Finder" to …', multiline: true, mono: true, ctx, onInput: (v) => { a.code = v; set(acts); } })); continue; }
+          if (['timeout', 'seconds', 'count', 'wait'].includes(k)) { const n = h('input', { class: 'input', type: 'number', placeholder: FIELD[k], value: a[k] ?? '', style: 'width:110px', title: FIELD[k] }); n.oninput = () => { a[k] = n.value === '' ? undefined : Number(n.value); set(acts); }; body.append(n); continue; }
           body.append(tokInput({ value: a[k], placeholder: PH[k] || FIELD[k], mono: k === 'target', ctx, onInput: (v) => { a[k] = v; set(acts); } }));
         }
         if (a.do === 'type' && a.secret) body.append(h('div', { class: 'hint warn-hint' }, `Recorded as {{secrets.${a.secret}}} — add that secret in Connections › Secrets.`));
-        const sel = h('select', { class: 'select act-do', onchange: () => { a.do = sel.value; set(acts); draw(); } }, ...Object.entries(BA).map(([k, d]) => h('option', { value: k, selected: k === a.do }, d.label)));
+        if (!def.fields.length) body.append(h('div', { class: 'hint' }, 'Nothing to fill in.'));
+        const sel = h('select', { class: 'select act-do', onchange: () => { a.do = sel.value; set(acts); draw(); } }, ...(allowed.some(([k]) => k === a.do) ? allowed : [[a.do, def], ...allowed]).map(([k, d]) => h('option', { value: k, selected: k === a.do }, d.label)));
         box.append(h('div', { class: 'act' + (a.off ? ' off' : '') },
           h('div', { class: 'act-head' }, h('span', { class: 'op-n' }, String(i + 1)), sel, h('span', { class: 'grow' }),
             h('button', { class: 'icon-btn xs', title: 'Move up', disabled: i === 0, onclick: () => { [acts[i - 1], acts[i]] = [acts[i], acts[i - 1]]; set(acts); draw(); } }, ic('up', 13)),
@@ -253,11 +274,23 @@ const Actions = {
             h('button', { class: 'icon-btn xs', title: 'Remove', onclick: () => { acts.splice(i, 1); set(acts); draw(); } }, ic('x', 13))),
           body));
       });
-      const add = h('button', { class: 'btn sm', onclick: (e) => { e.preventDefault(); menu(add, Object.entries(BA).map(([k, d]) => ({ label: d.label, run: () => { acts.push({ do: k }); set(acts); draw(); } })), { width: 230 }); } }, ic('plus', 14), 'Add an action');
+      const add = h('button', { class: 'btn sm', onclick: (e) => { e.preventDefault(); const page = allowed.filter(([, d]) => d.scope !== 'native'), nat = allowed.filter(([, d]) => d.scope === 'native'); menu(add, [...(page.length && nat.length ? [{ header: true, label: 'Inside the window' }] : []), ...page.map(([k, d]) => ({ label: d.label, run: () => { acts.push({ do: k }); set(acts); draw(); } })), ...(nat.length && page.length ? [{ header: true, label: 'Keyboard and menus' }] : []), ...nat.map(([k, d]) => ({ label: d.label, run: () => { acts.push({ do: k }); set(acts); draw(); } }))], { width: 250 }); } }, ic('plus', 14), 'Add an action');
       box.append(add);
     };
     draw();
     return box;
+  },
+  async recordApp(acts, set, draw, values) {
+    if (!values.app) return toast('Choose the app first', '', 'info');
+    const t = toast('Opening ' + values.app, 'Cadence restarts it once so it can follow your clicks.', 'busy', 0);
+    try { await call('record:startApp', values.app); } catch (e) { t.remove(); return fail(e); }
+    t.remove();
+    const bar = toast('Recording in ' + values.app, 'Click through the app, then press Stop here.', 'busy', 0);
+    const stop = h('button', { class: 'btn sm', style: 'margin-left:8px', onclick: () => call('record:stopApp') }, 'Stop'); bar.append(stop);
+    const off = C.on('record:event', (ev) => {
+      if (ev.type === 'action') { const a = ev.action; const last = acts[acts.length - 1]; if (a.do === 'type' && last && last.do === 'type' && last.target === a.target) acts[acts.length - 1] = a; else acts.push(a); set(acts); draw(); }
+      if (ev.type === 'done') { off(); bar.remove(); toast('Recording saved', `${acts.length} action${acts.length === 1 ? '' : 's'}. Add “Copy table” or “Copy cards” actions for the numbers you want, then test the step.`); }
+    });
   },
   async record(acts, set, draw, values) {
     const url = values.url;
@@ -320,3 +353,142 @@ const Slides = {
     return box;
   },
 };
+
+
+// ───────── app picker
+async function loadApps(fresh) { if (!S.apps || fresh) S.apps = await call('apps:list', !!fresh).catch(() => []); return S.apps; }
+function appField(v, set, values, rerender) {
+  const box = h('div', { class: 'col', style: 'gap:6px' });
+  const sel = h('select', { class: 'select grow' });
+  const hint = h('div', { class: 'hint' });
+  const describe = (name) => {
+    const a = (S.apps || []).find((x) => x.name === name);
+    hint.textContent = !name ? '' : !a ? 'Not found in Applications — use Browse to pick it.' : a.kind === 'native' ? `${a.name} is a regular app: Cadence can open it and use its keyboard shortcuts, menus and clipboard.` : `Cadence can read and click inside ${a.name}${a.suite ? ' (Utility Suite)' : ''}.`;
+    if (a && a.kind === 'native' && values.control === 'inside') { values.control = 'keys'; if (rerender) setTimeout(rerender, 0); }
+  };
+  const draw = () => {
+    sel.innerHTML = '';
+    sel.append(h('option', { value: '' }, 'Choose an app…'));
+    const list = S.apps || [];
+    const suite = list.filter((a) => a.suite), inside = list.filter((a) => !a.suite && a.kind !== 'native'), other = list.filter((a) => !a.suite && a.kind === 'native');
+    const grp = (label, items) => { if (!items.length) return; const g = h('optgroup', { label }); items.forEach((a) => g.append(h('option', { value: a.name, selected: a.name === v }, a.name))); sel.append(g); };
+    grp('Utility Suite', suite); grp('Cadence can read inside', inside); grp('Keyboard and menus', other);
+    if (v && !list.some((a) => a.name === v)) sel.append(h('option', { value: v, selected: true }, v.split(/[\\/]/).pop()));
+    describe(v);
+  };
+  sel.onchange = () => { v = sel.value; set(v); describe(v); };
+  const browse = h('button', { class: 'btn sm', onclick: async (e) => { e.preventDefault(); const p = await call('dialog:file', S.info.platform === 'win32' ? { filters: [{ name: 'Apps', extensions: ['exe'] }] } : {}).catch(fail); if (p) { v = p.replace(/\/Contents\/MacOS\/.*$/, ''); set(v); draw(); } } }, 'Browse…');
+  box.append(h('div', { class: 'row', style: 'gap:6px' }, sel, browse), hint);
+  loadApps().then(draw);
+  draw();
+  return box;
+}
+
+// ───────── PowerPoint template map
+const PptMap = {
+  cache: {},
+  editor(values, set, ctx) {
+    const box = h('div', { class: 'pmap' });
+    values.fills = Array.isArray(values.fills) ? values.fills : [];
+    values.repeat = Array.isArray(values.repeat) ? values.repeat : [];
+    let sel = null; // { slide, shape }
+    const save = () => set(values.fills);
+    const keyOf = (slide, id) => `${slide}:${id}`;
+    const fillOf = (slide, id) => values.fills.find((f) => Number(f.slide) === slide && f.shape && String(f.shape.id) === String(id));
+    const literal = () => { const t = values.template; return typeof t === 'string' && t.trim() && !/\{\{/.test(t) ? t.trim() : null; };
+    const load = async (fresh) => {
+      const p = literal();
+      if (!p) { box.innerHTML = ''; box.append(h('div', { class: 'note' }, ic('info', 15), h('span', {}, 'Choose the template above to see its slides here. (A template path that uses {{ }} can still be filled — map it by typing {{ }} into the deck.)'))); return; }
+      box.innerHTML = '<div class="muted small"><span class="spin"></span> Reading the template…</div>';
+      try { if (fresh || !PptMap.cache[p]) PptMap.cache[p] = await call('pptx:inspect', p); draw(PptMap.cache[p]); }
+      catch (e) { box.innerHTML = ''; box.append(h('div', { class: 'note bad' }, ic('alert', 15), h('span', {}, e.message))); }
+    };
+    const draw = (an) => {
+      box.innerHTML = '';
+      const filled = values.fills.length + values.repeat.length;
+      box.append(h('div', { class: 'pm-head' },
+        h('span', { class: 'grow small muted' }, `${an.slideCount} slide${an.slideCount === 1 ? '' : 's'} · ${filled ? `${filled} filled` : 'nothing mapped yet'}${an.theme && an.theme.headFont ? ` · ${an.theme.headFont}${an.theme.bodyFont && an.theme.bodyFont !== an.theme.headFont ? ' / ' + an.theme.bodyFont : ''}` : ''}`),
+        h('button', { class: 'btn sm', title: 'Read the template again (after you change it)', onclick: (e) => { e.preventDefault(); load(true); } }, ic('refresh', 13)),
+        h('button', { class: 'btn sm primary', onclick: (e) => { e.preventDefault(); PptMap.ai(values, ctx, an, () => { save(); draw(an); }); } }, ic('sparkle', 13), 'Map with AI')));
+      box.append(h('div', { class: 'hint' }, 'Click a box on a slide to choose what goes there. Text you leave alone stays as it is; numbers keep the template’s format.'));
+      const strip = h('div', { class: 'pm-strip' });
+      for (const sl of an.slides) {
+        const rep = values.repeat.find((r) => Number(r.slide) === sl.index);
+        const frame = h('div', { class: 'pm-slide' + (rep ? ' rep' : ''), style: `aspect-ratio:${an.size.ratio}` });
+        for (const sh of sl.shapes) {
+          if (!sh.box || !['text', 'table', 'chart', 'picture'].includes(sh.kind)) continue;
+          const f = fillOf(sl.index, sh.id);
+          const tok = sh.tokens && sh.tokens.length;
+          const b = h('button', { class: `pm-box k-${sh.kind}${f ? ' on' : ''}${tok ? ' tok' : ''}${sel && sel.slide === sl.index && String(sel.shape.id) === String(sh.id) ? ' sel' : ''}`, title: `${sh.name}${sh.text ? ': ' + sh.text.slice(0, 80) : ''}${tok ? '\n(already has {{ }} in it)' : ''}`, style: `left:${(sh.box.x * 100).toFixed(2)}%;top:${(sh.box.y * 100).toFixed(2)}%;width:${(sh.box.w * 100).toFixed(2)}%;height:${(sh.box.h * 100).toFixed(2)}%`, onclick: (e) => { e.preventDefault(); sel = { slide: sl.index, shape: sh }; draw(an); } });
+          b.append(h('span', {}, sh.kind === 'table' ? '▦' : sh.kind === 'chart' ? '▮▮' : sh.kind === 'picture' ? '◩' : (sh.text || '').slice(0, 40)));
+          frame.append(b);
+        }
+        const card = h('div', { class: 'pm-card' }, frame, h('div', { class: 'pm-cap' }, h('b', {}, String(sl.index)), h('span', { class: 'ellip' }, sl.title), rep ? h('span', { class: 'pill acc' }, 'Repeats') : null));
+        strip.append(card);
+      }
+      box.append(strip);
+      if (sel) box.append(PptMap.panel(values, ctx, an, sel, () => { save(); draw(an); }, () => { sel = null; draw(an); }));
+      const list = values.fills.map((f, i) => { const sl = an.slides.find((s) => s.index === Number(f.slide)); const sh = sl && sl.shapes.find((x) => String(x.id) === String(f.shape.id)); return h('button', { class: 'pm-item', onclick: (e) => { e.preventDefault(); if (sh) { sel = { slide: sl.index, shape: sh }; draw(an); } } }, h('b', {}, `Slide ${f.slide}`), h('span', { class: 'ellip' }, `${sh ? sh.name : '(missing) ' + (f.shape.name || f.shape.id)} ← `), h('span', { class: 'ellip', html: prettyTok(String(f.kind === 'table' || f.kind === 'chart' ? f.table || '' : f.value || '')) })); });
+      const reps = values.repeat.map((r) => h('div', { class: 'pm-item' }, h('b', {}, `Slide ${r.slide}`), h('span', { class: 'ellip', html: 'one per row of ' + prettyTok(String(r.table || '')) })));
+      if (list.length || reps.length) box.append(h('div', { class: 'pm-list' }, ...list, ...reps));
+    };
+    load();
+    // reload when the template path changes
+    box.dataset.watch = '1';
+    PptMap.reload = () => load(true);
+    return box;
+  },
+  panel(values, ctx, an, sel, changed, close) {
+    const sh = sel.shape; const slide = sel.slide;
+    let f = values.fills.find((x) => Number(x.slide) === slide && String(x.shape.id) === String(sh.id));
+    const kinds = sh.kind === 'text' ? [['text', 'Replace all its text'], ['replace', 'Swap part of the text']] : sh.kind === 'table' ? [['table', 'Fill with a table']] : sh.kind === 'chart' ? [['chart', 'Plot a table']] : [['picture', 'Use a picture']];
+    const p = h('div', { class: 'pm-panel' });
+    const draw = () => {
+      p.innerHTML = '';
+      p.append(h('div', { class: 'row' }, h('b', { class: 'grow' }, `Slide ${slide} · ${sh.name}`), h('button', { class: 'icon-btn xs', title: 'Close', onclick: (e) => { e.preventDefault(); close(); } }, ic('x', 13))));
+      if (sh.text) p.append(h('div', { class: 'pm-now' }, sh.text.slice(0, 300)));
+      if (sh.table) p.append(h('div', { class: 'pm-now' }, `Table · ${sh.table.cols} columns: ${sh.table.header.join(' | ')}${sh.table.totalRow ? ' · has a Total row' : ''}`));
+      if (sh.chart) p.append(h('div', { class: 'pm-now' }, `${sh.chart.type} chart · series: ${sh.chart.series.join(', ') || '—'} · ${sh.chart.points} points`));
+      if (!f) { p.append(h('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' }, ...kinds.map(([k, l]) => h('button', { class: 'btn sm', onclick: (e) => { e.preventDefault(); f = { slide, shape: { id: sh.id, name: sh.name }, kind: k, ...(k === 'replace' ? { find: (String(sh.text || '').match(/[-+$€£]?\d[\d,.]*%?/) || [''])[0] } : {}) }; values.fills.push(f); changed(); } }, l)))); }
+      else {
+        if (kinds.length > 1) p.append(h('div', { class: 'seg' }, ...kinds.map(([k, l]) => h('button', { class: f.kind === k ? 'on' : '', onclick: (e) => { e.preventDefault(); f.kind = k; changed(); draw(); } }, l))));
+        const up = () => changed();
+        if (f.kind === 'replace') { const fi = h('input', { class: 'input', value: f.find || '', placeholder: 'Text in the box to swap, e.g. 4,450' }); fi.oninput = () => { f.find = fi.value; up(); }; p.append(h('div', { class: 'f' }, h('div', { class: 'f-label' }, h('label', {}, 'Swap this')), fi)); }
+        if (f.kind === 'text' || f.kind === 'replace' || f.kind === 'picture') p.append(h('div', { class: 'f' }, h('div', { class: 'f-label' }, h('label', {}, f.kind === 'picture' ? 'Picture' : 'With')), tokInput({ value: f.value, placeholder: f.kind === 'picture' ? '{{steps.lumen.file}}' : '{{steps.….totals.Signups.now}}', ctx, accepts: f.kind === 'picture' ? ['file', 'files'] : null, onInput: (v) => { f.value = v; up(); } })));
+        if (f.kind === 'table' || f.kind === 'chart') {
+          p.append(h('div', { class: 'f' }, h('div', { class: 'f-label' }, h('label', {}, 'Data')), tokInput({ value: f.table, placeholder: '{{steps.….table}}', ctx, accepts: ['table'], replace: true, onInput: (v) => { f.table = v; up(); } })));
+          const cols = columnsOf(ctx, f.table);
+          if (f.kind === 'table') p.append(h('div', { class: 'f' }, h('div', { class: 'f-label' }, h('label', {}, `Columns, in the table’s order (${sh.table ? sh.table.header.join(', ') : ''})`)), chipsInput(Array.isArray(f.columns) ? f.columns : [], (v) => { f.columns = v; up(); }, cols, 'Blank = match headers, else in order')));
+          if (f.kind === 'chart') { const id = 'dl' + dlSeq++; const x = h('input', { class: 'input', list: id, placeholder: 'Labels from column', value: f.x || '' }); x.oninput = () => { f.x = x.value; up(); }; p.append(h('div', { class: 'f' }, h('div', { class: 'f-label' }, h('label', {}, 'Labels')), x), h('div', { class: 'f' }, h('div', { class: 'f-label' }, h('label', {}, `Series (template has: ${sh.chart ? sh.chart.series.join(', ') : ''})`)), chipsInput(Array.isArray(f.y) ? f.y : f.y ? [f.y] : [], (v) => { f.y = v; up(); }, cols, 'Value columns'))); if (cols.length) p.append(colList(id, cols)); }
+          const mr = h('input', { class: 'input', type: 'number', placeholder: 'All rows', value: f.maxRows ?? '', style: 'width:120px' }); mr.oninput = () => { f.maxRows = mr.value === '' ? undefined : Number(mr.value); up(); };
+          p.append(h('div', { class: 'f' }, h('div', { class: 'f-label' }, h('label', {}, 'At most')), mr));
+        }
+        p.append(h('button', { class: 'link-btn', style: 'color:var(--bad)', onclick: (e) => { e.preventDefault(); values.fills.splice(values.fills.indexOf(f), 1); f = null; changed(); } }, ic('trash', 13), 'Stop filling this'));
+      }
+      // repeat the whole slide
+      let rp = values.repeat.find((r) => Number(r.slide) === slide);
+      const rsw = h('button', { class: 'switch' + (rp ? ' on' : ''), onclick: (e) => { e.preventDefault(); if (rp) values.repeat.splice(values.repeat.indexOf(rp), 1); else values.repeat.push({ slide, table: '' }); changed(); } });
+      p.append(h('div', { class: 'f-bool sepline' }, h('div', { class: 'grow' }, h('label', {}, `Repeat slide ${slide} for each row`), h('div', { class: 'hint' }, 'E.g. one slide per campaign. Use {{row.Column}} on the slide (in the deck or in fills).')), rsw));
+      if (rp) p.append(tokInput({ value: rp.table, placeholder: '{{steps.lumen.tables.campaigns}}', ctx, accepts: ['table'], replace: true, onInput: (v) => { rp.table = v; changed(); } }));
+    };
+    draw();
+    return p;
+  },
+  async ai(values, ctx, an, done) {
+    const groups = tokensFor(ctx, null);
+    const vals = [];
+    for (const [g, items] of groups) for (const [k, l] of items) { if (g === 'Secrets') continue; let sample = getPath({ steps: ctx.outputs }, k); if (sample && sample.__table) sample = { columns: sample.columns, firstRows: sample.rows.slice(0, 3), rows: sample.total }; vals.push({ value: `{{${k}}}`, what: l, example: sample === undefined ? undefined : typeof sample === 'string' ? sample.slice(0, 200) : sample }); }
+    // expand tables into their columns and totals so the AI can point at single numbers
+    for (const v of vals.slice()) { const ex = v.example; if (ex && ex.columns && ex.firstRows) { /* keep */ } if (ex && typeof ex === 'object' && !ex.columns && !Array.isArray(ex)) for (const [k2, v2] of Object.entries(ex).slice(0, 30)) if (v2 && typeof v2 === 'object' && 'now' in v2) vals.push({ value: v.value.replace('}}', `.${/^\w+$/.test(k2) ? k2 : `["${k2}"]`}.now}}`), what: `${v.what} › ${k2} now`, example: v2.now }, { value: v.value.replace('}}', `.${/^\w+$/.test(k2) ? k2 : `["${k2}"]`}.changePct}}`), what: `${v.what} › ${k2} change (fraction)`, example: v2.changePct }); }
+    const t = toast('Mapping the template', 'Reading your slides and matching them with this automation’s data…', 'busy', 0);
+    const off = C.on('ai:progress', (m) => { const el = t.querySelector('.t-text'); if (el) el.textContent = m; });
+    try {
+      const r = await call('pptx:aiMap', values.template, vals);
+      off(); t.remove();
+      if (!r.fills.length && !r.repeat.length) return toast('Nothing mapped', r.notes || 'Test the steps above first so there’s data to match.', 'info', 8000);
+      values.fills = r.fills; values.repeat = r.repeat; done();
+      toast(`Mapped ${r.fills.length} element${r.fills.length === 1 ? '' : 's'}${r.repeat.length ? ` and ${r.repeat.length} repeating slide${r.repeat.length === 1 ? '' : 's'}` : ''}`, r.notes || 'Check them, then test the step.', 'ok', 9000);
+    } catch (e) { off(); t.remove(); fail(e); }
+  },
+};
+function getPath(obj, p) { let cur = obj; for (const part of String(p).match(/[^.[\]"]+/g) || []) { if (cur == null) return undefined; cur = cur[part]; } return cur; }

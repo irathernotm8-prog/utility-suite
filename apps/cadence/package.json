@@ -1,7 +1,7 @@
 {
   "name": "cadence",
   "productName": "Cadence",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Automations that run on your schedule: pull reports from sites, file them in folders named for the week, and turn the data into PowerPoint slides and reports, with Claude and Codex plugged in.",
   "main": "src/main.js",
   "author": "Bilal",
@@ -15,6 +15,7 @@
     "dist:win": "electron-builder --win --x64"
   },
   "dependencies": {
+    "@xmldom/xmldom": "^0.9.12",
     "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
     "pptxgenjs": "^4.0.1"
@@ -47,7 +48,10 @@
       ],
       "icon": "build/icon.png",
       "category": "public.app-category.productivity",
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Cadence uses System Events to press shortcuts, type and pick menu items in apps you automate."
+      }
     },
     "win": {
       "target": [

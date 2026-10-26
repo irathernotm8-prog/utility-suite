@@ -56,13 +56,25 @@ async function makeSlides(w, x) {
   const pres = new PptxGen();
   pres.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 in
   pres.author = 'Cadence'; pres.company = ''; pres.title = (w.slides && w.slides[0] && w.slides[0].title) || x.run.flow.name;
-  const th = THEMES[w.theme] || THEMES.paper; const acc = hex(w.accent); const font = w.font || 'Aptos';
+  let th = THEMES[w.theme] || THEMES.paper; let acc = hex(w.accent); let font = w.font || 'Aptos'; let hfont = font;
+  let palette = null;
+  if (w.lookFrom) {
+    const lf = x.resolvePath(typeof w.lookFrom === 'object' ? w.lookFrom.file : w.lookFrom);
+    const theme = require('../pptx').themeOf(require('../pptx').Pkg.open(lf));
+    if (theme) {
+      const c = theme.colors || {};
+      acc = (c.accent1 || acc).toUpperCase(); font = theme.bodyFont || font; hfont = theme.headFont || font;
+      palette = ['accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6'].map((k) => c[k]).filter(Boolean);
+      if (w.theme !== 'midnight') th = { ...th, text: c.dk1 && c.dk1 !== '000000' ? c.dk1 : th.text, bg: c.lt1 || th.bg, muted: c.dk2 || th.muted };
+      x.log(`Using the colours and fonts of ${path.basename(lf)} (${hfont}${hfont !== font ? ' / ' + font : ''})`);
+    }
+  }
   const logo = w.logo && fs.existsSync(x.resolvePath(w.logo)) ? x.resolvePath(w.logo) : null;
   const W = 13.333, H = 7.5, M = 0.6;
   const slides = [...normSlides(w.slides), ...normSlides(w.slidesFrom)];
   if (!slides.length) throw new Error('Add at least one slide');
   const footer = w.footer ? String(w.footer) : '';
-  const palette = [acc, '22B8CF', 'F59F00', 'E64980', '51CF66', '845EF7', '339AF0', 'FF922B'];
+  palette = palette && palette.length ? palette : [acc, '22B8CF', 'F59F00', 'E64980', '51CF66', '845EF7', '339AF0', 'FF922B'];
 
   slides.forEach((s, i) => {
     const sl = pres.addSlide();
@@ -73,13 +85,13 @@ async function makeSlides(w, x) {
       sl.background = { color: w.theme === 'midnight' ? th.bg : th.bg };
       sl.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: 0.28, h: H, fill: { color: acc }, line: { color: acc } });
       sl.addShape(pres.ShapeType.ellipse, { x: W - 4.6, y: -1.8, w: 6.4, h: 6.4, fill: { color: acc, transparency: 88 }, line: { color: acc, transparency: 100 } });
-      sl.addText(String(s.title || ''), { x: M + 0.4, y: layout === 'title' ? 2.35 : 2.8, w: W - 2.4, h: 1.5, fontFace: font, fontSize: layout === 'title' ? 44 : 36, bold: true, color: th.text, valign: 'bottom', margin: 0, fit: 'shrink' });
+      sl.addText(String(s.title || ''), { x: M + 0.4, y: layout === 'title' ? 2.35 : 2.8, w: W - 2.4, h: 1.5, fontFace: hfont, fontSize: layout === 'title' ? 44 : 36, bold: true, color: th.text, valign: 'bottom', margin: 0, fit: 'shrink' });
       if (s.subtitle) sl.addText(String(s.subtitle), { x: M + 0.4, y: (layout === 'title' ? 2.35 : 2.8) + 1.6, w: W - 2.4, h: 0.7, fontFace: font, fontSize: 20, color: th.muted, valign: 'top', margin: 0 });
       if (logo) sl.addImage({ path: logo, x: M + 0.4, y: 0.55, h: 0.6, w: 0.6, sizing: { type: 'contain', w: 1.8, h: 0.6 } });
     } else {
       if (th.band) sl.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: W, h: 1.1, fill: { color: acc }, line: { color: acc } });
       else sl.addShape(pres.ShapeType.rect, { x: M, y: 0.5, w: 0.5, h: 0.07, fill: { color: acc }, line: { color: acc } });
-      sl.addText(String(s.title || ''), { x: M, y: th.band ? 0.18 : 0.62, w: W - 2 * M - (logo ? 1.6 : 0), h: 0.75, fontFace: font, fontSize: 26, bold: true, color: th.band ? 'FFFFFF' : th.text, margin: 0, valign: 'middle', fit: 'shrink' });
+      sl.addText(String(s.title || ''), { x: M, y: th.band ? 0.18 : 0.62, w: W - 2 * M - (logo ? 1.6 : 0), h: 0.75, fontFace: hfont, fontSize: 26, bold: true, color: th.band ? 'FFFFFF' : th.text, margin: 0, valign: 'middle', fit: 'shrink' });
       if (logo) sl.addImage({ path: logo, x: W - M - 1.4, y: th.band ? 0.25 : 0.55, w: 1.4, h: 0.6, sizing: { type: 'contain', w: 1.4, h: 0.6 } });
     }
     const top = th.band ? 1.45 : 1.55, bodyH = H - top - 0.8;
@@ -270,5 +282,21 @@ async function makeReport(w, x) {
   return { file: dest };
 }
 
-module.exports = { 'doc.slides': makeSlides, 'doc.report': makeReport };
+async function fillTemplate(w, x) {
+  const pptx = require('../pptx');
+  const tpl = x.resolvePath(typeof w.template === 'object' && w.template ? w.template.file : w.template);
+  if (!tpl) throw new Error('Choose the template PowerPoint');
+  const out = x.resolvePath(w.path);
+  if (!out || !/\.pptx$/i.test(out)) throw new Error('Save the result as a .pptx file');
+  if (path.resolve(out) === path.resolve(tpl)) throw new Error('Save to a different file so your template stays as it is');
+  const res = await pptx.fill({
+    template: tpl, out, fills: Array.isArray(w.fills) ? w.fills.filter((f) => f && !f.off) : [], repeat: Array.isArray(w.repeat) ? w.repeat.filter((r) => r && !r.off) : [],
+    render: (v, extra) => x.render(v, extra), num: T.num, fmt: (v, c) => fmtCell(v, c), tokens: w.tokens !== false, log: x.log,
+  });
+  const c = res.counts;
+  x.log(`Made ${res.slides} slides from ${path.basename(tpl)}: ${[c.text && `${c.text} text`, c.table && `${c.table} table${c.table === 1 ? '' : 's'}`, c.chart && `${c.chart} chart${c.chart === 1 ? '' : 's'}`, c.picture && `${c.picture} picture${c.picture === 1 ? '' : 's'}`, c.tokens && `${c.tokens} {{ }} spot${c.tokens === 1 ? '' : 's'}`, c.slides && `${c.slides} repeated slide${c.slides === 1 ? '' : 's'}`].filter(Boolean).join(', ') || 'nothing to fill'}`);
+  return { file: out, count: res.slides };
+}
+
+module.exports = { 'doc.slides': makeSlides, 'doc.report': makeReport, 'doc.template': fillTemplate };
 module.exports._ = { reportHTML, reportMarkdown, chartSeries, normSlides, fmtCell, deltaTone };

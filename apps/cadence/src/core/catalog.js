@@ -4,6 +4,7 @@
 
 const GROUPS = [
   { id: 'web', label: 'Web', color: 'sky' },
+  { id: 'apps', label: 'Apps', color: 'lime' },
   { id: 'files', label: 'Files & folders', color: 'amber' },
   { id: 'data', label: 'Data', color: 'teal' },
   { id: 'docs', label: 'Slides & reports', color: 'rose' },
@@ -25,24 +26,33 @@ const PROVIDERS = [
   { value: 'openai', label: 'OpenAI API key' },
 ];
 
+// scope: page = inside a web page or an Electron/Chromium app window; native = any app (Use an app step); any = both
 const BROWSER_ACTIONS = {
-  goto: { label: 'Go to page', fields: ['url'] },
-  click: { label: 'Click', fields: ['target'] },
-  type: { label: 'Type into', fields: ['target', 'value'] },
-  select: { label: 'Choose option', fields: ['target', 'value'] },
-  press: { label: 'Press key', fields: ['key'] },
-  waitFor: { label: 'Wait for', fields: ['target', 'timeout'] },
-  waitText: { label: 'Wait for text', fields: ['value', 'timeout'] },
-  wait: { label: 'Pause', fields: ['seconds'] },
-  download: { label: 'Click and download', fields: ['target', 'saveAs', 'timeout'] },
-  downloadUrl: { label: 'Download link address', fields: ['target', 'saveAs'] },
-  extractTable: { label: 'Copy table', fields: ['target', 'name'] },
-  extractText: { label: 'Copy text', fields: ['target', 'name', 'all'] },
-  screenshot: { label: 'Screenshot', fields: ['target', 'saveAs'] },
-  pdf: { label: 'Save page as PDF', fields: ['saveAs'] },
-  scroll: { label: 'Scroll to', fields: ['target'] },
-  script: { label: 'Run page script', fields: ['code', 'name'] },
-  ifExists: { label: 'Skip next unless present', fields: ['target', 'count'] },
+  goto: { label: 'Go to page', fields: ['url'], scope: 'page' },
+  click: { label: 'Click', fields: ['target'], scope: 'page' },
+  type: { label: 'Type into', fields: ['target', 'value'], scope: 'page' },
+  select: { label: 'Choose option', fields: ['target', 'value'], scope: 'page' },
+  press: { label: 'Press key', fields: ['key'], scope: 'page' },
+  waitFor: { label: 'Wait for', fields: ['target', 'timeout'], scope: 'page' },
+  waitText: { label: 'Wait for text', fields: ['value', 'timeout'], scope: 'page' },
+  wait: { label: 'Pause', fields: ['seconds'], scope: 'any' },
+  download: { label: 'Click and download', fields: ['target', 'saveAs', 'timeout'], scope: 'page' },
+  downloadUrl: { label: 'Download link address', fields: ['target', 'saveAs'], scope: 'page' },
+  extractTable: { label: 'Copy table', fields: ['target', 'name'], scope: 'page' },
+  extractList: { label: 'Copy cards as a table', fields: ['target', 'fields', 'name'], scope: 'page' },
+  extractText: { label: 'Copy text', fields: ['target', 'name', 'all'], scope: 'page' },
+  screenshot: { label: 'Screenshot', fields: ['target', 'saveAs'], scope: 'page' },
+  pdf: { label: 'Save page as PDF', fields: ['saveAs'], scope: 'page' },
+  scroll: { label: 'Scroll to', fields: ['target'], scope: 'page' },
+  script: { label: 'Run page script', fields: ['code', 'name'], scope: 'page' },
+  ifExists: { label: 'Skip next unless present', fields: ['target', 'count'], scope: 'page' },
+  focus: { label: 'Bring app to front', fields: [], scope: 'native' },
+  shortcut: { label: 'Press shortcut', fields: ['keys', 'wait'], scope: 'native' },
+  keys: { label: 'Type text', fields: ['value'], scope: 'native' },
+  menu: { label: 'Choose menu item', fields: ['menu', 'wait'], scope: 'native' },
+  openFile: { label: 'Open a file in it', fields: ['value'], scope: 'native' },
+  clipboard: { label: 'Read the clipboard', fields: ['name'], scope: 'native' },
+  appScript: { label: 'Run AppleScript / PowerShell', fields: ['code', 'name'], scope: 'native' },
 };
 
 const SLIDE_LAYOUTS = {
@@ -70,7 +80,7 @@ const STEPS = {
       f('show', 'Show the window while it runs', 'bool', { default: false, help: 'Handy while setting up. Leave off for scheduled runs.' }),
       f('timeout', 'Give up after (seconds)', 'number', { default: 120 }),
     ],
-    outputs: [{ key: 'file', label: 'Downloaded file', kind: 'file' }, { key: 'files', label: 'All downloads', kind: 'files' }, { key: 'table', label: 'First copied table', kind: 'table' }, { key: 'tables', label: 'Copied tables by name', kind: 'object' }, { key: 'text', label: 'Copied text by name', kind: 'object' }, { key: 'url', label: 'Last page address', kind: 'text' }],
+    outputs: [{ key: 'file', label: 'Downloaded file', kind: 'file' }, { key: 'files', label: 'All downloads', kind: 'files' }, { key: 'table', label: 'First copied table', kind: 'table' }, { key: 'tables', label: 'Copied tables by name', kind: 'object' }, { key: 'values', label: 'Card values by name', kind: 'object' }, { key: 'text', label: 'Copied text by name', kind: 'object' }, { key: 'url', label: 'Last page address', kind: 'text' }],
   },
   'web.download': {
     group: 'web', label: 'Download a file', icon: 'download', summary: 'Fetch a file from a link (direct export links, APIs that return CSV, shared drive links).',
@@ -102,6 +112,24 @@ const STEPS = {
       f('text', 'Message', 'textarea', { required: true, placeholder: 'Weekly report for {{week.range}} is ready: {{steps.slides.file | basename}}' }),
     ],
     outputs: [{ key: 'status', label: 'HTTP status', kind: 'number' }],
+  },
+
+  // ───────── apps
+  'app.use': {
+    group: 'apps', label: 'Use an app', icon: 'app', summary: 'Open an app and work in it: read numbers and tables out of apps like Lumen, or press shortcuts and menus in any app.',
+    doc: 'control "inside" works with apps built on Electron or Chromium (every Utility Suite app, Slack, Notion, VS Code, Chrome…): Cadence opens the app with a private debugging connection (restarting it once if it is already open) and the browser actions work inside its window — click, type, choose, wait, copy tables (extractTable), copy repeated cards as a table (extractList with fields "Label=.l, Value=.v"), screenshot an element, run page script. control "keys" works with any app: focus, shortcut ("cmd+shift+e", "ctrl+s", "alt+f, x"), keys (type text), menu ("File > Export…", Mac only), openFile, clipboard (read what was copied; tab/CSV text becomes a table), appScript (AppleScript on Mac, PowerShell on Windows). control "open" just opens it (optionally with a file). afterwards: restore (put the app back as it was), leave, quit.',
+    fields: [
+      f('app', 'App', 'app', { required: true, placeholder: 'Lumen' }),
+      f('control', 'How', 'select', { options: [{ value: 'inside', label: 'Read and click inside it (Electron / Chromium apps)' }, { value: 'keys', label: 'Use keyboard, menus and clipboard (any app)' }, { value: 'open', label: 'Just open it' }], default: 'inside' }),
+      f('file', 'Open this file in it', 'file', { placeholder: 'Optional' }),
+      f('restart', 'Restart it if it’s already open', 'bool', { default: true, show: { control: 'inside' }, help: 'Cadence can only read inside apps it opened itself.' }),
+      f('window', 'Window', 'text', { placeholder: 'Main window', show: { control: 'inside' }, help: 'Only if the app has several windows: part of the title.' }),
+      f('waitFor', 'Ready when this shows', 'text', { placeholder: '.kpi  ·  text=Overview', show: { control: 'inside' } }),
+      f('actions', 'In the app', 'actions', { show: { control: ['inside', 'keys'] } }),
+      f('afterwards', 'Afterwards', 'select', { options: [{ value: 'restore', label: 'Put it back as it was' }, { value: 'leave', label: 'Leave it open' }, { value: 'quit', label: 'Quit it' }], default: 'restore' }),
+      f('timeout', 'Give up after (seconds)', 'number', { default: 120 }),
+    ],
+    outputs: [{ key: 'table', label: 'First copied table', kind: 'table' }, { key: 'tables', label: 'Copied tables by name', kind: 'object' }, { key: 'values', label: 'Card values by name', kind: 'object' }, { key: 'text', label: 'Copied text by name', kind: 'object' }, { key: 'file', label: 'First file (screenshot or download)', kind: 'file' }, { key: 'files', label: 'All files', kind: 'files' }, { key: 'images', label: 'Screenshots', kind: 'files' }],
   },
 
   // ───────── files
@@ -203,8 +231,20 @@ const STEPS = {
       f('accent', 'Accent colour', 'color', { default: '#7C5CFF' }),
       f('logo', 'Logo (optional)', 'file', { placeholder: 'A PNG shown on every slide' }),
       f('footer', 'Footer', 'text', { placeholder: '{{week.range}}' }),
+      f('lookFrom', 'Match the look of a PowerPoint', 'file', { placeholder: 'Optional .pptx — uses its colours and fonts' }),
       f('slides', 'Slides', 'slides'),
       f('slidesFrom', 'Add slides from', 'ref', { accepts: ['list', 'object'], placeholder: '{{steps.ai.json.slides}} (optional)', help: 'A list of slides written by an AI step.' }),
+    ],
+    outputs: [{ key: 'file', label: 'PowerPoint file', kind: 'file' }, { key: 'count', label: 'Slide count', kind: 'number' }],
+  },
+  'doc.template': {
+    group: 'docs', label: 'Fill a PowerPoint template', icon: 'template', summary: 'Copy your own deck and put this run’s numbers, tables, charts and pictures in the same places, keeping its look.',
+    doc: 'template is a .pptx. Two ways to fill, usable together: (1) {{ }} typed into the deck’s text, table cells, chart titles or notes are filled in; (2) fills: [{slide: N, shape: {id, name}, kind: "text"|"replace"|"table"|"chart"|"picture", value (text/picture), find (replace: the text to swap, e.g. "4,450"), table: "{{steps.x.table}}", columns: [...] (table, in template column order), x, y: [...] (chart), maxRows}]. Numbers take the template’s format ($, %, decimals). Tables keep the header and the body rows’ style; a last row starting “Total” is refilled with sums. Charts keep their type and colours and stay editable. repeat: [{slide: N, table: "{{steps.x.table}}", max}] makes one copy of that slide per row ({{row.Column}}, {{index}} inside); no rows drops the slide. Use the inspect_powerpoint tool (MCP) or the step’s map to see slide numbers and shape ids.',
+    fields: [
+      f('template', 'Template', 'file', { required: true, placeholder: '~/Documents/Templates/Weekly Update.pptx', help: 'Your deck as a .pptx. It’s read each run, so you can keep improving it.' }),
+      f('path', 'Save as', 'file', { required: true, placeholder: '{{steps.folder.folder}}/Weekly Update {{lastWeek.start}}.pptx' }),
+      f('fills', 'What goes where', 'pptmap'),
+      f('tokens', 'Also fill {{ }} written in the deck', 'bool', { default: true }),
     ],
     outputs: [{ key: 'file', label: 'PowerPoint file', kind: 'file' }, { key: 'count', label: 'Slide count', kind: 'number' }],
   },
@@ -310,7 +350,8 @@ function defaults(type) {
   const s = STEPS[type]; if (!s) return {};
   const o = {};
   for (const fl of s.fields) if (fl.default !== undefined) o[fl.key] = fl.default;
-  if (type === 'web.browser') o.actions = [];
+  if (type === 'web.browser' || type === 'app.use') o.actions = [];
+  if (type === 'doc.template') { o.fills = []; o.repeat = []; }
   if (type === 'doc.slides' || type === 'doc.report') o[type === 'doc.slides' ? 'slides' : 'sections'] = [{ layout: 'title', title: '', subtitle: '{{week.range}}' }];
   if (type === 'data.transform') o.ops = [];
   return o;
@@ -331,7 +372,7 @@ function referenceText() {
     if (s.outputs.length) lines.push(`  outputs: ${s.outputs.map((o) => `${o.key} (${o.kind})`).join(', ')}`);
     if (s.doc) lines.push(`  notes: ${s.doc}`);
   }
-  lines.push('BROWSER ACTIONS (web.browser with.actions): ' + Object.entries(BROWSER_ACTIONS).map(([k, v]) => `{"do":"${k}", ${v.fields.map((x) => `"${x}"`).join(', ')}}`).join(' | '));
+  lines.push('ACTIONS (web.browser and app.use with.actions; page = inside a web page or Electron/Chromium app window, native = app.use only): ' + Object.entries(BROWSER_ACTIONS).map(([k, v]) => `{"do":"${k}"${v.fields.length ? ', ' + v.fields.map((x) => `"${x}"`).join(', ') : ''}} (${v.scope})`).join(' | '));
   lines.push('  target = CSS selector, or "text=Export" (smallest visible element containing the text; clickable ancestors preferred), "label=Email" (input labelled Email), "placeholder=Search", "xpath=//…". value/url may use templates and {{secrets.X}}. download waits for the file the click starts. extractTable copies an HTML <table> (or a grid with role=row) to a table named by name. ifExists skips the next `count` actions (default 1) unless target exists.');
   lines.push('SLIDE / SECTION SHAPES: ' + Object.entries(SLIDE_LAYOUTS).map(([k, v]) => `{"layout":"${k}", ${v.fields.map((x) => `"${x}"`).join(', ')}}`).join(' | '));
   return lines.join('\n');

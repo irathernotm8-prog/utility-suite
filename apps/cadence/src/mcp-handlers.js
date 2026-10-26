@@ -32,6 +32,8 @@ function makeHandlers(engine, { settings = () => ({}), onActivity = () => {} } =
         now: new Date().toString(), platform: process.platform,
       });
     },
+    inspect_powerpoint: ({ path: p }) => { const a = require('./core/pptx').inspect(String(p || '').replace(/^~/, require('os').homedir())); return text({ ...a, slides: a.slides.map((s) => ({ ...s, shapes: s.shapes.map((x) => ({ ...x, box: x.box ? Object.fromEntries(Object.entries(x.box).map(([k, v]) => [k, Math.round(v * 1000) / 1000])) : null })) })) }); },
+    list_apps: () => text(require('./apps').listApps().map((a) => ({ name: a.name, kind: a.kind, suite: a.suite || undefined }))),
     list_automations: () => text(engine.list().map((f) => ({ id: f.id, name: f.name, description: f.description, enabled: f.enabled, when: f.when, steps: f.steps, next_run: f.nextAt ? new Date(f.nextAt).toISOString() : null, last_run: f.lastRun }))),
     get_automation: ({ id }) => text(engine.get(id)),
     create_automation: ({ automation }) => {

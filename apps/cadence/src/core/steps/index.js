@@ -6,6 +6,7 @@ module.exports = {
   ...require('./data'),
   ...require('./docs'),
   ...require('./logic'),
+  'app.use': async (w, x) => require('../../apps').runAppStep(w, x),
   'web.browser': async (w, x) => {
     if (!x.services.browser) throw new Error('The browser isn’t available here');
     return x.services.browser.run(w, x);

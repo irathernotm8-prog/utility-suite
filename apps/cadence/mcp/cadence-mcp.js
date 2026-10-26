@@ -10,7 +10,7 @@ const http = require('http');
 const { spawn, execFile } = require('child_process');
 const { TOOLS, INSTRUCTIONS } = require('./tools');
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const log = (...a) => process.stderr.write('[cadence-mcp] ' + a.join(' ') + '\n');
 
 function defaultBridge() {

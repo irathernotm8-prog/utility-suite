@@ -16,12 +16,16 @@ const OUT = path.resolve(process.argv[2] || path.join(__dirname, 'shots'));
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cadence-e2e-'));
   // stand-in for `claude -p` so the AI step works offline
   const fake = path.join(tmp, 'claude');
-  fs.writeFileSync(path.join(tmp, 'fake.js'), `let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{ if(process.argv.includes('--version')){console.log('2.1.0 (Claude Code)');return;} console.log(JSON.stringify({headline:'Sign-ups up 6% week over week, led by TikTok',bullets:['TikTok sign-ups jumped 51% on 12% more spend — best cost per sign-up gain this week.','Email grew 18% with no spend; the Thursday newsletter drove most of it.','Google Search slipped 7% while spend held flat — worth a bid review.']}));});`);
+  fs.copyFileSync(path.join(__dirname, 'fake-ai.js'), path.join(tmp, 'fake.js'));
+  const deckTpl = await require('../fixtures/make-lumen-template')(path.join(tmp, 'Weekly Ads Update.pptx'));
+  const electronBin = require('electron');
+  const lumenDir = process.env.LUMEN_DIR || path.join(__dirname, '..', '..', '..', 'lumen');
   fs.writeFileSync(fake, `#!/bin/sh\nexec node "${path.join(tmp, 'fake.js')}" "$@"\n`); fs.chmodSync(fake, 0o755);
   const outDir = path.join(tmp, 'Reports');
   const app = await _electron.launch({
     executablePath: require('electron'), args: ['--no-sandbox', path.join(__dirname, '..', '..')],
-    env: { ...process.env, CADENCE_DEMO: '1', CADENCE_E2E: '1', CADENCE_USER_DATA: path.join(tmp, 'data'), CADENCE_DEMO_SITE: base, CADENCE_DEMO_OUT: outDir, CADENCE_CLAUDE: fake, CADENCE_CODEX: path.join(tmp, 'none'), HOME: tmp },
+    env: { ...process.env, CADENCE_DEMO: '1', CADENCE_E2E: '1', CADENCE_USER_DATA: path.join(tmp, 'data'), CADENCE_DEMO_SITE: base, CADENCE_DEMO_OUT: outDir, CADENCE_CLAUDE: fake, CADENCE_CODEX: path.join(tmp, 'none'), HOME: tmp, CADENCE_DEMO_PPTX: deckTpl,
+      CADENCE_APPS: JSON.stringify(fs.existsSync(lumenDir) ? [{ name: 'Lumen', exec: electronBin, args: ['--no-sandbox', lumenDir], env: { LUMEN_USER_DATA: path.join(tmp, 'lumen-data') }, kind: 'electron' }] : []) },
   });
   const win = await app.firstWindow();
   await win.setViewportSize({ width: 1360, height: 860 });
@@ -81,6 +85,30 @@ const OUT = path.resolve(process.argv[2] || path.join(__dirname, 'shots'));
   const cs = await win.evaluate(() => call('connectors:desktop').then(() => call('connectors:codex')));
   console.log('desktop added:', cs.desktop.added, 'codex added:', cs.codex.added);
   console.log(fs.readFileSync(path.join(tmp, '.codex', 'config.toml'), 'utf8'));
+
+  // ───── Lumen → the team's PowerPoint template
+  const lid = await win.evaluate(() => (S.flows.find((f) => f.name === 'Weekly Lumen deck') || {}).id);
+  if (lid) {
+    await go('editor', lid); await win.waitForSelector('.node'); await win.evaluate(() => Editor.select('lumen')); await shot('18-lumen-step');
+    const wait = async (rid) => { for (let i = 0; i < 300; i++) { const st = await win.evaluate((r) => call('runs:get', r).then((x) => x.status), rid); if (!['running', 'queued'].includes(st)) break; await win.waitForTimeout(500); } return win.evaluate((r) => call('runs:get', r), rid); };
+    // test up to the Lumen step so its tables are known to the editor
+    await win.evaluate(() => Editor.test('lumen'));
+    const t1 = await win.evaluate(() => Editor.run && Editor.run.id);
+    const tr = await wait(t1);
+    console.log('lumen test:', tr.status, tr.error || '', JSON.stringify(tr.outputs.lumen && tr.outputs.lumen.values));
+    await win.waitForTimeout(800); await shot('19-lumen-result');
+    await win.evaluate(() => Editor.select('deck')); await win.waitForSelector('.pm-slide'); await shot('20-template-map');
+    await win.click('text=Map with AI'); await win.waitForSelector('.pm-box.on', { timeout: 20000 });
+    await win.evaluate(() => { const b = document.querySelectorAll('.pm-box.on')[1]; if (b) b.click(); }); await shot('21-template-mapped');
+    await win.evaluate(() => Editor.flush());
+    const snap = await win.evaluate((id) => call('run:start', id, {}), lid);
+    const lr = await wait(snap.id);
+    console.log('lumen run:', lr.status, lr.error || '', lr.files);
+    if (lr.status !== 'done') console.log(JSON.stringify(lr.steps.filter((s) => s.status === 'failed'), null, 1));
+    await go('run', lr.id); await shot('22-lumen-run');
+    for (const f of lr.files || []) if (/\.(pptx|xlsx|png)$/.test(f) && fs.existsSync(f)) fs.copyFileSync(f, path.join(OUT, 'lumen-' + path.basename(f)));
+    fs.copyFileSync(deckTpl, path.join(OUT, 'lumen-template.pptx'));
+  } else console.log('no Lumen flow (set LUMEN_DIR)');
 
   // copy the deck so it can be looked at
   for (const f of r2.files || []) if (/\.(pptx|pdf|xlsx)$/.test(f) && fs.existsSync(f)) fs.copyFileSync(f, path.join(OUT, path.basename(f)));

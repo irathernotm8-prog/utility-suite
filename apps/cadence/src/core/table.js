@@ -29,7 +29,7 @@ function num(v) {
   const pct = s.endsWith('%');
   s = s.replace(/[$£€¥,\s%]/g, '');
   if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return NaN;
-  let n = Number(s); if (pct) n /= 100; return neg ? -n : n;
+  let n = Number(s); if (pct) n = Math.round((n / 100) * 1e10) / 1e10; return neg ? -n : n;
 }
 const isNum = (v) => !isNaN(num(v));
 function autoType(v) {
@@ -81,7 +81,7 @@ function parseCSV(text, { delimiter, header = true, types = true, skip = 0 } = {
 function fromMatrix(data, { header = true, types = true } = {}) {
   if (!data.length) return { columns: [], rows: [] };
   const width = Math.max(...data.map((r) => r.length));
-  let cols = header ? data[0].map((c, i) => String(c ?? '').trim() || `Column ${i + 1}`) : Array.from({ length: width }, (_, i) => `Column ${i + 1}`);
+  let cols = header ? data[0].map((c, i) => String(c ?? '').replace(/[\s↑↓▲▼⇅⬆⬇]+$/u, '').trim() || `Column ${i + 1}`) : Array.from({ length: width }, (_, i) => `Column ${i + 1}`);
   while (cols.length < width) cols.push(`Column ${cols.length + 1}`);
   const seen = {}; cols = cols.map((c) => { if (seen[c]) { seen[c]++; return `${c} ${seen[c]}`; } seen[c] = 1; return c; });
   const body = header ? data.slice(1) : data;
@@ -319,4 +319,4 @@ function compare(current, previous, { key, columns } = {}) {
 
 function preview(t, n = 50) { t = asTable(t); return { columns: t.columns, rows: t.rows.slice(0, n), total: t.rows.length }; }
 
-module.exports = { _testRow: testRow, isTable, asTable, fromObjects, parseCSV, toCSV, readXLSX, writeXLSX, readDataFile, transform, group, compare, compileFormula, num, cmpVals, preview, AGG };
+module.exports = { _testRow: testRow, isTable, asTable, fromObjects, fromMatrix, parseCSV, toCSV, readXLSX, writeXLSX, readDataFile, transform, group, compare, compileFormula, num, cmpVals, preview, AGG };

@@ -325,6 +325,136 @@ async function check(name, fn) { try { await fn(); passed++; console.log('  ✓ 
     child.kill(); bridge.close();
   });
 
+  // ───────── PowerPoint templates
+  const pptx = require('../src/core/pptx');
+  const tplFile = await require('./fixtures/make-template')(path.join(ROOT, 'template.pptx'));
+  const chanTable = { columns: ['Channel', 'Signups', 'Spend', 'Signups change %'], rows: [{ Channel: 'Meta', Signups: 1990, Spend: 6400.5, 'Signups change %': 0.08 }, { Channel: 'Google', Signups: 1200, Spend: 5100, 'Signups change %': -0.09 }, { Channel: 'TikTok', Signups: 455, Spend: 2210, 'Signups change %': 0.51 }] };
+
+  await check('PowerPoint template: read slides, boxes, tables, charts, theme', () => {
+    const a = pptx.inspect(tplFile);
+    assert.strictEqual(a.slideCount, 4); assert.strictEqual(a.theme.headFont, 'Georgia');
+    const s2 = a.slides[1]; const val = s2.shapes.find((x) => x.name === 'KPI value'); const tbl = s2.shapes.find((x) => x.kind === 'table');
+    assert.strictEqual(val.text, '4,450'); assert.ok(val.box.x > 0.05 && val.box.x < 0.1);
+    assert.deepStrictEqual(tbl.table.header, ['Channel', 'Sign-ups', 'Spend']); assert.ok(tbl.table.totalRow);
+    const ch = a.slides[2].shapes.find((x) => x.kind === 'chart'); assert.deepStrictEqual(ch.chart.series, ['This week', 'Last week']); assert.strictEqual(ch.chart.type, 'column');
+    assert.deepStrictEqual(a.slides[0].shapes[1].tokens, ['{{lastWeek.start | date:"MMMM D"}}']);
+  });
+
+  await check('PowerPoint template: fill keeps formatting; tables, totals, charts, repeats, notes, pictures', async () => {
+    const shot = path.join(ROOT, 'shot.png'); fs.writeFileSync(shot, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR4nGP8z8DwnwEIGAAZBAP/5yS5xAAAAABJRU5ErkJggg==', 'base64'));
+    const a = pptx.inspect(tplFile); const id = (sl, name) => a.slides[sl - 1].shapes.find((x) => x.name === name || x.kind === name).id;
+    const { render: R } = require('../src/core/template');
+    const scope = { ...dateContext(new Date(2026, 9, 26)), steps: { t: { table: chanTable, total: 3645, pct: 0.091 }, pic: { file: shot } } };
+    const out = path.join(ROOT, 'filled.pptx');
+    const r = await pptx.fill({ template: tplFile, out, render: (v, extra) => R(v, { ...scope, ...extra }), fills: [
+      { slide: 2, shape: { id: id(2, 'KPI value'), name: 'KPI value' }, kind: 'text', value: '{{steps.t.total}}' },
+      { slide: 2, shape: { id: id(2, 'KPI delta'), name: 'KPI delta' }, kind: 'replace', find: '6.7%', value: '{{steps.t.pct}}' },
+      { slide: 2, shape: { id: id(2, 'table'), name: 'Channel table' }, kind: 'table', table: '{{steps.t.table}}', columns: ['Channel', 'Signups', 'Spend'] },
+      { slide: 3, shape: { id: id(3, 'chart'), name: 'Signups chart' }, kind: 'chart', table: '{{steps.t.table}}', x: 'Channel', y: ['Signups', 'Spend'], title: 'Sign-ups and spend' },
+    ], repeat: [{ slide: 4, table: '{{steps.t.table}}' }] });
+    assert.strictEqual(r.slides, 6); assert.strictEqual(r.counts.chart, 1);
+    const b = pptx.inspect(out);
+    assert.strictEqual(b.slides[0].shapes[1].text, 'Week of October 19');
+    const s2 = b.slides[1];
+    assert.strictEqual(s2.shapes.find((x) => x.name === 'KPI value').text, '3,645');
+    assert.strictEqual(s2.shapes.find((x) => x.name === 'KPI delta').text, 'Up 9.1% on the prior week');
+    const t = s2.shapes.find((x) => x.kind === 'table').table;
+    assert.deepStrictEqual(t.cells, [['Channel', 'Sign-ups', 'Spend'], ['Meta', '1,990', '$6,401'], ['Google', '1,200', '$5,100'], ['TikTok', '455', '$2,210'], ['Total', '3,645', '$13,711']]);
+    const ch = b.slides[2].shapes.find((x) => x.kind === 'chart').chart;
+    assert.deepStrictEqual(ch.series, ['Signups', 'Spend']); assert.deepStrictEqual(ch.categories, ['Meta', 'Google', 'TikTok']); assert.deepStrictEqual(ch.values[1], [6400.5, 5100, 2210]); assert.strictEqual(ch.title, 'Sign-ups and spend');
+    assert.deepStrictEqual(b.slides.slice(3).map((s) => s.title), ['Meta', 'Google', 'TikTok']);
+    assert.strictEqual(b.slides[4].shapes[1].text, '1,200 sign-ups · −9.0% vs last week');
+    assert.strictEqual(b.slides[5].notes, 'Speaker note for TikTok');
+    // the run style of the swapped number survives (bold green), and the rest of the sentence keeps its grey
+    const { unzipSync, strFromU8 } = require('fflate'); const z = unzipSync(new Uint8Array(fs.readFileSync(out)));
+    const x2 = strFromU8(z['ppt/slides/slide2.xml']); assert.ok(/<a:rPr[^>]*b="1"[^>]*>(?:(?!<\/a:r>).)*1A7F37(?:(?!<\/a:r>).)*<a:t>9\.1%<\/a:t>/s.test(x2), 'swapped number lost its formatting');
+    // embedded chart workbook updated for "Edit data"
+    const ExcelJS = require('exceljs'); const wbPart = Object.keys(z).find((k) => /embeddings\/.*\.xlsx$/.test(k));
+    if (wbPart) { const wb = new ExcelJS.Workbook(); await wb.xlsx.load(Buffer.from(z[wbPart])); assert.strictEqual(wb.worksheets[0].getCell('A4').value, 'TikTok'); }
+    // picture swap + empty repeat drops the slide
+    const out2 = path.join(ROOT, 'filled2.pptx');
+    const tplWithPic = path.join(ROOT, 'pic.pptx');
+    { const P = require('pptxgenjs'); const p = new P(); const sl = p.addSlide(); sl.addImage({ path: shot, x: 1, y: 1, w: 4, h: 4, objectName: 'Chart image' }); p.addSlide().addText('{{row.Channel}}', { x: 1, y: 1, w: 4, h: 1 }); await p.writeFile({ fileName: tplWithPic }); }
+    const r2 = await pptx.fill({ template: tplWithPic, out: out2, render: (v, e) => R(v, { ...scope, ...e, steps: { ...scope.steps, empty: { table: { columns: ['Channel'], rows: [] } } } }), fills: [{ slide: 1, shape: { name: 'Chart image' }, kind: 'picture', value: '{{steps.pic.file}}' }], repeat: [{ slide: 2, table: '{{steps.empty.table}}' }] });
+    assert.strictEqual(r2.slides, 1); assert.strictEqual(r2.counts.picture, 1);
+    const pz = unzipSync(new Uint8Array(fs.readFileSync(out2))); assert.ok(Object.keys(pz).some((k) => /media\/cadence1\.png$/.test(k)));
+    const pic = pptx.inspect(out2).slides[0].shapes[0]; assert.ok(Math.abs(pic.box.w / pic.box.h - (2 * a.size.ratio) / (a.size.ratio)) < 0.05 || pic.box.w > pic.box.h, 'picture should keep its 2:1 shape');
+  });
+
+  await check('PowerPoint template: a deck re-saved by another app (LibreOffice) still fills', async () => {
+    const { execFileSync } = require('child_process');
+    let soffice = null; try { soffice = execFileSync('which', ['soffice']).toString().trim(); } catch {}
+    if (!soffice) { console.log('    (skipped: LibreOffice not installed)'); return; }
+    const dir = path.join(ROOT, 'lo'); fs.mkdirSync(dir, { recursive: true });
+    execFileSync(soffice, ['--headless', '--convert-to', 'pptx', '--outdir', dir, tplFile], { timeout: 120000, stdio: 'ignore' });
+    const re = path.join(dir, 'template.pptx');
+    const a = pptx.inspect(re);
+    const s2 = a.slides[1]; const val = s2.shapes.find((x) => x.text === '4,450'); const tbl = s2.shapes.find((x) => x.kind === 'table');
+    const { render: R } = require('../src/core/template');
+    const out = path.join(ROOT, 'lo-filled.pptx');
+    await pptx.fill({ template: re, out, render: (v, e) => R(v, { ...dateContext(), steps: { t: { table: chanTable, total: 3645 } }, ...e }), fills: [{ slide: 2, shape: { id: val.id, name: val.name }, kind: 'text', value: '{{steps.t.total}}' }, { slide: 2, shape: { id: tbl.id, name: tbl.name }, kind: 'table', table: '{{steps.t.table}}' }] });
+    const b = pptx.inspect(out).slides[1];
+    assert.ok(b.shapes.some((x) => x.text === '3,645'));
+    assert.strictEqual(b.shapes.find((x) => x.kind === 'table').table.cells[1][0], 'Meta');
+  });
+
+  await check('Fill a PowerPoint template step inside a run', async () => {
+    const f = engine.save({ name: 'Template run', steps: [
+      { id: 'v', type: 'data.set', with: { values: [{ key: 'total', value: '{{ 1234 }}' }] } },
+      { id: 'deck', type: 'doc.template', with: { template: tplFile, path: '~/Decks/Update {{today}}.pptx', fills: [{ slide: 2, shape: { name: 'KPI value' }, kind: 'text', value: '{{vars.total}}' }], repeat: [] } },
+    ] }).flow;
+    const run = await engine.runAndWait(f.id);
+    assert.strictEqual(run.status, 'done', run.error);
+    assert.strictEqual(pptx.inspect(run.outputs.deck.file).slides[1].shapes.find((x) => x.name === 'KPI value').text, '1,234');
+    const bad = engine.save({ name: 'Same file', steps: [{ id: 'deck', type: 'doc.template', with: { template: tplFile, path: tplFile } }] }).flow;
+    const r2 = await engine.runAndWait(bad.id); assert.ok(/different file/.test(r2.error));
+  });
+
+  await check('Make PowerPoint can borrow a template’s colours and fonts', async () => {
+    const f = engine.save({ name: 'Look', steps: [{ id: 's', type: 'doc.slides', with: { path: '~/Decks/look.pptx', lookFrom: tplFile, slides: [{ layout: 'title', title: 'Hi' }, { layout: 'bullets', title: 'B', bullets: 'a\nb' }] } }] }).flow;
+    const run = await engine.runAndWait(f.id); assert.strictEqual(run.status, 'done', run.error);
+    const { unzipSync, strFromU8 } = require('fflate'); const z = unzipSync(new Uint8Array(fs.readFileSync(run.outputs.s.file)));
+    assert.ok(strFromU8(z['ppt/slides/slide1.xml']).includes('Georgia')); assert.ok(strFromU8(z['ppt/slides/slide2.xml']).includes('Verdana'));
+  });
+
+  // ───────── apps: drive a real Chromium window over its debugging port, like Cadence does with Lumen
+  await check('Use an app: open a Chromium-based app, click, copy cards and a table, screenshot, close it', async () => {
+    let chrome = null; try { chrome = require('playwright').chromium.executablePath(); } catch {}
+    if (!chrome || !fs.existsSync(chrome)) { console.log('    (skipped: no Chromium here)'); return; }
+    const appSite = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(`<!doctype html><meta charset="utf-8"><title>Dash</title><body><button id="rp">Last 30 days</button><div id="pop" hidden><button>Last 7 days</button></div>
+      <div class="kpis"></div><table id="t"><thead><tr><th>Campaign ↓</th><th>Spend</th><th>CTR</th></tr></thead><tbody></tbody></table>
+      <script>const draw=(d)=>{document.querySelector('.kpis').innerHTML='<div class="kpi"><div class="l">Spend</div><div class="v">$'+(d*100).toLocaleString()+'</div><span class="d">▲ 4.1%</span></div><div class="kpi"><div class="l">Conversions</div><div class="v">'+d*3+'</div><span class="d">flat</span></div>';document.querySelector('tbody').innerHTML='<tr><td>Fall promo<span class="tag">meta</span></td><td>$1,234.50</td><td>1.95%</td></tr><tr><td>Brand</td><td>$530</td><td>0.78%</td></tr>';};draw(30);
+      document.getElementById('rp').onclick=()=>{document.getElementById('pop').hidden=false};document.querySelector('#pop button').onclick=()=>{document.getElementById('rp').textContent='Last 7 days';document.getElementById('pop').hidden=true;draw(7)};</script></body>`); });
+    await new Promise((r) => appSite.listen(0, '127.0.0.1', r));
+    const url = `http://127.0.0.1:${appSite.address().port}/`;
+    process.env.CADENCE_APPS = JSON.stringify([{ name: 'Dash', exec: chrome, args: ['--headless=new', '--no-sandbox', `--user-data-dir=${path.join(ROOT, 'chr')}`, url], kind: 'chromium' }]);
+    const apps = require('../src/apps');
+    assert.ok(apps.listApps({ fresh: true }).some((a) => a.name === 'Dash'));
+    const f = engine.save({ name: 'Dash pull', steps: [{ id: 'dash', type: 'app.use', with: { app: 'Dash', control: 'inside', waitFor: '.kpi', afterwards: 'quit', actions: [
+      { do: 'click', target: '#rp' }, { do: 'click', target: 'text=Last 7 days' }, { do: 'waitText', value: '$700' },
+      { do: 'extractList', target: '.kpi', fields: 'Metric=.l, Value=.v, Change=.d', name: 'kpis' },
+      { do: 'extractTable', target: '#t', name: 'campaigns' },
+      { do: 'script', code: 'document.title', name: 'title' },
+      { do: 'screenshot', target: '.kpis', saveAs: 'kpis' },
+    ] } }, { id: 'k', type: 'data.set', with: { values: [{ key: 'spend', value: '{{steps.dash.values.kpis.Spend}}' }] } }] }).flow;
+    const run = await engine.runAndWait(f.id);
+    appSite.close();
+    assert.strictEqual(run.status, 'done', run.error + JSON.stringify(run.steps[0].log.slice(-5)));
+    const o = run.outputs.dash;
+    assert.deepStrictEqual(o.tables.kpis.rows, [{ Metric: 'Spend', Value: 700, Change: '▲ 4.1%' }, { Metric: 'Conversions', Value: 21, Change: 'flat' }]);
+    assert.deepStrictEqual(o.tables.campaigns.columns, ['Campaign', 'Spend', 'CTR']);
+    assert.deepStrictEqual(o.tables.campaigns.rows[0], { Campaign: 'Fall promo meta', Spend: 1234.5, CTR: 0.0195 });
+    assert.strictEqual(o.text.title, 'Dash'); assert.strictEqual(run.vars.spend, 700);
+    assert.ok(fs.statSync(o.file).size > 500);
+    assert.strictEqual((await apps._.pids(apps.findApp('Dash'))).length, 0, 'app should be closed afterwards');
+  });
+
+  await check('Use an app: keyboard shortcuts parse for Mac and Windows', () => {
+    const { parseCombo } = require('../src/native');
+    const c = parseCombo('Cmd+Shift+E'); assert.strictEqual(c.key, 'e'); assert.ok(c.mods.has('cmd') && c.mods.has('shift'));
+    assert.strictEqual(parseCombo('enter').key, 'enter');
+  });
+
   engine.shutdown(); server.close();
   console.log(`\n${passed} passed${fails.length ? `, ${fails.length} failed: ${fails.join(', ')}` : ''}`);
   if (process.env.KEEP) console.log('kept', ROOT); else try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch {}

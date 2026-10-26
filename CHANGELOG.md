@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-26 18:29 — **Cadence 0.2.0** — Use an app: read numbers, tables and cards out of apps like Lumen (any Electron/Chromium app), or drive any app with shortcuts, menus and the clipboard; Record works inside apps. Fill a PowerPoint template: Cadence reads your deck, shows each slide as a map, and puts new numbers, tables, charts and pictures in the same places with the same formatting (Map with AI, repeat a slide per row). Make PowerPoint can match a template's colours and fonts. New template: Lumen numbers into your PowerPoint.
 - 2026-10-26 17:03 — **Datum 1.6.0** — Delete projects and remove them from Recent, no more failure when a recent folder is gone, fill a formula down a whole data set in one go, Quick report counts lists of records (sign-ups, leads), dashboard widgets hold their place, crash protection
 - 2026-10-26 01:13 — **Atoll 0.1.1** — Fixes the "text.trim is not a function" error that kept popping up on Mac and Windows: clipboard history now reads the clipboard the way Electron 44 expects, and any future error is logged quietly instead of showing a dialog. Tidier settings title bar on Windows.
 - 2026-10-26 00:51 — **Atoll 0.1.0** — First release: the island with live activities around the notch, music controls with system volume, timers, focus sessions and a stopwatch, one live match from Touchline with goal moments, a file and clipboard shelf, weather and a system glance

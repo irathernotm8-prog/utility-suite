@@ -115,7 +115,7 @@ function menu(anchor, items, opts) {
 }
 
 // ───────── step looks
-const COLORS = { web: 'sky', files: 'amber', data: 'teal', docs: 'rose', ai: 'violet', logic: 'slate' };
+const COLORS = { web: 'sky', apps: 'lime', files: 'amber', data: 'teal', docs: 'rose', ai: 'violet', logic: 'slate' };
 function stepMeta(type) {
   const s = S.cat.steps[type];
   if (!s) return { label: type, icon: 'alert', color: 'red', group: '' };

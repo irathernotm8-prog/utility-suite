@@ -59,6 +59,8 @@ const ICONS = {
   import: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
   export: '<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
   wand: '<path d="m4 20 11-11M14 4l1.5 1.5M19 9l1.5 1.5M17.5 3v3M21 6.5h-3"/><path d="m13 8 3 3"/>',
+  app: '<rect x="3" y="4" width="18" height="14" rx="3"/><path d="M3 8.5h18"/><circle cx="6" cy="6.3" r=".6" fill="currentColor"/><circle cx="8.3" cy="6.3" r=".6" fill="currentColor"/><path d="m10 13 2 2 3.5-3.5"/><path d="M8 21h8"/>',
+  template: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M6.5 8h6M6.5 11h4" /><rect x="14" y="8" width="4" height="5" rx="1" stroke-dasharray="2 1.5"/><path d="M12 17v3M8.5 20h7"/>',
   lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>',
 };
 function icon(name, size = 18, extra = '') { return `<svg class="ic ${extra}" width="${size}" height="${size}" viewBox="0 0 24 24">${ICONS[name] || ICONS.file}</svg>`; }

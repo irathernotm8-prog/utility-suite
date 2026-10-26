@@ -9,6 +9,7 @@ How to work with it:
 3. Build with create_automation / update_automation. Fix every problem it reports. Use {{secrets.NAME}} for passwords and tokens — never put them in plain text; ask the user to add the secret in Cadence › Connections › Secrets.
 4. Test with test_step (runs the automation up to that step and returns its output) and run_automation. Read failures with get_run and fix them.
 Sites that need signing in: use a web.browser step with a profile; the user signs in once from Cadence (Connections › Browser profiles) — tell them which profile and site. If you don't know a site's buttons, add actions with text= targets ("text=Export") and suggest the user open the step and use Record to capture the clicks.
+To pull data out of another app (e.g. Lumen, the user's ads dashboard), use an app.use step with control "inside" and test it with test_step to see what it copied; extractList turns repeated cards (like KPI tiles) into a table. To fill the user's own PowerPoint template, call inspect_powerpoint and write a doc.template step's fills against the shape ids it returns.
 New automations start switched off unless enabled is true; switch them on when the user wants the schedule to start.`;
 
 const ref = { type: 'string', description: 'Automation id (from list_automations)' };
@@ -25,6 +26,8 @@ const TOOLS = [
   { name: 'get_run', title: 'Get run', description: 'A run’s status, per-step logs, errors, outputs and files.', inputSchema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] }, annotations: { readOnlyHint: true } },
   { name: 'list_runs', title: 'Run history', description: 'Recent runs, optionally for one automation.', inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Automation id (optional)' }, limit: { type: 'number' } } }, annotations: { readOnlyHint: true } },
   { name: 'cancel_run', title: 'Stop a run', description: 'Stop a run that is in progress.', inputSchema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
+  { name: 'inspect_powerpoint', title: 'Read a PowerPoint template', description: 'Map of a .pptx on this computer: every slide’s text boxes, tables (header, sample row), charts (type, series, categories) and pictures with their ids, names and positions, plus any {{ }} already in it and the theme colours/fonts. Use before writing a doc.template step’s fills.', inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Full path (or ~/…) to the .pptx' } }, required: ['path'] }, annotations: { readOnlyHint: true } },
+  { name: 'list_apps', title: 'Apps on this computer', description: 'Apps an app.use step can open, with kind: electron/chromium (Cadence can read and click inside them) or native (keyboard, menus and clipboard only).', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'delete_automation', title: 'Delete automation', description: 'Delete an automation (Cadence keeps a copy in its “deleted” folder). Only when the user asked.', inputSchema: { type: 'object', properties: { id: ref }, required: ['id'] }, annotations: { destructiveHint: true } },
 ];
 

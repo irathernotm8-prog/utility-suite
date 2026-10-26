@@ -13,7 +13,7 @@ const table = require('./table');
 const STEP_IMPL = require('./steps');
 
 // Fields a step templates itself (they depend on per-item values like {{name}}).
-const RAW_FIELDS = { 'file.save': ['rename'], 'web.browser': ['actions'], 'logic.run': [] };
+const RAW_FIELDS = { 'file.save': ['rename'], 'web.browser': ['actions'], 'app.use': ['actions'], 'doc.template': ['fills', 'repeat'], 'logic.run': [] };
 
 class StopRun extends Error { constructor(kind, msg) { super(msg || 'Stopped'); this.kind = kind; } }
 class Cancelled extends Error { constructor() { super('Cancelled'); this.cancelled = true; } }
