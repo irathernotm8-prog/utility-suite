@@ -228,6 +228,14 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "ro2",
+      "name": "RO2",
+      "description": "Quick, easy designs and photo edits: shapes, icons, text and free photos at any size or aspect ratio, a background remover, magic eraser, magic grab and magic expand that run on this computer, and export to PNG, JPG, WebP, SVG and PDF.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {

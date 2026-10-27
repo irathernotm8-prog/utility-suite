@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' ro2:; script-src 'self' ro2: 'wasm-unsafe-eval'; worker-src 'self' ro2: blob:; style-src 'self' ro2: 'unsafe-inline'; img-src 'self' ro2: data: blob: https:; font-src 'self' ro2: data:; connect-src 'self' ro2: data: blob:; media-src 'self' data: blob:">
+  <title>RO2</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="booting">
+  <div id="titlebar" class="drag">
+    <div class="tb-left">
+      <div class="brand no-drag" id="brand" title="Home"><span class="brand-mark"></span><span class="brand-name">RO2</span></div>
+      <div class="tb-editor-only no-drag" id="tbLeftTools"></div>
+    </div>
+    <div class="tb-center tb-editor-only" id="tbCenter"></div>
+    <div class="tb-right no-drag" id="tbRight"></div>
+  </div>
+  <main id="home" class="view"></main>
+  <main id="editor" class="view hidden">
+    <nav id="rail"></nav>
+    <aside id="drawer"><div class="drawer-inner" id="drawerInner"></div><button class="drawer-collapse" id="drawerCollapse" title="Hide panel"></button></aside>
+    <section id="stage">
+      <div id="ctxbar"></div>
+      <div id="canvasHost"></div>
+      <div id="floatbar" class="hidden"></div>
+      <div id="stageBottom">
+        <div id="pages"></div>
+        <div id="zoomBox"></div>
+      </div>
+      <div id="dropHint" class="hidden"><div>Drop images to add them</div></div>
+    </section>
+  </main>
+  <div id="overlayRoot"></div>
+  <div id="toasts"></div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

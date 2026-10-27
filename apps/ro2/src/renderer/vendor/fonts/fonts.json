@@ -1,0 +1,314 @@
+[
+ {
+  "family": "Inter",
+  "category": "sans",
+  "files": {
+   "400": "inter-400.woff2",
+   "700": "inter-700.woff2",
+   "900": "inter-900.woff2"
+  }
+ },
+ {
+  "family": "Poppins",
+  "category": "sans",
+  "files": {
+   "400": "poppins-400.woff2",
+   "600": "poppins-600.woff2",
+   "800": "poppins-800.woff2"
+  }
+ },
+ {
+  "family": "Montserrat",
+  "category": "sans",
+  "files": {
+   "400": "montserrat-400.woff2",
+   "700": "montserrat-700.woff2",
+   "900": "montserrat-900.woff2"
+  }
+ },
+ {
+  "family": "DM Sans",
+  "category": "sans",
+  "files": {
+   "400": "dm-sans-400.woff2",
+   "700": "dm-sans-700.woff2"
+  }
+ },
+ {
+  "family": "Manrope",
+  "category": "sans",
+  "files": {
+   "400": "manrope-400.woff2",
+   "700": "manrope-700.woff2",
+   "800": "manrope-800.woff2"
+  }
+ },
+ {
+  "family": "Outfit",
+  "category": "sans",
+  "files": {
+   "400": "outfit-400.woff2",
+   "700": "outfit-700.woff2"
+  }
+ },
+ {
+  "family": "Space Grotesk",
+  "category": "sans",
+  "files": {
+   "400": "space-grotesk-400.woff2",
+   "700": "space-grotesk-700.woff2"
+  }
+ },
+ {
+  "family": "Work Sans",
+  "category": "sans",
+  "files": {
+   "400": "work-sans-400.woff2",
+   "700": "work-sans-700.woff2"
+  }
+ },
+ {
+  "family": "Rubik",
+  "category": "sans",
+  "files": {
+   "400": "rubik-400.woff2",
+   "700": "rubik-700.woff2"
+  }
+ },
+ {
+  "family": "Nunito",
+  "category": "sans",
+  "files": {
+   "400": "nunito-400.woff2",
+   "800": "nunito-800.woff2"
+  }
+ },
+ {
+  "family": "Quicksand",
+  "category": "sans",
+  "files": {
+   "400": "quicksand-400.woff2",
+   "700": "quicksand-700.woff2"
+  }
+ },
+ {
+  "family": "Raleway",
+  "category": "sans",
+  "files": {
+   "400": "raleway-400.woff2",
+   "700": "raleway-700.woff2"
+  }
+ },
+ {
+  "family": "Josefin Sans",
+  "category": "sans",
+  "files": {
+   "400": "josefin-sans-400.woff2",
+   "700": "josefin-sans-700.woff2"
+  }
+ },
+ {
+  "family": "Syne",
+  "category": "sans",
+  "files": {
+   "400": "syne-400.woff2",
+   "800": "syne-800.woff2"
+  }
+ },
+ {
+  "family": "Comfortaa",
+  "category": "sans",
+  "files": {
+   "400": "comfortaa-400.woff2",
+   "700": "comfortaa-700.woff2"
+  }
+ },
+ {
+  "family": "Bricolage Grotesque",
+  "category": "sans",
+  "files": {
+   "400": "bricolage-grotesque-400.woff2",
+   "800": "bricolage-grotesque-800.woff2"
+  }
+ },
+ {
+  "family": "Oswald",
+  "category": "display",
+  "files": {
+   "400": "oswald-400.woff2",
+   "700": "oswald-700.woff2"
+  }
+ },
+ {
+  "family": "Bebas Neue",
+  "category": "display",
+  "files": {
+   "400": "bebas-neue-400.woff2"
+  }
+ },
+ {
+  "family": "Anton",
+  "category": "display",
+  "files": {
+   "400": "anton-400.woff2"
+  }
+ },
+ {
+  "family": "Archivo Black",
+  "category": "display",
+  "files": {
+   "400": "archivo-black-400.woff2"
+  }
+ },
+ {
+  "family": "Barlow Condensed",
+  "category": "display",
+  "files": {
+   "400": "barlow-condensed-400.woff2",
+   "700": "barlow-condensed-700.woff2"
+  }
+ },
+ {
+  "family": "Righteous",
+  "category": "display",
+  "files": {
+   "400": "righteous-400.woff2"
+  }
+ },
+ {
+  "family": "Abril Fatface",
+  "category": "display",
+  "files": {
+   "400": "abril-fatface-400.woff2"
+  }
+ },
+ {
+  "family": "Shrikhand",
+  "category": "display",
+  "files": {
+   "400": "shrikhand-400.woff2"
+  }
+ },
+ {
+  "family": "Bungee",
+  "category": "display",
+  "files": {
+   "400": "bungee-400.woff2"
+  }
+ },
+ {
+  "family": "Playfair Display",
+  "category": "serif",
+  "files": {
+   "400": "playfair-display-400.woff2",
+   "700": "playfair-display-700.woff2",
+   "900": "playfair-display-900.woff2"
+  }
+ },
+ {
+  "family": "Lora",
+  "category": "serif",
+  "files": {
+   "400": "lora-400.woff2",
+   "700": "lora-700.woff2"
+  }
+ },
+ {
+  "family": "Merriweather",
+  "category": "serif",
+  "files": {
+   "400": "merriweather-400.woff2",
+   "700": "merriweather-700.woff2"
+  }
+ },
+ {
+  "family": "DM Serif Display",
+  "category": "serif",
+  "files": {
+   "400": "dm-serif-display-400.woff2"
+  }
+ },
+ {
+  "family": "Fraunces",
+  "category": "serif",
+  "files": {
+   "400": "fraunces-400.woff2",
+   "700": "fraunces-700.woff2"
+  }
+ },
+ {
+  "family": "Cormorant Garamond",
+  "category": "serif",
+  "files": {
+   "400": "cormorant-garamond-400.woff2",
+   "700": "cormorant-garamond-700.woff2"
+  }
+ },
+ {
+  "family": "Libre Baskerville",
+  "category": "serif",
+  "files": {
+   "400": "libre-baskerville-400.woff2",
+   "700": "libre-baskerville-700.woff2"
+  }
+ },
+ {
+  "family": "Pacifico",
+  "category": "script",
+  "files": {
+   "400": "pacifico-400.woff2"
+  }
+ },
+ {
+  "family": "Caveat",
+  "category": "script",
+  "files": {
+   "400": "caveat-400.woff2",
+   "700": "caveat-700.woff2"
+  }
+ },
+ {
+  "family": "Dancing Script",
+  "category": "script",
+  "files": {
+   "400": "dancing-script-400.woff2",
+   "700": "dancing-script-700.woff2"
+  }
+ },
+ {
+  "family": "Lobster",
+  "category": "script",
+  "files": {
+   "400": "lobster-400.woff2"
+  }
+ },
+ {
+  "family": "Permanent Marker",
+  "category": "script",
+  "files": {
+   "400": "permanent-marker-400.woff2"
+  }
+ },
+ {
+  "family": "Great Vibes",
+  "category": "script",
+  "files": {
+   "400": "great-vibes-400.woff2"
+  }
+ },
+ {
+  "family": "JetBrains Mono",
+  "category": "mono",
+  "files": {
+   "400": "jetbrains-mono-400.woff2",
+   "700": "jetbrains-mono-700.woff2"
+  }
+ },
+ {
+  "family": "Press Start 2P",
+  "category": "mono",
+  "files": {
+   "400": "press-start-2p-400.woff2"
+  }
+ }
+]
