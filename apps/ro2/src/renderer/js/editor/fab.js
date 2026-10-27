@@ -3,7 +3,7 @@ import * as fabric from '../../vendor/fabric/fabric.min.mjs';
 export { fabric };
 
 // Properties RO2 adds to objects (saved in designs, kept by undo).
-export const PROPS = ['id', 'ro2Name', 'ro2Role', 'assetId', 'ro2Shape', 'ro2Credit', 'ro2Locked', 'ro2Adjust', 'ro2Filter', 'ro2Frame', 'ro2Fill', 'ro2Upper', 'ro2Icon',
+export const PROPS = ['id', 'ro2Name', 'ro2Role', 'assetId', 'ro2Shape', 'ro2Credit', 'ro2Locked', 'ro2Adjust', 'ro2Filter', 'ro2Frame', 'ro2Fill', 'ro2Upper', 'ro2Icon', 'ro2Qr', 'ro2Curve',
   'selectable', 'evented', 'lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'strokeUniform', 'visible', 'flipX', 'flipY'];
 
 const ACCENT = '#46e6a2';
@@ -103,6 +103,23 @@ export class Ro2Line extends fabric.FabricObject {
 }
 fabric.classRegistry.setClass(Ro2Line);
 fabric.classRegistry.setSVGClass(Ro2Line);
+
+// ───── Curved text: an IText that follows an invisible arc; its box is grown to hold every glyph ─────
+export class Ro2CurvedText extends fabric.IText {
+  static type = 'Ro2CurvedText';
+  initDimensions() {
+    super.initDimensions();
+    if (!this.path) return;
+    this.calcTextWidth(); // places every glyph on the path
+    let mx = 1, my = 1; const hh = this.fontSize * 0.62;
+    for (const line of this.__charBounds || []) for (const b of line) {
+      if (b.renderLeft == null) continue; const c = Math.cos(b.angle), s = Math.sin(b.angle), hw = b.width / 2;
+      for (const [x, y] of [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]) { mx = Math.max(mx, Math.abs(b.renderLeft + x * c - y * s)); my = Math.max(my, Math.abs(b.renderTop + x * s + y * c)); }
+    }
+    this.width = mx * 2; this.height = my * 2;
+  }
+}
+fabric.classRegistry.setClass(Ro2CurvedText);
 
 // Short type names for the UI
 export function kindOf(o) {

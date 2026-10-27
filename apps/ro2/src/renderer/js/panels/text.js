@@ -46,6 +46,11 @@ register('text', {
     root.append(h('div.sec', h('h4', 'Default styles')));
     const pv = (key, label, css) => draggable(h('button.text-preset', { style: css }, label), { kind: 'text', preset: key });
     root.append(pv('heading', 'Add a heading', { font: '800 26px Poppins' }), pv('subheading', 'Add a subheading', { font: '600 18px Poppins' }), pv('body', 'Add a little bit of body text', { font: '400 13px Inter' }));
+    const B = await import('./brand.js'); const kit = B.activeKit();
+    if (kit && (kit.fonts?.heading || kit.fonts?.subheading || kit.fonts?.body)) {
+      root.append(h('div.sec', h('h4', `Brand: ${kit.name}`)));
+      for (const role of ['heading', 'subheading', 'body']) { const f = kit.fonts[role]; if (!f) continue; await ensureFont(f.family, f.weight || 400); root.append(draggable(h('button.text-preset', { style: { fontFamily: `"${f.family}"`, fontWeight: f.weight || 400, fontSize: role === 'heading' ? '24px' : role === 'subheading' ? '17px' : '13px' } }, role === 'heading' ? 'Brand heading' : role === 'subheading' ? 'Brand subheading' : 'Brand body text'), { kind: 'brandtext', role })); }
+    }
     root.append(h('div.sec', h('h4', 'Font pairings')));
     const g = h('div.tiles.c2'); root.append(g);
     for (const c of COMBOS) {

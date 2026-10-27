@@ -9,6 +9,7 @@ export const TOOLS = [
   { mode: 'removebg', name: 'Remove background', icon: 'scissors', text: 'Cut out the subject in one click, then fine-tune, add a new background or a sticker outline.' },
   { mode: 'erase', name: 'Magic eraser', icon: 'eraser', text: 'Paint over or click on anything (people, text, wires, blemishes) and it disappears.' },
   { mode: 'grab', name: 'Magic grab', icon: 'hand-grab', text: 'Lift an object out into its own layer to move or resize it. The gap behind is filled in.' },
+  { mode: 'layers', name: 'Make editable', icon: 'layers', text: 'Take a flat picture apart: real text you can retype, objects and shapes as their own layers, the background rebuilt.' },
   { mode: 'expand', name: 'Magic expand', icon: 'expand', text: 'Grow a photo past its edges to fill the page or a new shape.' },
 ];
 let gpuInfo = null;

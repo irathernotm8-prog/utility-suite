@@ -30,6 +30,8 @@ export async function addPayload(p, at) {
   else if (p.kind === 'frame') o = await makeFrame(ed, p.id);
   else if (p.kind === 'text') { const { addTextPreset } = await import('./text.js'); return addTextPreset(p.preset, at); }
   else if (p.kind === 'photo') { const { addLibraryPhoto } = await import('./photos.js'); return addLibraryPhoto(p.photo, at); }
+  else if (p.kind === 'logo') { const B = await import('./brand.js'); const k = app.brand.kits.find((x) => x.id === p.kit); const l = k && k.logos.find((x) => x.id === p.id); return l && B.addLogo(k, l, at); }
+  else if (p.kind === 'brandtext') { const B = await import('./brand.js'); return B.addBrandText(p.role, at); }
   else if (p.kind === 'asset') { const { addImage } = await import('../app.js'); return addImage(ed.assetUrl(p.id), { name: p.name, at }); }
   if (o) ed.add(o, { at: at || ed.dropPoint() });
   return o;
@@ -68,21 +70,27 @@ register('elements', {
       const shapes = SHAPES.filter((s) => !q || s.name.toLowerCase().includes(q) || s.id.includes(q));
       if (shapes.length) {
         out.append(h('div.sec', h('h4', 'Shapes')));
-        const g = h('div.tiles'); for (const s of (q ? shapes : shapes)) g.append(draggable(h('button.tile', { title: s.name, html: shapeSvg(s, '#9aa7b2') }), { kind: 'shape', id: s.id }));
+        const g = h('div.tiles'); for (const s of (q ? shapes : shapes)) g.append(draggable(h('button.tile', { title: s.name, style: { color: 'var(--tile-ink)' }, html: shapeSvg(s, 'currentColor') }), { kind: 'shape', id: s.id }));
         out.append(g);
       }
       const lines = LINES.filter((l) => !q || l.name.toLowerCase().includes(q) || 'line arrow'.includes(q));
       if (lines.length) {
         out.append(h('div.sec', h('h4', 'Lines & arrows')));
-        const g = h('div.tiles'); for (const l of lines) g.append(draggable(h('button.tile', { title: l.name, html: lineSvg(l), style: { color: '#c8d0d6' } }), { kind: 'line', id: l.id }));
+        const g = h('div.tiles'); for (const l of lines) g.append(draggable(h('button.tile', { title: l.name, html: lineSvg(l), style: { color: 'var(--tile-ink)' } }), { kind: 'line', id: l.id }));
         out.append(g);
       }
       const frames = FRAMES.filter((id) => !q || byId(id).name.toLowerCase().includes(q) || 'frame photo'.includes(q));
       if (frames.length) {
         out.append(h('div.sec', h('h4', 'Photo frames')));
-        const g = h('div.tiles.c5'); for (const id of frames) { const s = byId(id); g.append(draggable(h('button.tile', { title: s.name + ' frame', html: shapeSvg(s, 'none').replace(/fill="none"/, 'fill="none" stroke="#9aa7b2" stroke-width="5" stroke-dasharray="7 5" vector-effect="non-scaling-stroke"') }), { kind: 'frame', id })); }
+        const g = h('div.tiles.c5'); for (const id of frames) { const s = byId(id); g.append(draggable(h('button.tile', { style: { color: 'var(--tile-ink)' }, title: s.name + ' frame', html: shapeSvg(s, 'none').replace(/fill="none"/, 'fill="none" stroke="currentColor" stroke-width="5" stroke-dasharray="7 5" vector-effect="non-scaling-stroke"') }), { kind: 'frame', id })); }
         out.append(g);
         if (!q) out.append(h('p.tiny.dim', { style: { marginTop: '6px' } }, 'Drop any photo onto a frame to fill it.'));
+      }
+      if (!q || 'qr code link url'.includes(q)) {
+        out.append(h('div.sec', h('h4', 'QR code')));
+        const inp = h('input.input', { placeholder: 'https://… or any text', style: { flex: 1 }, on: { keydown: (e) => { if (e.key === 'Enter') go(); e.stopPropagation(); } } });
+        const go = async () => { const v = inp.value.trim(); if (!v) return inp.focus(); const ed = ensureEditor(); const { makeQr } = await import('../editor/objects.js'); ed.add(await makeQr(ed, v), { at: ed.dropPoint() }); inp.value = ''; };
+        out.append(h('div', { style: { display: 'flex', gap: '6px' } }, inp, h('button.btn', { html: ico('qr-code') + '<span>Add</span>', on: { click: go } })));
       }
       // icons
       const names = iconNames();

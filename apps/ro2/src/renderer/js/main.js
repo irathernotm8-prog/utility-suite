@@ -12,18 +12,29 @@ import { adjustPanel } from './panels/image.js';
 import { startCrop } from './editor/crop.js';
 import { makeShape, makeLine } from './editor/objects.js';
 import { byId, LINES } from './editor/shapes.js';
-import './panels/elements.js'; import './panels/text.js'; import './panels/photos.js'; import './panels/background.js'; import './panels/ai.js'; import './panels/layers.js'; import './panels/props.js';
+import './panels/elements.js'; import './panels/brand.js'; import './panels/text.js'; import './panels/photos.js'; import './panels/background.js'; import './panels/ai.js'; import './panels/layers.js'; import './panels/props.js';
 import { addPayload } from './panels/elements.js';
 import { addTextPreset } from './panels/text.js';
 
 register('adjust', { label: 'Adjust', icon: 'sliders-horizontal', render(root) { const a = app.editor?.active(); if (!(a instanceof fabric.FabricImage)) { root.append(h('p.muted', 'Select a photo.')); return; } adjustPanel(root, a, app.editor); } });
 
+// Theme: 'dark' | 'light' | 'system'
+export function applyTheme(t = app.settings.theme || 'dark') {
+  const light = t === 'light' || (t === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  window.ro2.setTheme(t).catch(() => {});
+  if (app.editor) app.editor.applyTheme();
+  app.emit('theme', light ? 'light' : 'dark');
+}
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (app.settings.theme === 'system') applyTheme('system'); });
+export function setTheme(t) { app.settings.theme = t; window.ro2.settings.set({ theme: t }); applyTheme(t); renderTbRight(); }
 async function boot() {
   document.body.classList.add(isMac ? 'mac' : navigator.platform.toLowerCase().includes('win') ? 'win' : 'linux');
   await loadIcons();
   await initFonts();
   app.settings = await window.ro2.settings.get(); app.info = await window.ro2.info();
-  setRecent(app.settings.recentColors);
+  setRecent(app.settings.recentColors); applyTheme();
+  await (await import('./panels/brand.js')).loadBrand().catch(() => {});
   buildRail(); wireTitle(); wireStage(); wireKeys(); wireDrop(); wireMenu();
   app.on('view', setView);
   app.on('doc', () => { titleInput.value = app.editor.doc.name; renderPages(); renderCtx(); });
@@ -69,6 +80,8 @@ function wireTitle() {
 }
 function renderTbRight() {
   const r = $('#tbRight'); r.innerHTML = '';
+  const light = document.documentElement.dataset.theme === 'light';
+  r.append(h('button.btn.ghost.icon', { title: light ? 'Dark theme' : 'Light theme', html: ico(light ? 'moon' : 'sun'), on: { click: () => setTheme(light ? 'dark' : 'light') } }));
   if (app.view === 'home') {
     r.append(h('button.btn.ghost.icon', { title: 'Settings', html: ico('settings'), on: { click: () => import('./modals/settings.js').then((m) => m.openSettings()) } }),
       h('button.btn.primary', { html: ico('plus') + '<span>New design</span>', on: { click: () => import('./modals/new.js').then((m) => m.openNew()) } }));
@@ -88,7 +101,7 @@ async function goHome() { if (app.view === 'home') return renderHome(); closePop
 
 // ───── stage: selection → toolbars, pages, zoom ─────
 function wireStage() {
-  const ed = ensureEditor();
+  const ed = ensureEditor(); ed.applyTheme();
   const onSel = () => { renderCtx(); placeFloat(); syncUndo(); if (ed.cropping) return; const cp = currentPanel(); if (['position', 'effects', 'adjust'].includes(cp)) refresh(); else if (cp === 'layers' || cp === 'ai') refresh(); };
   ed.on('selection', onSel);
   ed.on('modified', debounce(() => { renderCtx(); placeFloat(); const cp = currentPanel(); if (cp === 'position' || cp === 'layers') refresh(); }, 60));

@@ -8,7 +8,8 @@ export const GRADIENTS = [
   ['#fa709a', '#fee140'], ['#30cfd0', '#330867'], ['#0f2027', '#2c5364'], ['#ff9a9e', '#fecfef'], ['#667eea', '#764ba2'], ['#f83600', '#f9d423'],
   ['#000000', '#434343'], ['#e0eafc', '#cfdef3'], ['#11998e', '#38ef7d'], ['#ee0979', '#ff6a00'],
 ];
-let recent = [];
+let recent = []; let brandColors = [];
+export function setBrandColors(list) { brandColors = (list || []).map((c) => c.hex || c); }
 export function setRecent(list) { recent = list || []; }
 export function pushRecent(c) { if (typeof c !== 'string') return; recent = [c, ...recent.filter((x) => x !== c)].slice(0, 16); window.ro2.settings.set({ recentColors: recent }); }
 
@@ -42,6 +43,7 @@ export function colorPicker(anchor, value, onChange, { noGradient = false, docCo
     if (mode === 'solid') {
       root.append(pickerUI(solid, (c, final) => { solid = c; emit(final); if (final) pushRecent(c); }));
       const sw = (list, label, none) => { if (!list.length && !none) return; root.append(h('h5', label)); const g = h('div.sw'); if (none) g.append(h('button.none', { title: 'No colour', on: { click: () => { solid = 'transparent'; emit(true); render(); } } })); for (const c of list) g.append(h('button' + (c.toLowerCase() === String(solid).toLowerCase() ? '.on' : ''), { title: c, style: { background: c }, on: { click: () => { solid = c; emit(true); pushRecent(c); render(); } } })); root.append(g); };
+      sw(brandColors.slice(0, 16), 'Brand colours');
       sw(docColors.filter((c) => typeof c === 'string').slice(0, 16), 'In this design', allowNone && !docColors.length);
       sw(recent.slice(0, 8), 'Recent');
       sw(PALETTE, 'Default colours', allowNone && docColors.length);

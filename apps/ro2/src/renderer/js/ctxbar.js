@@ -1,5 +1,5 @@
 // The bar above the page: quick controls for whatever is selected, plus the floating mini toolbar and the right-click menu.
-import { h, ico, esc, popover, closePopover, slider, seg, menu, MOD, toast, debounce } from './ui.js';
+import { h, ico, esc, popover, closePopover, slider, seg, menu, MOD, toast, debounce, promptBox } from './ui.js';
 import { app, runStudio } from './app.js';
 import { fabric, kindOf, Ro2Line } from './editor/fab.js';
 import { open as openPanel, currentPanel, refresh } from './drawer.js';
@@ -47,7 +47,7 @@ function textSet(o, props) {
 const textList = () => ed().selected().filter((o) => kindOf(o) === 'text');
 
 // ───── font picker ─────
-async function fontPicker(anchor, current, onPick) {
+export async function fontPicker(anchor, current, onPick) {
   const search = h('input.input', { placeholder: 'Search fonts', style: { width: '100%' } });
   const list = h('div.list'); const root = h('div.fontlist', search, list);
   const cats = [['sans', 'Sans serif'], ['serif', 'Serif'], ['display', 'Display'], ['script', 'Handwriting & script'], ['mono', 'Monospace & pixel']];
@@ -134,9 +134,10 @@ export function renderCtx() {
     el.append(sep(), cbtn('Effects', () => openPanel('effects'), { icon: 'wand-sparkles' }));
   } else if (k === 'group') {
     const cs = colorsOf(a);
+    if (a.ro2Qr) el.append(cbtn('Edit QR', async () => { const v = await promptBox('QR code link or text', a.ro2Qr, 'Update'); if (v) { const { updateQr } = await import('./editor/objects.js'); const n = await updateQr(E, a, v); E.select(n); } }, { icon: 'qr-code' }));
     cs.forEach((c) => el.append(colorDot(c.value, (v, f) => { if (typeof v !== 'string') return; setGroupColor(a, c.value, v.toLowerCase()); c.value = v.toLowerCase(); E.canvas.requestRenderAll(); if (f) E.commit(); }, { title: 'Colour', noGradient: true })));
     if (cs.length) el.append(sep());
-    el.append(cbtn('Ungroup', () => E.ungroup(), { icon: 'ungroup' }), cbtn('Effects', () => openPanel('effects'), { icon: 'wand-sparkles' }));
+    if (!a.ro2Qr) el.append(cbtn('Ungroup', () => E.ungroup(), { icon: 'ungroup' })); el.append(cbtn('Effects', () => openPanel('effects'), { icon: 'wand-sparkles' }));
   } else if (k === 'multi') {
     el.append(cbtn('Group', () => E.group(), { icon: 'group', title: `Group (${MOD}G)` }));
     el.append(cbtn('Align', (e, b) => popover(b, alignBox()), { icon: 'align-center-vertical' }));

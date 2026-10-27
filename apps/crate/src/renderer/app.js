@@ -36,7 +36,7 @@ function artEl(t, cls = '', size = '') {
   return `<div class="art ${u ? '' : 'ph'} ${cls}" ${size ? `style="width:${size}px;height:${size}px"` : ''}>${u ? `<img src="${u}" loading="lazy" draggable="false" alt="">` : ''}</div>`;
 }
 function albumOf(t) {
-  const k = `${(t.albumArtist || primaryArtist(t.artist) || '').toLowerCase()}\u0000${(t.album || '').toLowerCase()}`;
+  const k = `${(t.albumArtist || primaryArtist(t.artist) || '').toLowerCase()} || ${(t.album || '').toLowerCase()}`;
   return S.albums.find((a) => a.key === k);
 }
 const primaryArtist = (a) => String(a || '').split(/\s*(?:,|&| x | and |;|\/)\s*/i)[0].trim();
@@ -173,13 +173,14 @@ function menu(e, items) {
   closeMenu();
   const el = h(`<div class="menu"></div>`);
   for (const it of items) {
-    if (it === '-') { el.append(h('<hr>')); continue; }
-    if (it.section) { el.append(h(`<div class="sublabel">${esc(it.section)}</div>`)); continue; }
     if (!it) continue;
+    if (it === '-') { if (el.lastElementChild && el.lastElementChild.tagName !== 'HR') el.append(h('<hr>')); continue; }
+    if (it.section) { el.append(h(`<div class="sublabel">${esc(it.section)}</div>`)); continue; }
     const b = h(`<button class="${it.danger ? 'danger' : ''}" ${it.disabled ? 'disabled' : ''}>${it.icon ? icon(it.icon, 16) : '<span style="width:16px"></span>'}<span>${esc(it.label)}</span></button>`);
     b.onclick = () => { closeMenu(); it.run(); };
     el.append(b);
   }
+  if (el.lastElementChild && el.lastElementChild.tagName === 'HR') el.lastElementChild.remove();
   document.body.append(el);
   const r = el.getBoundingClientRect();
   const x = Math.min(e.clientX, innerWidth - r.width - 8); const y = Math.min(e.clientY, innerHeight - r.height - 8);

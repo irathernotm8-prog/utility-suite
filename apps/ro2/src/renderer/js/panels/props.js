@@ -121,6 +121,12 @@ register('effects', {
       root.append(h('div.sec', h('h4', 'Spacing')));
       root.append(slider('Letter spacing', { min: -100, max: 800, value: first.charSpacing || 0, onInput: (v) => { list.forEach((x) => { x.set({ charSpacing: v }); x.initDimensions(); }); ed().canvas.requestRenderAll(); }, onChange: () => ed().commit() }));
       root.append(slider('Line spacing', { min: 0.5, max: 3, step: 0.05, value: first.lineHeight || 1.16, fmt: (v) => v.toFixed(2), onInput: (v) => { list.forEach((x) => { x.set({ lineHeight: v }); x.initDimensions(); }); ed().canvas.requestRenderAll(); }, onChange: () => ed().commit() }));
+      if (list.length === 1) {
+        root.append(h('div.sec', h('h4', 'Curve')));
+        let cur = first; let busyC = false;
+        const row = slider('Curve', { min: -100, max: 100, value: first.ro2Curve || 0, onInput: async (v) => { if (busyC || !first.ro2Curve) return; busyC = true; const { setCurve } = await import('../editor/objects.js'); cur = await setCurve(ed(), cur, v); busyC = false; }, onChange: async (v) => { const { setCurve } = await import('../editor/objects.js'); cur = await setCurve(ed(), cur, v); ed().commit(); ed().emit('selection', ed().selected()); } });
+        row.input.dataset.reset = 0; root.append(row);
+      }
       root.append(h('div.sec', h('h4', 'Highlight')));
       root.append(colorBtn('Highlight colour', first.textBackgroundColor || 'rgba(0,0,0,0)', (v, f) => { if (typeof v !== 'string') return; list.forEach((x) => { x.set({ textBackgroundColor: v === 'transparent' ? '' : v }); x.dirty = true; }); ed().canvas.requestRenderAll(); if (f) ed().commit(); }, { noGradient: true, allowNone: true }));
     }

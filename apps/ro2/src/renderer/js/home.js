@@ -34,6 +34,7 @@ export async function renderHome() {
       qcard('scissors', 'Remove a background', 'One click cut-outs', () => quickPhoto('removebg')),
       qcard('eraser', 'Magic eraser', 'Make anything disappear', () => quickPhoto('erase')),
       qcard('hand-grab', 'Magic grab', 'Move things inside a photo', () => quickPhoto('grab')),
+      qcard('layers', 'Make a photo editable', 'Turn a flat image into layers', () => quickPhoto('layers')),
       qcard('expand', 'Magic expand', 'Grow a photo past its edges', () => quickPhoto('expand'))));
   wrap.append(hero);
   // sizes

@@ -435,7 +435,7 @@ async function organizeAll(settings) {
 
 /* ---------------- albums & artists ---------------- */
 
-const akey = (t) => `${(t.albumArtist || meta.primaryArtist(t.artist) || '').toLowerCase()}\u0000${(t.album || '').toLowerCase()}`;
+const akey = (t) => `${(t.albumArtist || meta.primaryArtist(t.artist) || '').toLowerCase()} || ${(t.album || '').toLowerCase()}`;
 
 function albums() {
   const map = new Map();

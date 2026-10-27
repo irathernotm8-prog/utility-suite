@@ -7,6 +7,7 @@ const on = (ch) => (fn) => { const h = (_e, d) => fn(d); ipcRenderer.on(ch, h); 
 
 contextBridge.exposeInMainWorld('ro2', {
   info: call('app:info'),
+  setTheme: call('app:theme'),
   pendingOpen: call('app:pending-open'),
   readyToClose: () => ipcRenderer.send('app:ready-to-close'),
   onBeforeClose: on('app:before-close'),
@@ -25,6 +26,10 @@ contextBridge.exposeInMainWorld('ro2', {
   },
   exporter: { choose: call('export:choose'), write: call('export:write'), writeIn: call('export:write-in'), pdf: call('export:pdf'), copyPng: call('export:copy-png') },
   clipboard: { readImage: call('clipboard:read-image') },
+  brand: {
+    get: call('brand:get'), setActive: call('brand:active'), create: call('brand:create'), update: call('brand:update'), remove: call('brand:remove'),
+    addLogo: call('brand:add-logo'), removeLogo: call('brand:remove-logo'), logo: call('brand:logo'), pickLogos: call('brand:pick-logos'),
+  },
   library: { search: call('library:search'), fetch: call('library:fetch') },
   models: { list: call('models:list'), download: call('models:download'), cancel: call('models:cancel'), remove: call('models:delete'), onProgress: on('models:progress') },
 });

@@ -187,7 +187,7 @@ module.exports = async function drive({ win, app }) {
     await js(`await ${E}.gotoPage(0)`); await sleep(300);
 
     // ── resize ──
-    await clickSel('#tbRight .btn'); await sleep(300); await shot('resize-modal');
+    await js(`[...document.querySelectorAll('#tbRight .btn')].find(b => b.textContent.trim() === 'Resize').click()`); await sleep(300); await shot('resize-modal');
     await clickText('.size-cats button', 'Social media');
     await js(`[...document.querySelectorAll('.size-opt')].find(b => b.textContent.includes('Instagram story')).click()`); await sleep(100);
     await clickText('.modal-foot .btn', 'Resize'); await sleep(1500);
@@ -223,6 +223,51 @@ module.exports = async function drive({ win, app }) {
     check('reopened design has the same objects', await js(`return ${E}.userObjects().length === ${count} && ${E}.doc.pages.length === 2`));
     check('reopened photo keeps its frame and crop', await js(`const i = ${E}.userObjects().find(o => o.type === 'image'); return !!i && i.ro2Frame === 'circle' && Math.abs(i.width - i.height) < 2`));
 
+
+    // ── 0.2: light theme ──
+    await js(`(await import('./js/main.js')).setTheme('light')`); await sleep(600);
+    check('light theme switches the UI and the workspace', await js(`return document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor !== 'rgb(11, 13, 16)' && ${E}.canvas.backgroundColor !== '#08090a'`), await js(`return getComputedStyle(document.body).backgroundColor + ' / ' + ${E}.canvas.backgroundColor`));
+    await shot('light-editor');
+    await clickSel('.rail-btn[data-id="elements"]'); await sleep(400); await shot('light-elements');
+
+    // ── brand kit ──
+    const kitId = await js(`const d = await window.ro2.brand.create('Acme Test'); await window.ro2.brand.update(d.active, { name: 'Acme Test', colors: [{ hex: '#ff3366', name: 'Pink' }, { hex: '#1b2a4a', name: 'Navy' }], fonts: { heading: { family: 'Poppins', weight: 800 }, subheading: null, body: { family: 'Inter', weight: 400 } } }); const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#ff3366"/><rect x="30" y="30" width="40" height="40" fill="#1b2a4a"/></svg>'; await window.ro2.brand.addLogo(d.active, { name: 'Acme mark', bytes: new TextEncoder().encode(svg), ext: 'svg' }); await (await import('./js/panels/brand.js')).loadBrand(); return d.active;`);
+    await clickSel('.rail-btn[data-id="brand"]'); await sleep(900); await shot('light-brand-panel');
+    check('brand panel shows the kit, logo and colours', await js(`const d = document.getElementById('drawerInner'); return d.textContent.includes('Acme Test') && d.querySelectorAll('.tile.logo').length >= 1 && d.querySelectorAll('[data-hex]').length >= 2`), await js(`const d = document.getElementById('drawerInner'); return d.querySelectorAll('.tile.logo').length + ' logos, ' + d.querySelectorAll('[data-hex]').length + ' colours'`));
+    const nb = await js(`return ${E}.userObjects().length`);
+    await js(`const B = await import('./js/panels/brand.js'); const k = B.activeKit(); await B.addLogo(k, k.logos[0]);`); await sleep(500);
+    check('brand logo goes on the page', await js(`return ${E}.userObjects().length === ${nb} + 1`));
+    await js(`(await import('./js/panels/brand.js')).applyColor('#1b2a4a')`); await sleep(200);
+    const t1 = await js(`const t = await (await import('./js/panels/brand.js')).addBrandText('heading'); return { f: t.fontFamily, w: t.fontWeight }`);
+    check('brand heading uses the kit font', t1.f === 'Poppins' && +t1.w === 800, JSON.stringify(t1));
+    await shot('light-brand-added');
+    await js(`(await import('./js/main.js')).setTheme('dark')`); await sleep(400);
+
+    // ── QR code ──
+    await js(`const O = await import('./js/editor/objects.js'); const g = await O.makeQr(${E}, 'https://example.com/ro2'); ${E}.add(g);`); await sleep(300);
+    check('QR code added as an editable group', await js(`const a = ${E}.active(); return a && a.ro2Qr === 'https://example.com/ro2' && a.type === 'group'`));
+    await shot('qr');
+    // ── curved text ──
+    await js(`const O = await import('./js/editor/objects.js'); const t = await O.makeText(${E}, { text: 'CURVED TEXT ROUND', fontFamily: 'Poppins', fontWeight: 800, size: 0.06 }); ${E}.add(t); await O.setCurve(${E}, ${E}.active(), 60);`); await sleep(300);
+    check('curve turns text into curved text', await js(`const a = ${E}.active(); return a && a.type.toLowerCase() === 'ro2curvedtext' && a.ro2Curve === 60 && a.width > 50 && a.height > 50`), await js(`const a = ${E}.active(); return a ? a.type + ' ' + Math.round(a.width) + 'x' + Math.round(a.height) : ''`));
+    await shot('curved-text');
+    const rt = await js(`const f = JSON.parse(JSON.stringify(${E}.toFile())); await window.__ro2app.openDoc(f, window.__ro2.file); await new Promise(r => setTimeout(r, 600)); const c = ${E}.userObjects().find(o => o.ro2Curve === 60); return !!c && c.type.toLowerCase() === 'ro2curvedtext'`);
+    check('curved text survives save and reload', rt);
+    await js(`const O = await import('./js/editor/objects.js'); const c = ${E}.userObjects().find(o => o.ro2Curve); ${E}.select(c); await O.setCurve(${E}, c, 0);`); await sleep(200);
+    check('curve 0 turns it back into a text box', await js(`return ${E}.active()?.type === 'textbox'`));
+
+    // ── several resized copies at once ──
+    const nd0 = (await js(`return (await window.ro2.designs.list()).length`));
+    await js(`[...document.querySelectorAll('#tbRight .btn')].find(b => b.textContent.trim() === 'Resize').click()`); await sleep(300);
+    await js(`[...document.querySelectorAll('.modal label.check')].find(l => l.textContent.includes('copies')).querySelector('input').click()`); await sleep(150);
+    await clickText('.size-cats button', 'Social media');
+    for (const nm of ['Instagram post', 'Facebook post', 'YouTube thumbnail']) { await js(`[...document.querySelectorAll('.size-opt')].find(b => b.textContent.startsWith(${JSON.stringify(nm)}))?.click()`); await sleep(120); }
+    await shot('resize-many');
+    const goLabel = await js(`return [...document.querySelectorAll('.modal-foot .btn')].pop().textContent`);
+    await js(`[...document.querySelectorAll('.modal-foot .btn')].pop().click()`);
+    let okc = false; for (let i = 0; i < 60 && !okc; i++) { await sleep(400); okc = await js(`return !document.querySelector('.busy') && (await window.ro2.designs.list()).length > ${nd0}`); }
+    const nd1 = await js(`return (await window.ro2.designs.list()).length`);
+    check('resize makes several copies at once', nd1 - nd0 >= 2, `${goLabel}: ${nd0} → ${nd1}`);
     // ── templates panel ──
     await clickSel('.rail-btn[data-id="templates"]'); await sleep(1200); await shot('panel-templates');
 
@@ -289,11 +334,41 @@ module.exports = async function drive({ win, app }) {
       await js(`window.__studio.doneB.click()`); await sleep(2500);
       check('expanded photo is wider', await js(`const i = ${E}.active(); return i && i.width / i.height > 1.7`), await js(`const i = ${E}.active(); return i ? Math.round(i.width) + 'x' + Math.round(i.height) : 'none'`));
       await shot('editor-after-expand');
+
+      // ── make editable: render a template flat, then take it apart ──
+      if (hasModels.includes('ocr')) {
+        const flat = await js(`const T = await import('./js/templates.js'); const tpl = T.TEMPLATES.find(t => t.w === t.h) || T.TEMPLATES[0];
+          await window.__ro2app.newDesign(tpl.w, tpl.h, 'Flat source', { template: tpl }); await new Promise(r => setTimeout(r, 1200));
+          const R = await import('./js/editor/render.js'); const c = await R.pageCanvas(${E}, 0, { scale: 1 }); return c.toDataURL('image/png');`);
+        await js(`await window.__ro2app.newDesign(1080, 1080, 'Make editable test')`); await sleep(800);
+        await js(`window.__flat = ${JSON.stringify(flat)}; const ed = ${E}; ed.userObjects().forEach(o => ed.canvas.remove(o)); await window.__ro2app.addImage(window.__flat, { name: 'flat.png', fit: 'page' });`); await sleep(600);
+        fs.writeFileSync(path.join(OUT, 'flat-source.png'), Buffer.from(flat.split(',')[1], 'base64'));
+        await js(`window.__ro2app.runStudio(${E}.active(), 'layers')`);
+        let okl = false; for (let i = 0; i < 600 && !okl; i++) { await sleep(500); okl = await js(`return !!window.__layers?.res`); }
+        const found = await js(`const r = window.__layers.res; return { texts: r.texts.map(t => t.text), objects: r.objects.map(o => o.kind) }`);
+        check('make editable reads the text and finds objects', okl && found.texts.length >= 1, JSON.stringify(found).slice(0, 300));
+        await shot('studio-layers');
+        await js(`window.__layers.finish()`); okl = false; for (let i = 0; i < 600 && !okl; i++) { await sleep(500); okl = await js(`return !document.querySelector('.studio') && !document.querySelector('.busy')`); }
+        const lay = await js(`const u = ${E}.userObjects(); return { n: u.length, text: u.filter(o => o.type === 'textbox').map(o => o.text), hidden: u.filter(o => o.visible === false).length, bg: u.some(o => o.ro2Name === 'Background') }`);
+        check('make editable builds real layers', lay.n >= 3 && lay.text.length >= 1 && lay.hidden === 1 && lay.bg, JSON.stringify(lay).slice(0, 300));
+        await shot('editor-after-layers');
+        await js(`const t = ${E}.userObjects().find(o => o.type === 'textbox'); t.set({ text: 'EDITED', fill: '#ff3366' }); t.set({ left: t.left + 40 }); ${E}.canvas.requestRenderAll();`); await sleep(300);
+        await js(`${E}.canvas.discardActiveObject(); ${E}.canvas.requestRenderAll()`); await sleep(200);
+        await shot('editor-layers-edited');
+        // and a photo
+        await js(`const ed = ${E}; await ed.addPage(); await window.__ro2app.addImage(${JSON.stringify(fixture('person.jpg'))}, { name: 'person.jpg', fit: 'page' });`); await sleep(600);
+        await js(`window.__ro2app.runStudio(${E}.active(), 'layers')`);
+        okl = false; for (let i = 0; i < 600 && !okl; i++) { await sleep(500); okl = await js(`return !!window.__layers?.res && document.querySelector('.studio')`); }
+        check('make editable on a photo finds the subject', okl && (await js(`return window.__layers.res.objects.length >= 1`)), await js(`const r = window.__layers.res; return r.objects.length + ' objects, ' + r.texts.length + ' texts'`));
+        await shot('studio-layers-photo');
+        await js(`window.__layers.finish()`); okl = false; for (let i = 0; i < 600 && !okl; i++) { await sleep(500); okl = await js(`return !document.querySelector('.studio') && !document.querySelector('.busy')`); }
+        await shot('editor-after-layers-photo');
+      }
     } else log('  (AI checks skipped: no models in RO2_MODELS)');
     // dark mode screenshot of the home with designs
     await js(`document.getElementById('brand').click()`); await sleep(1200); await shot('home-final');
   } catch (e) { log('  ✗ CRASH ' + (e.stack || e)); results.push({ name: 'crash', ok: false }); await shot('crash'); }
-  const bad = errors.filter((m) => !/Autofill|DevTools|Electron Security Warning|favicon/.test(m));
+  const bad = errors.filter((m) => !/Autofill|DevTools|Electron Security Warning|favicon|Estimating resolution/.test(m));
   check('no console errors', !bad.length, bad.slice(0, 5).join(' || '));
   const fails = results.filter((r) => !r.ok).length;
   log(`\n${results.length - fails}/${results.length} passed`);

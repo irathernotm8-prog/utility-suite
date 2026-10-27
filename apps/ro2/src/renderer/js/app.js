@@ -5,6 +5,7 @@ import { makeImage, makeSvg, replaceImage, loadImage } from './editor/objects.js
 import { thumb } from './editor/render.js';
 import { toast, toastErr, busy, debounce, h } from './ui.js';
 import { openStudio } from './ai/studio.js';
+import { ensureFont } from './fonts.js';
 import { buildTemplate } from './templates.js';
 
 export const app = {
@@ -122,8 +123,9 @@ export async function addFiles(files, at) {
 export async function runStudio(img, mode) {
   const ed = app.editor; if (!img || !(img instanceof fabric.FabricImage)) return toast('Select a photo first.', { type: 'info' });
   const src = ed.assetUrl(img.assetId) || img.getSrc();
-  const res = await openStudio({ src, mode, name: img.ro2Name, pageAspect: ed.W / ed.H });
+  const res = mode === 'layers' ? await (await import('./ai/layers-studio.js')).openLayersStudio({ src }) : await openStudio({ src, mode, name: img.ro2Name, pageAspect: ed.W / ed.H });
   if (!res) return;
+  if (mode === 'layers') return applyLayers(ed, img, res);
   const b = busy('Applying…'); let pick = img;
   try {
     if (mode === 'grab') {
@@ -156,6 +158,73 @@ export async function runStudio(img, mode) {
       if (mode === 'removebg') toast('Background removed.');
     }
     ed.select(pick); ed.emit('modified', [pick]);
+  } catch (e) { toastErr(e); } finally { b.close(); }
+}
+
+// Render a text box, find its letters, and nudge size and line spacing so they cover the same area as the original's
+// letters; leaves the ink centre's offset from the box centre in o.ro2InkOff
+function inkOf(o) {
+  const m = Math.min(1, 700 / Math.max(o.width, o.height)); const el = o.toCanvasElement({ multiplier: m, enableRetinaScaling: false });
+  const x = el.getContext('2d', { willReadFrequently: true }); const d = x.getImageData(0, 0, el.width, el.height).data; let a = el.width, b = el.height, c = -1, e = -1;
+  for (let y = 0; y < el.height; y++) for (let i = 0; i < el.width; i++) if (d[(y * el.width + i) * 4 + 3] > 100) { if (i < a) a = i; if (i > c) c = i; if (y < b) b = y; if (y > e) e = y; }
+  if (c < 0) return null; return { w: (c - a + 1) / m, h: (e - b + 1) / m, cx: ((a + c + 1) / 2) / m - el.width / m / 2, cy: ((b + e + 1) / 2) / m - el.height / m / 2 };
+}
+function fitInk(o, L, s) {
+  const tw = (L.ink[2] - L.ink[0]) * s, th = (L.ink[3] - L.ink[1]) * s;
+  o.set({ width: Math.max(o.width, tw) * 3 + o.fontSize * 4 }); // no wrapping while measuring
+  for (let it = 0; it < 3; it++) {
+    const k = inkOf(o); if (!k) return;
+    if (L.lines > 1) { const lineH = th / (L.lines + (L.lines - 1) * 0.25); const ratio = (th - lineH) / Math.max(1, k.h - lineH); o.set({ lineHeight: Math.max(0.6, Math.min(3, o.lineHeight * ratio)) }); }
+    else { const r = th / Math.max(1, k.h); if (Math.abs(r - 1) > 0.02) o.set({ fontSize: o.fontSize * r }); }
+    const k2 = inkOf(o); if (!k2) return;
+    const wr = tw / Math.max(1, k2.w); if (Math.abs(wr - 1) > 0.03) o.set({ charSpacing: Math.max(-80, Math.min(800, o.charSpacing + ((tw - k2.w) / Math.max(1, Math.max(...o.text.split('\n').map((l) => l.length)) - 1) / o.fontSize) * 1000)) });
+  }
+  const k3 = inkOf(o); if (k3) o.set({ width: k3.w * 1.05 + o.fontSize * 0.5 });
+  const f = inkOf(o); if (f) o.ro2InkOff = { x: f.cx, y: f.cy };
+}
+
+// Make editable: put the rebuilt background in the photo's place, then each piece on top, exactly where it was
+async function applyLayers(ed, img, res) {
+  const b = busy('Placing the layers…');
+  try {
+    const el = img._originalElement || img.getElement(); const ratio = (el.naturalWidth || el.width) / res.W;
+    const M = img.calcTransformMatrix(); const s = Math.abs(img.scaleX) * ratio;
+    const at = (x, y) => fabric.util.transformPoint(new fabric.Point(x * ratio - (img.cropX || 0) - img.width / 2, y * ratio - (img.cropY || 0) - img.height / 2), M);
+    const base = { angle: img.angle || 0, originX: 'center', originY: 'center' };
+    let idx = ed.canvas.getObjects().indexOf(img);
+    if (res.keepOriginal) {
+      const orig = await img.clone(); orig.id = uid(); orig.assetId = img.assetId; orig.ro2Name = (img.ro2Name || 'Photo') + ' (original)'; orig.visible = false;
+      ed.add(orig, { index: idx, commit: false, select: false }); idx++;
+    }
+    await replaceImage(ed, img, res.background); img.ro2Name = 'Background';
+    const made = [];
+    for (const L of res.layers) {
+      let o;
+      if (L.kind === 'shape') {
+        const p = at(L.x + L.w / 2, L.y + L.h / 2); const w = L.w * s, hh = L.h * s * Math.abs(img.scaleY / img.scaleX);
+        if (L.type === 'rect') o = new fabric.Rect({ width: w, height: hh, rx: (L.rx || 0) * s, ry: (L.rx || 0) * s, fill: L.color, strokeWidth: 0 });
+        else if (L.type === 'ellipse') o = new fabric.Ellipse({ rx: w / 2, ry: hh / 2, fill: L.color, strokeWidth: 0 });
+        else { o = new fabric.Path(L.d, { fill: L.color, strokeWidth: 0 }); o.set({ scaleX: w / o.width, scaleY: hh / o.height }); }
+        o.set({ ...base, left: p.x, top: p.y }); o.ro2Name = 'Shape';
+      } else if (L.kind === 'photo') {
+        o = await makeImage(ed, L.dataUrl, { fit: 'native', name: L.name || 'Object' });
+        const p = at(L.x + L.w / 2, L.y + L.h / 2); o.set({ ...base, left: p.x, top: p.y, scaleX: img.scaleX * ratio, scaleY: img.scaleY * ratio, flipX: img.flipX, flipY: img.flipY });
+      } else {
+        await ensureFont(L.fontFamily, L.fontWeight);
+        const fs = Math.max(4, L.fontSize * s); const p = at((L.x0 + L.x1) / 2, (L.y0 + L.y1) / 2);
+        o = new fabric.Textbox(L.text, { fontFamily: L.fontFamily, fontWeight: L.fontWeight, fontSize: fs, fill: L.color, textAlign: L.align || 'center', lineHeight: L.lineHeight || 1.2, charSpacing: L.charSpacing || 0,
+          width: (L.x1 - L.x0) * s * 1.08 + fs * 0.4, splitByGrapheme: false, editingBorderColor: '#46e6a2', cursorColor: '#46e6a2', originX: 'center', originY: 'center' });
+        if (L.ink && L.text === o.text) fitInk(o, L, s);
+        const c = L.ink ? at((L.ink[0] + L.ink[2]) / 2, (L.ink[1] + L.ink[3]) / 2) : p;
+        const off = o.ro2InkOff || { x: 0, y: 0 }; delete o.ro2InkOff; const a = ((img.angle || 0) * Math.PI) / 180;
+        o.set({ ...base, left: c.x - (off.x * Math.cos(a) - off.y * Math.sin(a)), top: c.y - (off.x * Math.sin(a) + off.y * Math.cos(a)) }); o.ro2Name = 'Text';
+      }
+      idx++; ed.add(o, { index: idx, commit: false, select: false }); made.push(o);
+    }
+    ed.commit(); ed.canvas.requestRenderAll();
+    ed.select(made.length ? made : img); ed.emit('modified', made);
+    const nt = made.filter((o) => o.type === 'textbox').length;
+    toast(made.length ? `Done: ${made.length} editable layer${made.length > 1 ? 's' : ''}.${nt ? ' Double-click text to change it.' : ' Drag them anywhere.'} The original is ${res.keepOriginal ? 'kept, hidden, in Layers' : 'replaced'}.` : 'Background rebuilt.', { ms: 5000 });
   } catch (e) { toastErr(e); } finally { b.close(); }
 }
 

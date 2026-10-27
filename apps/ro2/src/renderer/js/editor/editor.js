@@ -2,7 +2,7 @@
 import { fabric, PROPS, Ro2Line, kindOf, uid } from './fab.js';
 import { ensureFontsFor } from '../fonts.js';
 
-const WORKSPACE = '#08090a';
+let WORKSPACE = '#08090a'; let DIM = 'rgba(8,9,10,0.82)'; let EDGE = 'rgba(255,255,255,0.07)';
 export const DEFAULT_BG = { color: '#ffffff' };
 export const isClear = (c) => !c || c === 'transparent' || /rgba\([^)]*,\s*0(\.0+)?\)$/.test(c);
 
@@ -25,6 +25,23 @@ function absolute(o, json) {
   if (!(o.group instanceof fabric.ActiveSelection)) return json;
   const t = fabric.util.qrDecompose(o.calcTransformMatrix());
   return { ...json, left: t.translateX, top: t.translateY, angle: t.angle, scaleX: t.scaleX, scaleY: t.scaleY, skewX: t.skewX, skewY: 0, flipX: false, flipY: false };
+}
+
+// Resize a whole design (all pages) to w × h. 'scale': things keep their place relative to the page
+// (spreading out or closing up) and shrink/grow by the smaller ratio so nothing new overlaps; anything that
+// covered the page still covers it. 'keep': sizes stay, positions re-centre.
+export function resizeDocData(doc, w, h, mode = 'scale') {
+  const W0 = doc.width, H0 = doc.height; const rx = w / W0, ry = h / H0, s = Math.min(rx, ry);
+  const coverK = (o) => Math.max(w / Math.abs((o.width || 1) * (o.scaleX || 1)), h / Math.abs((o.height || 1) * (o.scaleY || 1)));
+  const covers = (o) => !o.angle && Math.abs((o.width || 0) * (o.scaleX || 1)) >= W0 * 0.92 && Math.abs((o.height || 0) * (o.scaleY || 1)) >= H0 * 0.92;
+  const move = (o) => {
+    if (o.ro2Role === 'bgimage' || (mode === 'scale' && covers(o) && (o.type === 'Image' || o.type === 'image'))) { const k = coverK(o); return { ...o, left: w / 2, top: h / 2, scaleX: (o.scaleX || 1) * k, scaleY: (o.scaleY || 1) * k }; }
+    if (mode === 'scale') return { ...o, left: o.left * rx, top: o.top * ry, scaleX: (o.scaleX || 1) * s, scaleY: (o.scaleY || 1) * s };
+    return { ...o, left: o.left + (w - W0) / 2, top: o.top + (h - H0) / 2 };
+  };
+  doc.pages.forEach((p) => { p.objects = (p.objects || []).map(move); });
+  doc.width = Math.round(w); doc.height = Math.round(h);
+  return doc;
 }
 
 export class Editor extends EventTarget {
@@ -332,15 +349,7 @@ export class Editor extends EventTarget {
   // Change the design's size. mode: 'scale' (fit content to the new size) or 'keep' (keep sizes, re-centre)
   async resize(w, h, mode = 'scale') {
     this.syncPage();
-    const W0 = this.W, H0 = this.H; const s = Math.min(w / W0, h / H0);
-    const moveAll = (objs) => objs.map((o) => {
-      const cx = o.left - W0 / 2, cy = o.top - H0 / 2;
-      if (o.ro2Role === 'bgimage') { const k = Math.max(w / (o.width * o.scaleX), h / (o.height * o.scaleY)); return { ...o, left: w / 2, top: h / 2, scaleX: o.scaleX * k, scaleY: o.scaleY * k }; }
-      if (mode === 'scale') return { ...o, left: w / 2 + cx * s, top: h / 2 + cy * s, scaleX: (o.scaleX || 1) * s, scaleY: (o.scaleY || 1) * s };
-      return { ...o, left: w / 2 + cx, top: h / 2 + cy };
-    });
-    this.doc.pages.forEach((p) => { p.objects = moveAll(p.objects); });
-    this.doc.width = Math.round(w); this.doc.height = Math.round(h);
+    resizeDocData(this.doc, w, h, mode);
     this.hist.clear();
     await this.loadPage(this.page); this.fit(); this.emit('pages'); this.emit('change'); this.emit('resized');
   }
@@ -382,6 +391,9 @@ export class Editor extends EventTarget {
       const s = o.scaleX; o.set({ fontSize: Math.max(1, Math.round(o.fontSize * s * 10) / 10), width: o.width * s, scaleX: 1, scaleY: 1 });
       if (o.styles) for (const line of Object.values(o.styles)) for (const ch of Object.values(line)) if (ch.fontSize) ch.fontSize *= s;
       o.initDimensions(); o.setCoords();
+    } else if (o.ro2Curve && o instanceof fabric.IText && (o.scaleX !== 1 || o.scaleY !== 1)) {
+      const s = o.scaleX; o.set({ fontSize: Math.max(1, o.fontSize * s), scaleX: 1, scaleY: 1 });
+      import('./objects.js').then((m) => m.setCurve(this, o, o.ro2Curve)).then(() => this.commit());
     } else if ((o instanceof fabric.Rect) && (o.scaleX !== 1 || o.scaleY !== 1)) {
       o.set({ width: o.width * o.scaleX, height: o.height * o.scaleY, scaleX: 1, scaleY: 1 }); o.setCoords();
     } else if (o instanceof Ro2Line && o.scaleX !== 1) { o.set({ width: o.width * o.scaleX, scaleX: 1 }); o.setCoords(); }
@@ -410,8 +422,8 @@ export class Editor extends EventTarget {
     // fade everything outside the page
     const big = 1e6 / v[0];
     ctx.beginPath(); ctx.rect(-big, -big, big * 2 + W, big * 2 + H); ctx.rect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(8,9,10,0.82)'; ctx.fill('evenodd');
-    ctx.lineWidth = 1 / v[0]; ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.strokeRect(0, 0, W, H);
+    ctx.fillStyle = DIM; ctx.fill('evenodd');
+    ctx.lineWidth = 1 / v[0]; ctx.strokeStyle = EDGE; ctx.strokeRect(0, 0, W, H);
     // snap guides
     if (this.guides.length) {
       ctx.strokeStyle = '#ff4fa3'; ctx.lineWidth = 1.2 / v[0]; ctx.setLineDash([4 / v[0], 3 / v[0]]);
@@ -429,6 +441,13 @@ export class Editor extends EventTarget {
       ctx.fillStyle = 'rgba(18,21,24,.95)'; ctx.beginPath(); ctx.roundRect(x, y, tw, 22, 6); ctx.fill();
       ctx.fillStyle = '#e9eef1'; ctx.textBaseline = 'middle'; ctx.fillText(label, x + 7, y + 11.5); ctx.restore();
     }
+  }
+  // colours of the workspace around the page follow the app theme
+  applyTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    WORKSPACE = cs.getPropertyValue('--workspace').trim() || WORKSPACE; DIM = cs.getPropertyValue('--dim').trim() || DIM;
+    EDGE = document.documentElement.dataset.theme === 'light' ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.07)';
+    this.canvas.backgroundColor = WORKSPACE; this.canvas.requestRenderAll();
   }
   kindOf(o) { return kindOf(o); }
   dispose() { this._ro.disconnect(); this.canvas.dispose(); }

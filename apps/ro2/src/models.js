@@ -30,6 +30,12 @@ const CATALOG = [
     ],
   },
   {
+    id: 'ocr', task: 'ocr', name: 'Text reader',
+    blurb: 'Reads the words in a picture so Make editable can turn them into real, editable text (Tesseract, English).',
+    license: 'Apache-2.0', source: 'tesseract-ocr/tessdata (via tesseract.js-data)',
+    files: [{ name: 'eng.traineddata.gz', url: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz', size: 2952873 }],
+  },
+  {
     id: 'isnet', task: 'removebg', name: 'Background remover: whole scenes', optional: true,
     blurb: 'An alternative cut-out model that keeps everything in the foreground (IS-Net general). Try it when the main one misses part of a scene.',
     license: 'Apache-2.0', source: 'xuebinqin/DIS (IS-Net), via rembg',

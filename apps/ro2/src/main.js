@@ -9,6 +9,7 @@ const { execFile } = require('child_process');
 const { pathToFileURL } = require('url');
 const { Models, CATALOG } = require('./models');
 const { Designs, safeName } = require('./designs');
+const { Brand } = require('./brand');
 
 if (process.env.RO2_USER_DATA) app.setPath('userData', path.resolve(process.env.RO2_USER_DATA));
 app.setName('RO2');
@@ -30,7 +31,7 @@ function saveSettings() { try { fs.writeFileSync(SETTINGS_FILE(), JSON.stringify
 const designsFolder = () => process.env.RO2_DESIGNS || settings.designsFolder || path.join(app.getPath('documents'), 'RO2');
 const modelsFolder = () => process.env.RO2_MODELS || path.join(app.getPath('userData'), 'Models');
 
-let win = null; let models; let designs; const pendingOpen = [];
+let win = null; let models; let designs; let brand; const pendingOpen = [];
 const send = (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send(ch, data); };
 
 // ───────────── protocol ─────────────
@@ -56,18 +57,21 @@ function registerProtocol() {
     const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
     if (u.host === 'app') return serveFile(path.join(RENDERER, rel || 'index.html'), RENDERER);
     if (u.host === 'models') return serveFile(path.join(modelsFolder(), rel), modelsFolder());
+    if (u.host === 'brand') return serveFile(brand.logoPath(rel), brand.logoPath(''));
     return new Response('Not found', { status: 404 });
   });
 }
 
 // ───────────── window ─────────────
+const lightNow = () => settings.theme === 'light' || (settings.theme === 'system' && !nativeTheme.shouldUseDarkColors);
 function createWindow() {
-  const isMac = process.platform === 'darwin';
+  const isMac = process.platform === 'darwin'; const light = lightNow();
+  nativeTheme.themeSource = ['light', 'dark'].includes(settings.theme) ? settings.theme : 'system';
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1040, minHeight: 640, show: false,
-    backgroundColor: '#0c0e10', title: 'RO2',
+    backgroundColor: light ? '#f6f7f9' : '#0c0e10', title: 'RO2',
     titleBarStyle: 'hidden',
-    ...(isMac ? { trafficLightPosition: { x: 16, y: 18 } } : { titleBarOverlay: { color: '#0c0e10', symbolColor: '#c9d1d6', height: 52 } }),
+    ...(isMac ? { trafficLightPosition: { x: 16, y: 18 } } : { titleBarOverlay: { color: light ? '#f6f7f9' : '#0c0e10', symbolColor: light ? '#3b444b' : '#c9d1d6', height: 52 } }),
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
   });
@@ -184,6 +188,13 @@ function registerIpc() {
   handle('app:pending-open', () => pendingOpen.splice(0));
   handle('settings:get', () => settings);
   handle('settings:set', (patch) => { settings = { ...settings, ...patch }; saveSettings(); return settings; });
+  handle('app:theme', (t) => {
+    nativeTheme.themeSource = t === 'light' || t === 'dark' ? t : 'system';
+    const light = t === 'light' || (t !== 'dark' && !nativeTheme.shouldUseDarkColors);
+    if (win && process.platform !== 'darwin') { try { win.setTitleBarOverlay({ color: light ? '#f6f7f9' : '#0c0e10', symbolColor: light ? '#3b444b' : '#c9d1d6', height: 52 }); } catch {} }
+    if (win) win.setBackgroundColor(light ? '#f6f7f9' : '#0c0e10');
+    return light;
+  });
   handle('shell:open', (url) => { if (/^https?:\/\//.test(url)) shell.openExternal(url); return true; });
   handle('shell:reveal', (file) => { shell.showItemInFolder(file); return true; });
   handle('log', (msg) => { log('renderer', msg); return true; });
@@ -285,6 +296,20 @@ function registerIpc() {
     return `data:${mime};base64,${buf.toString('base64')}`;
   });
 
+  handle('brand:get', () => brand.get());
+  handle('brand:active', (id) => brand.setActive(id));
+  handle('brand:create', (name) => brand.create(name));
+  handle('brand:update', (id, patch) => brand.update(id, patch));
+  handle('brand:remove', (id) => brand.remove(id));
+  handle('brand:add-logo', (id, logo) => brand.addLogo(id, logo));
+  handle('brand:remove-logo', (id, lid) => brand.removeLogo(id, lid));
+  handle('brand:logo', (id, lid) => brand.logoData(id, lid));
+  handle('brand:pick-logos', async (id) => {
+    const r = await dialog.showOpenDialog(win, { title: 'Add logos', filters: [{ name: 'Logos', extensions: ['png', 'svg', 'jpg', 'jpeg', 'webp', 'gif'] }], properties: ['openFile', 'multiSelections'] });
+    if (r.canceled) return brand.get();
+    for (const f of r.filePaths) brand.addLogo(id, { name: path.basename(f).replace(/\.[^.]+$/, ''), bytes: fs.readFileSync(f), ext: path.extname(f).slice(1) });
+    return brand.get();
+  });
   handle('models:list', () => models.list());
   handle('models:download', (id) => models.download(id));
   handle('models:cancel', (id) => models.cancel(id));
@@ -304,6 +329,7 @@ else {
   app.whenReady().then(() => {
     loadSettings();
     models = new Models(modelsFolder(), send);
+    brand = new Brand(app.getPath('userData'));
     designs = new Designs(path.join(app.getPath('userData'), 'index.json'), designsFolder);
     registerProtocol(); registerIpc(); buildMenu();
     session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(['local-fonts', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'].includes(perm)));

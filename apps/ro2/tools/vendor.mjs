@@ -4,11 +4,13 @@
 //   onnxruntime-web   runs the AI models on the GPU (WebGPU) or the CPU (WASM) (MIT)
 //   lucide-static     the icon library (ISC)
 //   @fontsource/*     the bundled fonts (SIL Open Font License)
+//   tesseract.js      reads text in pictures for Make editable (Apache-2.0)
+//   qrcode-generator  QR codes (MIT)
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const V = path.join(ROOT, 'src/renderer/vendor');
-const PKG = { fabric: '7.4.0', 'onnxruntime-web': '1.30.0', 'lucide-static': '1.49.0' };
+const PKG = { fabric: '7.4.0', 'onnxruntime-web': '1.30.0', 'lucide-static': '1.49.0', 'tesseract.js': '7.0.0', 'tesseract.js-core': '7.0.0', 'qrcode-generator': '2.0.4' };
 export const FONTS = [
   // [family, fontsource id, weights, category]
   ['Inter', 'inter', [400, 700, 900], 'sans'], ['Poppins', 'poppins', [400, 600, 800], 'sans'], ['Montserrat', 'montserrat', [400, 700, 900], 'sans'],
@@ -52,6 +54,13 @@ if (!process.argv.includes('--fonts-only')) {
   fs.mkdirSync(path.join(V, 'lucide'), { recursive: true });
   fs.writeFileSync(path.join(V, 'lucide/icons.json'), JSON.stringify(icons));
   cp(path.join(luc, 'LICENSE'), path.join(V, 'lucide/LICENSE'));
+  const tj = pack(`tesseract.js@${PKG['tesseract.js']}`);
+  for (const f of ['tesseract.esm.min.js', 'worker.min.js']) cp(path.join(tj, 'dist', f), path.join(V, 'tesseract', f));
+  cp(path.join(tj, 'LICENSE.md'), path.join(V, 'tesseract/LICENSE.md'));
+  const tc = pack(`tesseract.js-core@${PKG['tesseract.js-core']}`);
+  cp(path.join(tc, 'tesseract-core-simd-lstm.wasm.js'), path.join(V, 'tesseract', 'tesseract-core-simd-lstm.wasm.js'));
+  const qr = pack(`qrcode-generator@${PKG['qrcode-generator']}`);
+  cp(path.join(qr, 'dist/qrcode.mjs'), path.join(V, 'qrcode/qrcode.mjs'));
 }
 const fontList = [];
 for (const [family, id, weights, cat] of FONTS) {

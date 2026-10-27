@@ -127,3 +127,58 @@ export function setGroupColor(g, from, to) {
   g.dirty = true;
 }
 export { uid };
+
+// ───── QR codes: a white tile with the code as one vector path, both colours editable ─────
+let qrLib = null;
+export async function qrPath(text) {
+  if (!qrLib) { qrLib = (await import('../../vendor/qrcode/qrcode.mjs')).default; qrLib.stringToBytes = (s) => [...new TextEncoder().encode(s)]; }
+  const q = qrLib(0, 'M'); q.addData(String(text || ' '), 'Byte'); q.make();
+  const n = q.getModuleCount(); let d = '';
+  for (let y = 0; y < n; y++) { let x = 0; while (x < n) { if (!q.isDark(y, x)) { x++; continue; } let e = x; while (e < n && q.isDark(y, e)) e++; d += `M${x} ${y}h${e - x}v1h${x - e}z`; x = e; } }
+  return { d, n };
+}
+export async function makeQr(ed, text, { dark = '#111418', light = '#ffffff', size } = {}) {
+  const { d, n } = await qrPath(text); const pad = 2; const S = size || Math.min(ed.W, ed.H) * 0.3;
+  const bg = new fabric.Rect({ width: n + pad * 2, height: n + pad * 2, rx: 1.2, ry: 1.2, fill: light, left: 0, top: 0, strokeWidth: 0 });
+  const p = new fabric.Path(d, { fill: dark, strokeWidth: 0 }); p.set({ left: 0, top: 0 });
+  const g = new fabric.Group([bg, p], { subTargetCheck: false, interactive: false });
+  const k = S / (n + pad * 2); g.set({ scaleX: k, scaleY: k, ro2Name: 'QR code' }); g.ro2Qr = String(text);
+  return g;
+}
+// Rebuild a QR group for new text, keeping its place, size and colours
+export async function updateQr(ed, g, text) {
+  const [bg, p] = g.getObjects(); const shown = g.getScaledWidth();
+  const n = await makeQr(ed, text, { dark: p.fill, light: bg.fill, size: shown });
+  n.set({ left: g.left, top: g.top, angle: g.angle }); n.id = g.id;
+  const idx = ed.canvas.getObjects().indexOf(g); ed.canvas.remove(g); ed.add(n, { index: idx });
+  return n;
+}
+
+// ───── curved text ─────
+import { Ro2CurvedText, PROPS } from './fab.js';
+function arcPath(L, c) {
+  const th = Math.max(0.05, (Math.min(100, Math.abs(c)) / 100) * Math.PI * 1.9); const R = L / th; const f = (n) => n.toFixed(2);
+  if (c > 0) { const a0 = -Math.PI / 2 - th / 2, a1 = -Math.PI / 2 + th / 2; return `M ${f(R * Math.cos(a0))} ${f(R + R * Math.sin(a0))} A ${f(R)} ${f(R)} 0 ${th > Math.PI ? 1 : 0} 1 ${f(R * Math.cos(a1))} ${f(R + R * Math.sin(a1))}`; }
+  const b0 = Math.PI / 2 + th / 2, b1 = Math.PI / 2 - th / 2; return `M ${f(R * Math.cos(b0))} ${f(-R + R * Math.sin(b0))} A ${f(R)} ${f(R)} 0 ${th > Math.PI ? 1 : 0} 0 ${f(R * Math.cos(b1))} ${f(-R + R * Math.sin(b1))}`;
+}
+// c: -100..100 (0 = straight). Turns a text box into curved text and back; returns the (possibly new) object.
+export async function setCurve(ed, t, c) {
+  c = Math.round(c);
+  const replace = async (json) => {
+    const [n] = await fabric.util.enlivenObjects([json]); n.id = t.id; const idx = ed.canvas.getObjects().indexOf(t);
+    ed.canvas.remove(t); ed.canvas.insertAt(idx, n); ed._prep(n); n.setCoords(); ed.canvas.setActiveObject(n); return n;
+  };
+  if (!(t instanceof Ro2CurvedText)) {
+    if (!c) return t;
+    const json = t.toObject(PROPS); json.type = 'Ro2CurvedText'; delete json.width; delete json.minWidth; json.text = String(json.text).replace(/\n/g, ' '); json.styles = []; delete json.path;
+    t = await replace(json);
+  } else if (!c) {
+    t.set({ path: null }); t.initDimensions();
+    const json = t.toObject(PROPS); json.type = 'Textbox'; delete json.path; json.width = t.calcTextWidth() + t.fontSize * 0.4; json.ro2Curve = undefined;
+    const n = await replace(json); ed.canvas.requestRenderAll(); return n;
+  }
+  t.set({ path: null }); t.initDimensions(); const L = t.calcTextWidth();
+  t.set({ path: new fabric.Path(arcPath(L, c), { visible: false, fill: '', stroke: '' }), pathAlign: 'center', pathSide: 'left', pathStartOffset: 0, textAlign: 'center' });
+  t.ro2Curve = c; t.setPathInfo?.(); t.initDimensions(); t.setCoords(); t.dirty = true; ed.canvas.requestRenderAll();
+  return t;
+}

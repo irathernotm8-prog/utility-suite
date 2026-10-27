@@ -244,7 +244,7 @@ textarea.in { height: auto; min-height: 90px; padding: 8px 10px; resize: vertica
 .insp-head h3 { margin: 0; font: 700 16px var(--display); flex: 1; }
 .insp-art { width: 100%; aspect-ratio: 1; border-radius: 12px; position: relative; overflow: hidden; }
 .insp-art.drop { outline: 3px solid var(--accent); outline-offset: -3px; }
-.insp-art .art-tools { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 6px; justify-content: center; opacity: 0; transition: 0.15s; flex-wrap: wrap; }
+.insp-art .art-tools { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 6px; justify-content: center; opacity: 0.92; transition: 0.15s; flex-wrap: wrap; }
 .insp-art:hover .art-tools, .insp-art.drop .art-tools { opacity: 1; }
 .insp-art .art-tools .btn { background: rgba(20, 16, 24, 0.82); border-color: rgba(255,255,255,0.12); color: #fff; backdrop-filter: blur(6px); }
 .insp .fileinfo { font-size: 12px; color: var(--mute); line-height: 1.6; word-break: break-all; }

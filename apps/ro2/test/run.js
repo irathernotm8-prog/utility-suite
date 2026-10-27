@@ -41,9 +41,21 @@ t('model catalog: unique ids, sizes, files', () => {
   Module._load = function (req, ...a) { if (req === 'electron') return { net: {} }; return orig.call(this, req, ...a); };
   const { CATALOG } = require('../src/models.js'); Module._load = orig;
   const ids = new Set(); for (const m of CATALOG) { assert(!ids.has(m.id)); ids.add(m.id); assert(m.files.length && m.files.every((f) => f.size > 1e6 && /^https:/.test(f.url))); }
-  for (const id of ['ormbg', 'lama', 'slimsam']) assert(ids.has(id), id);
-  const worker = fs.readFileSync(path.join(R, 'js/ai/ai.worker.js'), 'utf8');
+  for (const id of ['ormbg', 'lama', 'slimsam', 'ocr']) assert(ids.has(id), id);
+  const worker = fs.readFileSync(path.join(R, 'js/ai/ai.worker.js'), 'utf8') + fs.readFileSync(path.join(R, 'js/ai/layerize.js'), 'utf8');
   for (const m of CATALOG) for (const f of m.files) assert(worker.includes(`'${f.name}'`) || worker.includes(`"${f.name}"`), `worker uses ${m.id}/${f.name}`);
+});
+t('brand kits: create, colours, logos, remove', () => {
+  const os = require('os'); const { Brand } = require('../src/brand.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ro2b-')); const b = new Brand(dir);
+  const id = b.create('Acme').active; assert(id && b.get().kits.length >= 1);
+  b.update(id, { colors: [{ hex: '#ff0066', name: 'Pink' }] }); assert.equal(b.kit(id).colors[0].hex, '#ff0066');
+  b.addLogo(id, { name: 'Mark', bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), ext: 'svg' });
+  const l = b.kit(id).logos[0]; assert(l && b.logoData(id, l.id).svg.includes('<svg'));
+  assert.throws(() => b.addLogo(id, { bytes: Buffer.from('x'), ext: 'exe' }));
+  assert.equal(new Brand(dir).kit(id).colors.length, 1, 'reloads from disk');
+  b.removeLogo(id, l.id); assert(!b.kit(id).logos.length);
+  if (b.get().kits.length > 1) { b.remove(id); assert(!b.get().kits.some((x) => x.id === id)); }
 });
 t('shape paths are well formed', () => {
   const s = src.find(([f]) => f.endsWith('shapes.js'))[1];

@@ -75,6 +75,26 @@ function toCHW(rgba, n, { mean = [0, 0, 0], std = [1, 1, 1], scale = 1 / 255, ma
   return t;
 }
 // box mean over radius r (separable, O(n)) on a Float32 map
+// LaMa's fill can sit a shade off the surrounding colour (most visible on gradients). Measure how far its output is
+// from the real picture on a ring around the hole, spread that difference smoothly over the hole, and take it out.
+function colourMatch(back, orig, W, rx, ry, rw, rh, hole) {
+  // the seam: the real picture just outside the hole vs. LaMa's fill just inside it, both averaged smoothly
+  const n = rw * rh; const r0 = Math.max(3, Math.round(Math.max(rw, rh) / 120));
+  const grown = dilateU8(hole, rw, rh, r0); const inv = new Uint8Array(n); for (let q = 0; q < n; q++) inv[q] = hole[q] ? 0 : 1;
+  const inside = dilateU8(inv, rw, rh, r0); const outer = new Float32Array(n), inner = new Float32Array(n);
+  for (let q = 0; q < n; q++) { if (grown[q] && !hole[q]) outer[q] = 1; if (hole[q] && inside[q]) inner[q] = 1; }
+  const R = Math.max(8, Math.round(Math.max(rw, rh) / 12)); const wo = boxMean(outer, rw, rh, R), wi = boxMean(inner, rw, rh, R);
+  for (let c = 0; c < 3; c++) {
+    const o = new Float32Array(n), i = new Float32Array(n);
+    for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) { const q = y * rw + x; if (outer[q]) o[q] = orig[((y + ry) * W + x + rx) * 4 + c]; if (inner[q]) i[q] = back[q * 4 + c]; }
+    const so = boxMean(o, rw, rh, R), si = boxMean(i, rw, rh, R);
+    for (let q = 0; q < n; q++) if (hole[q] && wo[q] > 1e-3 && wi[q] > 1e-3) back[q * 4 + c] = Math.max(0, Math.min(255, back[q * 4 + c] + so[q] / wo[q] - si[q] / wi[q]));
+  }
+}
+function dilateU8(m, w, h, r) { const t = new Uint8Array(w * h), o = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) { let last = -1e9; for (let x = 0; x < w; x++) { if (m[y * w + x]) last = x; t[y * w + x] = x - last <= r ? 1 : 0; } last = 1e9; for (let x = w - 1; x >= 0; x--) { if (m[y * w + x]) last = x; if (last - x <= r) t[y * w + x] = 1; } }
+  for (let x = 0; x < w; x++) { let last = -1e9; for (let y = 0; y < h; y++) { if (t[y * w + x]) last = y; o[y * w + x] = y - last <= r ? 1 : 0; } last = 1e9; for (let y = h - 1; y >= 0; y--) { if (t[y * w + x]) last = y; if (last - y <= r) o[y * w + x] = 1; } }
+  return o; }
 function boxMean(src, w, h, r) {
   const tmp = new Float32Array(w * h), out = new Float32Array(w * h);
   for (let y = 0; y < h; y++) {
@@ -212,6 +232,7 @@ async function inpaint({ img, hole, grow = 1 }) {
   x.putImageData(id, 0, 0);
   const [c2, x2] = canvas(rw, rh); x2.imageSmoothingQuality = 'high'; x2.drawImage(c, 0, 0, rw, rh);
   const back = x2.getImageData(0, 0, rw, rh).data;
+  colourMatch(back, img.data, w, rx, ry, rw, rh, hcrop);
   // blend into the original with a soft edge, only where the (grown) hole is
   const soft = feather(hcrop.map((v) => (v ? 1 : 0)), rw, rh, Math.max(2, Math.round(k * 3)));
   const out = new Uint8ClampedArray(img.data);
@@ -285,8 +306,67 @@ async function expand({ img, W, H, ox, oy, variant = 0 }) {
   return { data: x.getImageData(0, 0, W, H).data, w: W, h: H };
 }
 
+// ───── Make editable: every object in the picture (SAM on a grid of points), at a small analysis size ─────
+async function samAuto({ key, aw, ah, grid = 8, extra = [] }) {
+  if (!samCache || samCache.key !== key) throw new Error('The picture changed; start again.');
+  const { s, w, h, nw, nh } = samCache; const L = 256 * 256; const out = [];
+  const pts = []; for (let gy = 0; gy < grid; gy++) for (let gx = 0; gx < grid; gx++) pts.push({ x: ((gx + 0.5) / grid) * w, y: ((gy + 0.5) / grid) * h });
+  for (const p of extra) pts.push(p);
+  let i = 0;
+  for (const p of pts) {
+    i++; if (i % 4 === 0) progress(`Finding objects… ${Math.round((i / pts.length) * 100)}%`);
+    const r = await run('slimsam', 'decoder.onnx', {
+      input_points: new ort.Tensor('float32', new Float32Array([p.x * s, p.y * s]), [1, 1, 1, 2]), input_labels: new ort.Tensor('int64', new BigInt64Array([1n]), [1, 1, 1]),
+      image_embeddings: samCache.emb, image_positional_embeddings: samCache.pos,
+    });
+    const iou = Array.from(r.iou_scores.data); const m = r.pred_masks.data;
+    for (let k = 0; k < 3; k++) {
+      if (iou[k] < 0.8) continue;
+      const g = new Uint8Array(L); for (let q = 0; q < L; q++) g[q] = 255 / (1 + Math.exp(-m[k * L + q]));
+      const small = resizeGray(g, 256, 256, aw, ah, [0, 0, (nw / 1024) * 256, (nh / 1024) * 256]);
+      // stability: the mask barely changes between a strict and a loose threshold
+      let hi = 0, lo = 0, area = 0; const mask = new Uint8Array(aw * ah); let x0 = aw, y0 = ah, x1 = -1, y1 = -1;
+      for (let q = 0; q < small.length; q++) { const v = small[q]; if (v > 160) hi++; if (v > 95) lo++; if (v > 127) { mask[q] = 1; area++; const x = q % aw, y = (q / aw) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+      const stab = lo ? hi / lo : 0; if (!area || stab < 0.86) continue;
+      out.push({ mask, iou: iou[k], stab, area, bbox: [x0, y0, x1, y1], seed: p, extra: i > grid * grid });
+    }
+  }
+  // keep the best of overlapping candidates
+  out.sort((a, b) => (b.extra - a.extra) || (b.iou * b.stab - a.iou * a.stab));
+  const kept = [];
+  for (const c of out) {
+    let dup = false;
+    for (const k of kept) {
+      if (c.bbox[0] > k.bbox[2] || c.bbox[2] < k.bbox[0] || c.bbox[1] > k.bbox[3] || c.bbox[3] < k.bbox[1]) continue;
+      let inter = 0; for (let q = 0; q < c.mask.length; q++) if (c.mask[q] && k.mask[q]) inter++;
+      if (inter / (c.area + k.area - inter) > 0.72) { dup = true; break; }
+    }
+    if (!dup) kept.push(c);
+    if (kept.length >= 40) break;
+  }
+  return { masks: kept.map(({ mask, iou, stab, area, bbox, extra: ex }) => ({ mask, iou, stab, area, bbox, extra: ex })) };
+}
+// A small mask → a full-size soft alpha that hugs the picture's edges
+async function refineMask({ img, mask, aw, ah, feather = true, soft = false, radius }) {
+  const g = new Uint8Array(mask.length); for (let q = 0; q < mask.length; q++) g[q] = soft ? mask[q] : mask[q] ? 255 : 0;
+  let alpha = aw === img.w && ah === img.h ? g : resizeGray(g, aw, ah, img.w, img.h);
+  if (feather && img.w * img.h <= 24e6) alpha = guided(img.data, alpha, img.w, img.h, radius || Math.max(2, Math.round(Math.max(img.w, img.h) / 600)), 1e-3);
+  return { alpha };
+}
+// Fill several holes one after another (each with its own crop, so small holes stay sharp)
+async function inpaintParts({ img, parts }) {
+  let data = img.data;
+  for (const [i, part] of parts.entries()) {
+    progress(`Rebuilding the background… ${i + 1} of ${parts.length}`);
+    const hole = new Uint8Array(img.w * img.h); // part: {x, y, w, h, m} is a cropped 0/1 mask
+    for (let y = 0; y < part.h; y++) for (let x = 0; x < part.w; x++) if (part.m[y * part.w + x]) hole[(y + part.y) * img.w + x + part.x] = 1;
+    data = (await inpaint({ img: { data, w: img.w, h: img.h }, hole, grow: part.grow ?? 0 })).data;
+  }
+  return { data };
+}
+
 async function info() { return { gpu: await hasGpu(), threads: ort.env.wasm.numThreads, isolated: self.crossOriginIsolated }; }
-const API = { removebg, samEmbed, samDecode, inpaint, expand, info, reset: async () => { samCache = null; return true; } };
+const API = { removebg, samEmbed, samDecode, inpaint, expand, samAuto, refineMask, inpaintParts, info, reset: async () => { samCache = null; return true; } };
 self.onmessage = async (e) => {
   const { id, method, args } = e.data; curId = id;
   try {
