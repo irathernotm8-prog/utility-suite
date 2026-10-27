@@ -400,3 +400,112 @@ module.exports = {
   TCC, parseTccRows, parseRegQuery, winUninstallEntries, dedupeApps, winUninstallCommand, approvedEnabled, exeOfCommand, WIN_CAPS, parseConsentStore,
   filetime, prettyPackage, groupProcesses, macBundleOf, regDate
 };
+
+// ------------------------------------------------------------------ Upgrade tab parsers
+const MEM_TYPES = { 20: 'DDR', 21: 'DDR2', 24: 'DDR3', 26: 'DDR4', 27: 'LPDDR', 28: 'LPDDR2', 29: 'LPDDR3', 30: 'LPDDR4', 34: 'DDR5', 35: 'LPDDR5' };
+const FORM_FACTORS = { 8: 'DIMM', 12: 'SODIMM', 6: 'Proprietary', 21: 'BGA', 22: 'FPBGA', 23: 'LGA', 14: 'SMD' };
+/** system_profiler SPMemoryDataType -json → memory summary. Apple Silicon reports one soldered pool; Intel Macs list slots. */
+function macMemoryInfo(sp) {
+  const top = (sp && sp.SPMemoryDataType && sp.SPMemoryDataType[0]) || {};
+  const items = top._items || [];
+  const upg = top.is_memory_upgradeable;
+  const size = (s) => { const m = String(s || '').match(/([\d.]+)\s*(GB|MB|TB)/i); return m ? Math.round(parseFloat(m[1]) * { MB: 2 ** 20, GB: 2 ** 30, TB: 2 ** 40 }[m[2].toUpperCase()]) : 0; };
+  if (items.length) {
+    const modules = items.map((x) => ({ slot: x._name, size: size(x.dimm_size), type: x.dimm_type && x.dimm_type !== 'empty' ? x.dimm_type : '', speed: parseInt(x.dimm_speed, 10) || null, maker: x.dimm_manufacturer || '', part: x.dimm_part_number || '', empty: !size(x.dimm_size) }));
+    const filled = modules.filter((m) => !m.empty);
+    return { slots: modules.length, used: filled.length, modules, type: (filled[0] || {}).type || '', speed: Math.max(0, ...filled.map((m) => m.speed || 0)) || null, total: filled.reduce((a, m) => a + m.size, 0),
+      upgradeable: upg ? /yes/i.test(upg) : null, soldered: upg ? /no/i.test(upg) : false, formFactor: 'SODIMM' };
+  }
+  return { slots: 0, used: 0, modules: [], type: top.dimm_type || '', speed: null, total: size(top.SPMemoryDataType), maker: top.dimm_manufacturer || '', upgradeable: false, soldered: true, formFactor: 'Built in' };
+}
+/** Win32_PhysicalMemory + array rows → memory summary */
+function winMemoryInfo(inv) {
+  const mods = (inv.Modules || []).map((m) => ({ slot: m.DeviceLocator || m.BankLabel || '', size: +m.Capacity || 0, type: MEM_TYPES[m.SMBIOSMemoryType] || '', speed: +m.Speed || +m.ConfiguredClockSpeed || null,
+    configured: +m.ConfiguredClockSpeed || null, maker: String(m.Manufacturer || '').trim(), part: String(m.PartNumber || '').trim(), form: FORM_FACTORS[m.FormFactor] || '' }));
+  const total = mods.reduce((a, m) => a + m.size, 0);
+  const type = (mods.find((m) => m.type) || {}).type || '';
+  const form = (mods.find((m) => m.form) || {}).form || '';
+  const slots = Math.max(+inv.MemSlots || 0, mods.length);
+  let max = (+inv.MemMaxKBEx || 0) * 1024 || (+inv.MemMaxKB || 0) * 1024 || null;
+  if (max && max < total) max = null; // firmware tables are often wrong; ignore impossible values
+  const soldered = /^LPDDR/.test(type) || ['BGA', 'FPBGA', 'Proprietary', 'SMD'].includes(form) || (slots > 0 && slots === mods.length && mods.every((m) => /onboard|soldered|chip/i.test(m.slot)));
+  return { slots, used: mods.length, modules: mods, type, formFactor: form || (inv.laptop ? 'SODIMM' : 'DIMM'), speed: Math.max(0, ...mods.map((m) => m.speed || 0)) || null, total, max, soldered, upgradeable: soldered ? false : (slots ? true : null) };
+}
+/** Chassis from Win32_SystemEnclosure.ChassisTypes / PCSystemType. */
+function winChassis(types, pcType) {
+  const t = (types || []).map(Number);
+  if (t.some((x) => [8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32].includes(x)) || pcType === 2) return 'laptop';
+  if (t.some((x) => [13].includes(x))) return 'all-in-one';
+  if (t.some((x) => [35, 36].includes(x))) return 'mini';
+  if (t.some((x) => [3, 4, 5, 6, 7, 15, 16, 17, 23, 24].includes(x)) || pcType === 1) return 'desktop';
+  return 'unknown';
+}
+function macChassis(name) { const n = String(name || ''); return /MacBook/i.test(n) ? 'laptop' : /iMac/i.test(n) ? 'all-in-one' : /Mac mini|Mac Studio/i.test(n) ? 'mini' : /Mac Pro/i.test(n) ? 'desktop' : 'unknown'; }
+/** How many external displays an Apple Silicon chip drives (Apple's published specs). */
+function macExternalDisplays(chip, model) {
+  const c = String(chip || ''); const air = /MacBook Air/i.test(model || '');
+  const m = c.match(/M(\d)\s*(Pro|Max|Ultra)?/i); if (!m) return null;
+  const gen = +m[1], tier = (m[2] || '').toLowerCase();
+  if (tier === 'ultra') return { count: gen >= 2 ? 8 : 5 };
+  if (tier === 'max') return { count: 4 };
+  if (tier === 'pro') return { count: gen >= 4 ? 3 : 2 };
+  if (gen >= 4) return { count: 2 };
+  if (gen === 3) return { count: air ? 2 : 1, note: air ? 'Two only with the lid closed' : '' };
+  return { count: /Mac mini/i.test(model || '') ? 2 : 1 };
+}
+/** systemextensionsctl list → third-party extensions */
+function parseSystemExtensions(text) {
+  const out = [];
+  for (const l of String(text || '').split('\n')) {
+    const f = l.split('\t'); if (f.length < 6) continue;
+    const id = (f[3].match(/^(\S+)\s*\(([^)]*)\)/) || []); if (!id[1] || f[3] === 'bundleID (version)') continue;
+    out.push({ bundleId: id[1], version: id[2] || '', team: f[2], name: f[4].trim(), state: (f[5].match(/\[([^\]]+)\]/) || [])[1] || '', enabled: f[0].trim() === '*', active: f[1].trim() === '*' });
+  }
+  return out;
+}
+/** kextstat / kmutil showloaded --list-only → third-party kernel extensions */
+function parseKexts(text) {
+  const out = []; const seen = new Set();
+  for (const m of String(text || '').matchAll(/\s((?:[a-zA-Z0-9_-]+\.)+[a-zA-Z0-9_-]+)\s\(([^)]+)\)/g)) {
+    if (/^com\.apple\./.test(m[1]) || seen.has(m[1])) continue; seen.add(m[1]); out.push({ bundleId: m[1], version: m[2] });
+  }
+  return out;
+}
+/** softwareupdate --list */
+function parseSoftwareUpdate(text) {
+  const t = String(text || ''); const out = [];
+  for (const m of t.matchAll(/\*\s*Label:\s*(.+)\n\s*Title:\s*([^,\n]+)(?:,\s*Version:\s*([^,\n]+))?(?:,\s*Size:\s*([^,\n]+))?(?:,\s*Recommended:\s*(\w+))?(?:,\s*Action:\s*(\w+))?/g)) {
+    out.push({ label: m[1].trim(), title: m[2].trim(), version: (m[3] || '').trim(), size: (m[4] || '').trim(), recommended: /yes/i.test(m[5] || ''), restart: /restart/i.test(m[6] || '') });
+  }
+  return { updates: out, none: /No new software available/i.test(t) };
+}
+/** diskutil info -plist (as JSON) → a volume row */
+function macVolumeFromInfo(i) {
+  if (!i || !i.MountPoint) return null;
+  return {
+    id: i.DeviceIdentifier, disk: i.ParentWholeDisk || i.DeviceIdentifier, name: i.VolumeName || i.MediaName || i.DeviceIdentifier, mount: i.MountPoint, fs: i.FilesystemUserVisibleName || i.FilesystemName || i.FilesystemType || '',
+    fsType: i.FilesystemType || '', size: i.TotalSize || i.Size || 0, free: i.APFSContainerFree || i.FreeSpace || i.VolumeFreeSpace || 0, bus: i.BusProtocol || '', internal: !!i.Internal, removable: !!(i.Removable || i.RemovableMedia || i.Ejectable),
+    ssd: i.SolidState === true ? true : i.SolidState === false ? false : null, writable: i.WritableVolume !== false && i.Writable !== false, smart: i.SMARTStatus || '', model: i.MediaName || i.IORegistryEntryName || '', uuid: i.VolumeUUID || ''
+  };
+}
+/** Label rules per file system: returns an error message or null. */
+function labelError(name, fs) {
+  const n = String(name || '');
+  if (!n.trim()) return 'Give it a name.';
+  const f = String(fs || '').toLowerCase();
+  if (/fat|exfat|msdos/.test(f)) { if (n.length > 11) return `${fs} names can be at most 11 characters.`; if (/[*?.,;:/\\|+=<>[\]"]/.test(n)) return 'That file system doesn’t allow * ? . , ; : / \\ | + = < > [ ] or quotes.'; }
+  else if (/ntfs/.test(f)) { if (n.length > 32) return 'NTFS names can be at most 32 characters.'; if (/["*/:<>?\\|]/.test(n)) return 'Names can’t contain " * / : < > ? \\ or |.'; }
+  else { if (n.length > 255) return 'That name is too long.'; if (/:/.test(n)) return 'Names can’t contain a colon.'; }
+  return null;
+}
+/** What a measured speed is typical of (MB/s, sequential). */
+function speedClass(mbps) {
+  if (mbps == null) return null;
+  if (mbps < 45) return { label: 'USB 2.0 speed', hint: 'Slow. Try a blue/USB 3 port or a better cable.' };
+  if (mbps < 160) return { label: 'Hard drive or USB 3 flash drive', hint: '' };
+  if (mbps < 600) return { label: 'SATA SSD over USB 3', hint: '' };
+  if (mbps < 1300) return { label: 'NVMe SSD over 10 Gb/s USB', hint: '' };
+  if (mbps < 2200) return { label: 'Fast NVMe over USB 3.2 Gen 2x2', hint: '' };
+  return { label: 'Thunderbolt / USB4 NVMe speed', hint: '' };
+}
+module.exports.upgrade = { MEM_TYPES, FORM_FACTORS, macMemoryInfo, winMemoryInfo, winChassis, macChassis, macExternalDisplays, parseSystemExtensions, parseKexts, parseSoftwareUpdate, macVolumeFromInfo, labelError, speedClass };

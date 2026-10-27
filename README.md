@@ -26,7 +26,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Sideby** | Watch parties with shared playback and room chat | `apps/sideby` |
 | **Slate** | Accounts, retirement, credit and savings in one place | `apps/slate` |
 | **Trace** | Paths, decisions, org charts and folder plans you can trace, with notes and screenshot guides | `apps/trace` |
-| **Vitals** | Task manager and system dashboard: live CPU, memory, GPU and temperatures, apps and uninstalling, startup items, permissions, time and focus, checkup | `apps/vitals` |
+| **Vitals** | Task manager and system dashboard: live CPU, memory, GPU and temperatures, apps and uninstalling, startup items, permissions, time and focus, upgrade advice with drivers and drive speed tests, checkup | `apps/vitals` |
 | **Touchline** | Football scores, tables, match stats, squads and player histories for every league and season | `apps/touchline` |
 | **Waypoint** | Travel planning and booking: search and book flights and hotels, trips with interactive day timelines, bookings, documents, budgets and research, all offline; to your phone by QR code, to another computer with Beam | `apps/waypoint` |
 | **Utility Hub** | Installs, updates and removes the apps on each computer | `apps/hub` |

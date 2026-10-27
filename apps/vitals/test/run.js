@@ -233,4 +233,79 @@ t('macOS never calls app.getFileIcon (it crashes Electron 44 on a Mac)', () => {
 t('the native temperature module only loads in its worker', () => {
   for (const f of ['main.js', 'sys/metrics.js']) assert(!/require\('macos-temperature-sensor'\)/.test(fs.readFileSync(path.join(__dirname, '../src', f), 'utf8')), f);
 });
+
+// ------------------------------------------------------------------ Upgrade tab
+const U = P.upgrade; const { advise, ramPlan, diffInventory } = require('../src/sys/advisor');
+const GB = 2 ** 30;
+t('Apple Silicon memory is reported as built in', () => {
+  const m = U.macMemoryInfo({ SPMemoryDataType: [{ dimm_manufacturer: 'Hynix', dimm_type: 'LPDDR5', SPMemoryDataType: '8 GB' }] });
+  assert.equal(m.total, 8 * GB); assert.equal(m.soldered, true); assert.equal(m.type, 'LPDDR5');
+});
+t('Intel iMac memory slots', () => {
+  const m = U.macMemoryInfo({ SPMemoryDataType: [{ is_memory_upgradeable: 'Yes', _items: [
+    { _name: 'BANK 0/ChannelA-DIMM0', dimm_size: '8 GB', dimm_speed: '2667 MHz', dimm_type: 'DDR4', dimm_part_number: 'M471A1K43DB1-CTD' },
+    { _name: 'BANK 0/ChannelA-DIMM1', dimm_size: 'empty', dimm_speed: 'empty', dimm_type: 'empty' },
+    { _name: 'BANK 1/ChannelB-DIMM0', dimm_size: '8 GB', dimm_speed: '2667 MHz', dimm_type: 'DDR4' },
+    { _name: 'BANK 1/ChannelB-DIMM1', dimm_size: 'empty', dimm_speed: 'empty', dimm_type: 'empty' }] }] });
+  assert.equal(m.slots, 4); assert.equal(m.used, 2); assert.equal(m.total, 16 * GB); assert.equal(m.upgradeable, true); assert.equal(m.speed, 2667);
+});
+const WIN_DESKTOP = { MemSlots: 4, MemMaxKB: 134217728, Modules: [{ Capacity: 8 * GB, Speed: 3200, SMBIOSMemoryType: 26, FormFactor: 8, PartNumber: 'CMK16GX4M2B3200C16', DeviceLocator: 'DIMM_A2' }, { Capacity: 8 * GB, Speed: 3200, SMBIOSMemoryType: 26, FormFactor: 8, PartNumber: 'CMK16GX4M2B3200C16', DeviceLocator: 'DIMM_B2' }] };
+t('Windows memory: type, form factor, slots and max', () => {
+  const m = U.winMemoryInfo(WIN_DESKTOP);
+  assert.equal(m.type, 'DDR4'); assert.equal(m.formFactor, 'DIMM'); assert.equal(m.slots, 4); assert.equal(m.used, 2); assert.equal(m.max, 128 * GB); assert.equal(m.soldered, false);
+  const lp = U.winMemoryInfo({ MemSlots: 0, Modules: [{ Capacity: 16 * GB, Speed: 6400, SMBIOSMemoryType: 35, FormFactor: 0, DeviceLocator: 'Controller0-ChannelA' }] });
+  assert.equal(lp.soldered, true); assert.equal(lp.type, 'LPDDR5');
+  assert.equal(U.winMemoryInfo({ MemSlots: 2, MemMaxKB: 4 * 1024 * 1024, Modules: [{ Capacity: 8 * GB, SMBIOSMemoryType: 26, FormFactor: 12 }, { Capacity: 8 * GB, SMBIOSMemoryType: 26, FormFactor: 12 }] }).max, null, 'an impossible max is ignored');
+});
+t('chassis and external displays', () => {
+  assert.equal(U.winChassis([10], 2), 'laptop'); assert.equal(U.winChassis([3], 1), 'desktop'); assert.equal(U.winChassis([13], 1), 'all-in-one');
+  assert.equal(U.macChassis('MacBook Air'), 'laptop'); assert.equal(U.macExternalDisplays('Apple M2', 'MacBook Air').count, 1); assert.equal(U.macExternalDisplays('Apple M3 Pro', 'MacBook Pro').count, 2); assert.equal(U.macExternalDisplays('Apple M4', 'Mac mini').count, 2); assert.equal(U.macExternalDisplays('Apple M2 Max', 'Mac Studio').count, 4);
+});
+t('RAM plan: fill empty slots with matching sticks, else replace with a kit', () => {
+  const m = U.winMemoryInfo(WIN_DESKTOP);
+  assert.deepEqual(ramPlan(m, 32 * GB), { action: 'add', count: 2, each: 8 * GB, total: 32 * GB, keep: true });
+  const full = U.winMemoryInfo({ MemSlots: 2, Modules: [{ Capacity: 4 * GB, SMBIOSMemoryType: 26, FormFactor: 12 }, { Capacity: 4 * GB, SMBIOSMemoryType: 26, FormFactor: 12 }] });
+  assert.deepEqual(ramPlan(full, 16 * GB), { action: 'replace', count: 2, each: 8 * GB, total: 16 * GB, keep: false });
+  assert.equal(ramPlan({ ...m, max: 16 * GB }, 32 * GB), null, 'never above the board maximum');
+});
+const desktopInv = (over = {}) => ({ platform: 'win32', chassis: 'desktop', model: 'Custom PC', cpu: { name: 'AMD Ryzen 5 5600X', socket: 'AM4' }, board: 'ASUS TUF B550-PLUS', memory: U.winMemoryInfo(WIN_DESKTOP),
+  storage: [{ name: 'ST2000DM008', size: 2e12, bus: 'SATA', media: 'HDD', internal: true, system: true, health: 'Healthy' }], gpus: [{ model: 'NVIDIA GeForce GTX 1660', vram: 6 * GB, discrete: true }], os: { name: 'Microsoft Windows 10 Pro' }, ...over });
+t('advisor: Windows desktop with a hard drive, 16 GB and Kiln installed', () => {
+  const r = advise(desktopInv(), { apps: [{ name: 'Kiln' }], sample: { volumes: [{ name: 'C:\\', mount: 'C:\\', size: 2e12, free: 1e11 }] } });
+  const ids = r.ideas.map((i) => i.id);
+  assert.equal(ids[0], 'win11', 'Windows 10 end of support comes first');
+  for (const id of ['hdd-ssd', 'ram', 'gpu', 'more-storage']) assert(ids.includes(id), id);
+  const ram = r.ideas.find((i) => i.id === 'ram'); assert.equal(ram.buy, '16 GB (2x8GB) DDR4-3200 DIMM'); assert(/Add 2/.test(ram.title));
+  assert(r.ideas.find((i) => i.id === 'gpu').why.includes('Kiln'));
+  assert(r.ideas.every((i) => (i.shop || []).every((s) => /^https:\/\//.test(s.url))));
+});
+t('advisor: Apple Silicon MacBook Air nearly full', () => {
+  const inv = { platform: 'darwin', appleSilicon: true, chassis: 'laptop', model: 'MacBook Air', cpu: { name: 'Apple M2' }, memory: U.macMemoryInfo({ SPMemoryDataType: [{ dimm_type: 'LPDDR5', SPMemoryDataType: '8 GB' }] }),
+    storage: [{ name: 'APPLE SSD AP0256Z', size: 251e9, bus: 'NVMe', media: 'SSD', internal: true, system: true }], gpus: [{ model: 'Apple M2', cores: 8 }], battery: { health: 77, cycles: 640, condition: 'Service Recommended' }, displays: U.macExternalDisplays('Apple M2', 'MacBook Air'), os: { name: 'macOS', version: '26.1' } };
+  const r = advise(inv, { sample: { mem: { pressure: 'warning', swap: { used: 6 * GB } }, volumes: [{ name: 'Macintosh HD', size: 245e9, free: 14e9 }] } });
+  const ids = r.ideas.map((i) => i.id);
+  assert(ids.includes('ext-ssd') && ids.includes('battery') && ids.includes('mem-fixed')); assert(!ids.includes('ram') && !ids.includes('gpu'));
+  assert.equal(r.verdicts.find((v) => v.area === 'memory').status, 'fixed'); assert(/1 external display/.test(r.verdicts.find((v) => v.area === 'displays').text));
+});
+t('advisor: soldered laptop gets no RAM suggestion; inventory diff', () => {
+  const inv = desktopInv({ chassis: 'laptop', memory: U.winMemoryInfo({ MemSlots: 0, Modules: [{ Capacity: 16 * GB, SMBIOSMemoryType: 35 }] }), storage: [{ name: 'NVMe', size: 1e12, bus: 'NVMe', media: 'SSD', internal: true, system: true }], os: { name: 'Microsoft Windows 11 Home' } });
+  const r = advise(inv, {}); assert(!r.ideas.some((i) => i.id === 'ram' || i.id === 'gpu'));
+  const before = desktopInv(); const after = desktopInv({ memory: { ...before.memory, total: 32 * GB } });
+  assert.equal(diffInventory(before, after)[0].text, 'Memory 16 GB → 32 GB');
+});
+t('Mac extensions, kexts, software updates and diskutil volumes', () => {
+  const e = U.parseSystemExtensions('2 extension(s)\n--- com.apple.system_extension.network_extension\nenabled\tactive\tteamID\tbundleID (version)\tname\t[state]\n*\t*\tEQHXZ8M8AV\tcom.google.drivefs.fpext (1.0/1)\tGoogle Drive\t[activated enabled]\n\t\t9PTGMPNXZ2\tcom.wireguard.macos.network-extension (1.0.16/27)\tWireGuardNetworkExtension\t[terminated waiting to uninstall on reboot]\n');
+  assert.equal(e.length, 2); assert.equal(e[0].name, 'Google Drive'); assert.equal(e[0].state, 'activated enabled'); assert.equal(e[1].enabled, false);
+  const k = U.parseKexts('Index Refs Address Size Wired Name (Version) UUID <Linked Against>\n  1  155 0 0 0 com.apple.kpi.bsd (24.1.0) 1234 <>\n  200  0 0xff 0x1 0x1 com.Logitech.Control.Center.HIDDriver (3.9.14) ABCD <5 4>\n');
+  assert.equal(k.length, 1); assert.equal(k[0].bundleId, 'com.Logitech.Control.Center.HIDDriver');
+  const u = U.parseSoftwareUpdate('Software Update Tool\n\nFinding available software\nSoftware Update found the following new or updated software:\n* Label: macOS Tahoe 26.1-25B78\n\tTitle: macOS Tahoe 26.1, Version: 26.1, Size: 7160000KiB, Recommended: YES, Action: restart,\n* Label: Safari26.1\n\tTitle: Safari, Version: 26.1, Size: 220000KiB, Recommended: YES,\n');
+  assert.equal(u.updates.length, 2); assert.equal(u.updates[0].restart, true); assert.equal(u.updates[1].title, 'Safari');
+  assert(U.parseSoftwareUpdate('Software Update Tool\n\nFinding available software\nNo new software available.').none);
+  const v = U.macVolumeFromInfo({ DeviceIdentifier: 'disk4s1', ParentWholeDisk: 'disk4', VolumeName: 'T7', MountPoint: '/Volumes/T7', FilesystemUserVisibleName: 'ExFAT', FilesystemType: 'exfat', TotalSize: 1000202273280, FreeSpace: 400e9, BusProtocol: 'USB', Internal: false, Ejectable: true, SolidState: true, WritableVolume: true });
+  assert.equal(v.name, 'T7'); assert.equal(v.bus, 'USB'); assert.equal(v.removable, true); assert.equal(v.disk, 'disk4'); assert.equal(v.ssd, true);
+});
+t('drive name rules and speed classes', () => {
+  assert(U.labelError('MY BIG BACKUP', 'ExFAT')); assert.equal(U.labelError('BACKUP', 'ExFAT'), null); assert(U.labelError('a:b', 'APFS')); assert.equal(U.labelError('Projects 2026', 'APFS'), null); assert(U.labelError('', 'NTFS')); assert(U.labelError('x?', 'NTFS'));
+  assert.equal(U.speedClass(32).label, 'USB 2.0 speed'); assert.equal(U.speedClass(980).label, 'NVMe SSD over 10 Gb/s USB'); assert.equal(U.speedClass(2800).label, 'Thunderbolt / USB4 NVMe speed');
+});
 console.log(`\n${n - failed}/${n} checks passed`); process.exit(failed ? 1 : 0);

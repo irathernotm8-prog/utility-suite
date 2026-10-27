@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const OUT = process.env.VITALS_SHOTS || path.join(__dirname, 'out');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-module.exports = async ({ win, app, focus }) => {
+module.exports = async (ctx) => { try { await main(ctx); } catch (e) { console.log('FAIL test script error', e && e.message); ctx.app.exit(2); } };
+async function main({ win, app, focus }) {
   fs.mkdirSync(OUT, { recursive: true });
   const results = [];
   const check = (name, ok, info = '') => { results.push({ name, ok, info }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${info}`); };
@@ -30,13 +31,13 @@ module.exports = async ({ win, app, focus }) => {
   }
   focus.lastTick = Date.now(); focus.cur = null;
 
-  const js = (code) => win.webContents.executeJavaScript(code);
+  const js = (code) => win.webContents.executeJavaScript(`try { ${code} } catch (e) { 'JSERR ' + e.message }`).then((r) => { if (typeof r === 'string' && r.startsWith('JSERR')) console.log(r, '::', code.slice(0, 160)); return r; });
   const shot = async (name) => { const img = await win.webContents.capturePage(); fs.writeFileSync(path.join(OUT, name + '.png'), img.toPNG()); };
   await wait(7000);
-  const views = ['overview', 'activity', 'apps', 'startup', 'permissions', 'focus', 'thermals', 'specs', 'checkup'];
+  const views = ['overview', 'activity', 'apps', 'startup', 'permissions', 'focus', 'thermals', 'specs', 'upgrade', 'checkup'];
   for (const v of views) {
     win.webContents.send('vitals:navigate', v);
-    await wait(v === 'checkup' || v === 'specs' || v === 'apps' ? 4500 : 3000);
+    await wait(v === 'checkup' || v === 'specs' || v === 'apps' || v === 'upgrade' ? 5000 : 3000);
     await shot(v);
     const on = await js(`document.querySelector('.view.on').id`);
     check('page ' + v, on === 'v-' + v, on);
@@ -64,6 +65,25 @@ module.exports = async ({ win, app, focus }) => {
   // checkup
   win.webContents.send('vitals:navigate', 'checkup'); await wait(2500);
   const nf = await js(`document.querySelectorAll('.finding').length`); check('checkup has findings', nf > 1, String(nf));
+  // upgrade tab
+  win.webContents.send('vitals:navigate', 'upgrade'); await wait(3000);
+  check('upgrade shows the machine', await js(`!!document.querySelector('.ug-hero h2') && document.querySelectorAll('.inside .card').length >= 4`));
+  const nIdeas = await js(`document.querySelectorAll('.idea').length`); check('upgrade suggestions render', nIdeas >= 0, String(nIdeas));
+  await shot('upgrade-scroll-top');
+  await js(`document.querySelector('#ug-page').closest('.scroll').scrollTop = 99999`); await wait(400); await shot('upgrade-inside');
+  if (nIdeas) { await js(`(document.querySelector('.idea [data-guide]') || {click(){}}).click()`); await wait(600); await shot('upgrade-guide'); await js(`(document.querySelector('#modal [data-r]') || {click(){}}).click()`); }
+  await js(`document.querySelector('#ug-tab button[data-t="drivers"]').click()`); await wait(2500);
+  check('drivers view renders', await js(`!!document.querySelector('#ug-upd')`));
+  await js(`document.querySelector('#ug-upd').click()`); await wait(process.env.VITALS_DEMO ? 2000 : 1500); await shot('upgrade-drivers');
+  console.log('step: drives tab'); await js(`document.querySelector('#ug-tab button[data-t="drives"]').click()`); await wait(2500); console.log('step: drives shown', await js(`[...document.querySelectorAll('.drive')].map(d=>d.dataset.id+':'+!!d.querySelector('[data-a="speed"]')+':'+!!d.querySelector('[data-size]')).join(' | ')`));
+  const nd = await js(`document.querySelectorAll('.drive').length`); check('drives listed', nd > 0, String(nd));
+  await js(`(()=>{ const ds=[...document.querySelectorAll('.drive')].filter(d=>d.querySelector('[data-a="speed"]')); const d=ds.find(x=>/System|Macintosh|Windows/.test(x.textContent)) || ds[ds.length-1]; d.querySelector('[data-size]').value='256'; d.querySelector('[data-a="speed"]').click(); return ds.length; })()`); await wait(1200);
+  if (await js(`!!document.querySelector('#modal:not([hidden]) [data-r="ok"]')`)) { await js(`document.querySelector('#modal [data-r="ok"]').click()`); }
+  await wait(process.env.VITALS_DEMO ? 2500 : 12000);
+  check('speed test shows MB/s', await js(`document.querySelector('#ug-page').textContent.includes('MB/s')`));
+  const ext = await js(`!!document.querySelector('.drive.ext [data-a="rename"]')`);
+  if (ext) { await js(`document.querySelector('.drive.ext [data-a="rename"]').click()`); await wait(300); check('rename field opens', await js(`!!document.querySelector('#ug-name')`)); await shot('upgrade-rename'); await js(`document.querySelector('#ug-name').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`); }
+  await wait(300); await shot('upgrade-drives');
   // settings + light theme
   await js(`document.querySelector('#open-settings').click()`); await wait(600); await shot('settings');
   await js(`document.querySelector('#modal [data-r]').click()`);
@@ -77,4 +97,4 @@ module.exports = async ({ win, app, focus }) => {
   const failed = results.filter((r) => !r.ok).length;
   console.log(`\n${results.length - failed}/${results.length} checks passed`);
   app.exit(failed ? 1 : 0);
-};
+}

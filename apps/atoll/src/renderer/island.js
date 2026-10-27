@@ -30,6 +30,7 @@
   const mods = () => S.settings.modules;
   const geo = () => S.geo || { style: 'float', notchWidth: 0, notchHeight: 0 };
   const notch = () => geo().style === 'notch';
+  const hw = () => notch() && !!geo().notch;   // a real camera notch (MacBook) rather than a notch-style tab
 
   function ring(pct, size, color, stroke = 3, inner = '', cls = '') {
     const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.max(0, Math.min(1, pct)));
@@ -83,7 +84,7 @@
       const m = a.m; const live = m.state === 'live';
       const hs = m.state === 'pre' ? '' : m.home.score ?? 0, as = m.state === 'pre' ? '' : m.away.score ?? 0;
       const tag = live ? `<span class="sub tnum" style="color:var(--match)">${esc(m.label || '')}</span>` : m.state === 'pre' ? `<span class="sub">${esc(kickoff(m.kickoff))}</span>` : `<span class="sub">${esc(m.label || 'FT')}</span>`;
-      if (notch()) return { l: `${crest(m.home.logo)}<span class="val tnum">${hs}</span>`, r: `<span class="val tnum">${as}</span>${crest(m.away.logo)}${live ? '<span class="livedot"></span>' : ''}` };
+      if (hw()) return { l: `${crest(m.home.logo)}<span class="val tnum">${hs}</span>`, r: `<span class="val tnum">${as}</span>${crest(m.away.logo)}${live ? '<span class="livedot"></span>' : ''}` };
       return { l: crest(m.home.logo), mid: `<span class="val tnum">${esc(m.home.short)} ${m.state === 'pre' ? 'v' : `${hs}–${as}`} ${esc(m.away.short)}</span> ${tag}`, r: crest(m.away.logo) };
     }
     return null;
@@ -109,7 +110,10 @@
       const h = g.notchHeight || 32, gapw = g.notchWidth;
       if (!w) return { w: gapw, h, html: '', gapw, bubble: null };
       const side = Math.max(width(w.l), width(w.r)) + 16;
-      return { w: gapw + side * 2, h, gapw, html: `<div class="wing l" style="width:${side - 10}px">${w.l}</div><div class="gap"></div><div class="wing r" style="width:${side - 10}px">${w.r}</div>`, bubble: b ? bubbleHTML(b) : null, bubbleKey: b?.k };
+      // no camera in the way: the middle of the tab carries the title (song, timer label, teams)
+      const mid = !hw() && w.mid ? `<div class="gap ell" style="display:flex;align-items:center;justify-content:center;gap:6px;overflow:hidden">${w.mid}</div>` : '<div class="gap"></div>';
+      const midW = !hw() && w.mid ? Math.max(gapw, Math.min(220, width(w.mid) + 12)) : gapw;
+      return { w: midW + side * 2, h, gapw: midW, html: `<div class="wing l" style="width:${side - 10}px">${w.l}</div>${mid}<div class="wing r" style="width:${side - 10}px">${w.r}</div>`, bubble: b ? bubbleHTML(b) : null, bubbleKey: b?.k };
     }
     const h = 32;
     if (!w) {
@@ -127,7 +131,7 @@
 
   // ---------------------------------------------------------------- peek (bursts)
   function burstModel(b) {
-    const g = geo(); const top = notch() ? g.notchHeight : 0;
+    const g = geo(); const top = hw() ? g.notchHeight : 0;
     const base = { h: top + 78, pt: top + 10 };
     if (b.kind === 'timer') return { ...base, w: 420, c: 'var(--timer)', html: `${ring(1, 46, 'var(--timer)', 3.5, icon('timer', 20), 'ringing')}<div class="grow"><div class="pk-t ell">${esc(b.label)}</div><div class="pk-s">Timer done</div></div><div class="pk-actions"><button class="btn sm" data-act="timerExtend" data-id="${b.id}">+1 min</button><button class="btn sm acc" style="--c:var(--timer)" data-act="stopRing" data-id="${b.id}">Stop</button></div>`, sticky: true };
     if (b.kind === 'focus') return { ...base, w: 400, html: `${ring(1, 46, b.to === 'work' ? 'var(--focus)' : 'var(--match)', 3.5, icon(b.to === 'work' ? 'focus' : 'sparkle', 19))}<div class="grow"><div class="pk-t">${esc(b.label)}</div><div class="pk-s">${b.to === 'work' ? `Session ${b.cycle}` : 'Step away for a bit'}</div></div><button class="btn sm" data-act="focusSkip">Skip</button>`, ms: 6000 };
@@ -196,7 +200,9 @@
       document.documentElement.style.setProperty('--iw', `${t.w}px`);
       if (t.hh) head.style.setProperty('--hh', `${t.hh}px`);
       placeBubble(t);
+      requestAnimationFrame(rehit);
     };
+    if (geo().fixed) { apply(); setTimeout(rehit, DUR + 40); return; }   // Windows/Linux: the window never resizes
     if (grow) { const w = { w: Math.max(want.w, lastWin.w), h: Math.max(want.h, lastWin.h), expanded: want.expanded }; lastWin = w; A.call('size', w).then(() => requestAnimationFrame(apply)); }
     else apply();
     setTimeout(() => { if (my !== gen) return; lastWin = want; A.call('size', want); }, DUR + 40);
@@ -249,7 +255,23 @@
   // ---------------------------------------------------------------- panel header
   const VIEWS = [['home', 'home', 'Home'], ['media', 'music', 'Music'], ['timers', 'timer', 'Timers'], ['match', 'ball', 'Match'], ['shelf', 'tray', 'Shelf']];
   const enabledViews = () => VIEWS.filter(([k]) => k === 'home' || mods()[k]).map(([k]) => k);
+  let lastViewKey = '', lastHeadKey = '';
+  /** What the current view shows, minus values that move on their own (song position, countdowns). */
+  function viewKey() {
+    const n = S.media?.now;
+    const media = n ? [n.player, n.state, n.title, n.artist, n.album, n.art ? n.art.length : 0, n.canNext, n.canPrev, n.canSeek, Math.round(n.duration || 0)] : null;
+    const vol = S.media?.volume ? [S.media.volume.volume, S.media.volume.muted] : null;
+    const T = S.timers; const timers = T ? [T.list.map((t) => [t.id, t.state, t.label, t.duration, t.state === 'running' ? t.endsAt : t.left]), T.focus && [T.focus.phase, T.focus.running, T.focus.cycle, T.focus.endsAt], [T.watch.running, T.watch.before, T.watch.laps.length]] : null;
+    const parts = { media: [media, vol, S.media?.running, S.media?.error], timers, match: S.match, shelf: S.shelf, settings: S.settings, weather: S.glance?.weather };
+    const use = { home: ['media', 'timers', 'match', 'shelf', 'weather', 'settings'], media: ['media', 'settings'], timers: ['timers', 'settings'], match: ['match'], shelf: ['shelf', 'settings'] }[view] || [];
+    return view + '|' + sub.timers + sub.match + '|' + JSON.stringify(use.map((k) => parts[k]));
+  }
+  function headKey() {
+    const w = S.glance?.weather;
+    return JSON.stringify([view, pinned, enabledViews(), !!leadTimer(), liveMatch()?.state, np()?.state, S.shelf?.items.length, w && [w.temp, w.icon], geo().style, Math.floor(Date.now() / 60e3)]);
+  }
   function renderHead() {
+    lastHeadKey = headKey();
     const vs = VIEWS.filter(([k]) => enabledViews().includes(k));
     const dot = (k) => {
       if (k === 'timers' && leadTimer()) return '<span class="dot" style="--c:var(--timer)"></span>';
@@ -261,8 +283,8 @@
     const tabs = `<div class="tabs">${vs.map(([k, ic, label]) => `<button class="tab ${view === k ? 'on' : ''}" data-view="${k}" title="${label}">${icon(ic, 17)}${dot(k)}</button>`).join('')}</div>`;
     const w = S.glance.weather;
     const wx = mods().weather && w ? `<span class="wx-ic ${w.icon}">${icon(w.icon, 15)}</span><span class="tnum">${w.temp}°</span>` : '';
-    const right = `<div class="head-r">${notch() ? `<span class="head-mid" style="flex:none;margin-right:6px">${wx}</span>` : ''}<button class="ib ${pinned ? 'on' : ''}" data-act="pin" title="${pinned ? 'Stays open · click to let it close' : 'Keep open'}">${icon(pinned ? 'pin' : 'pinOff', 16)}</button><button class="ib" data-act="settings" title="Settings">${icon('gear', 16)}</button></div>`;
-    const mid = notch() ? `<div class="grow"></div><div class="notchgap" style="--gapw:${geo().notchWidth}px"></div><div class="grow"></div>` : `<div class="head-mid tnum">${esc(clock())} ${esc(ampm())} · ${esc(dateStr())}${wx ? ` · ${wx}` : ''}</div>`;
+    const right = `<div class="head-r">${hw() ? `<span class="head-mid" style="flex:none;margin-right:6px">${wx}</span>` : ''}<button class="ib ${pinned ? 'on' : ''}" data-act="pin" title="${pinned ? 'Stays open · click to let it close' : 'Keep open'}">${icon(pinned ? 'pin' : 'pinOff', 16)}</button><button class="ib" data-act="settings" title="Settings">${icon('gear', 16)}</button></div>`;
+    const mid = hw() ? `<div class="grow"></div><div class="notchgap" style="--gapw:${geo().notchWidth}px"></div><div class="grow"></div>` : `<div class="head-mid tnum">${esc(clock())} ${esc(ampm())} · ${esc(dateStr())}${wx ? ` · ${wx}` : ''}</div>`;
     head.innerHTML = tabs + mid + right;
   }
 
@@ -271,6 +293,7 @@
     if (mode !== 'open') return;
     const fn = { home: vHome, media: vMedia, timers: vTimers, match: vMatch, shelf: vShelf }[view] || vHome;
     const keepFocus = document.activeElement && viewEl.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' ? { id: document.activeElement.id, v: document.activeElement.value, s: document.activeElement.selectionStart } : null;
+    lastViewKey = viewKey();
     viewEl.innerHTML = `<div class="view-in" ${fresh ? '' : 'style="animation:none"'}>${fn()}</div>`;
     if (keepFocus?.id) { const el = document.getElementById(keepFocus.id); if (el) { el.value = keepFocus.v; el.focus(); try { el.setSelectionRange(keepFocus.s, keepFocus.s); } catch (_) {} } }
     if (view === 'shelf') thumbs();
@@ -621,9 +644,20 @@
   // shelf: drag files out
   viewEl.addEventListener('dragstart', (e) => { const f = e.target.closest('[data-file]'); if (!f) return; e.preventDefault(); A.drag(f.dataset.file); });
 
+  // Windows/Linux: the window is a fixed transparent sheet that lets clicks through; take them only over the island.
+  let px = -1, py = -1, hitOn = false;
+  function inside(el, x, y, pad) { if (!el) return false; const r = el.getBoundingClientRect(); if (!r.width || !r.height) return false; return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad; }
+  function rehit() {
+    if (!S || !geo().fixed) return;
+    const on = px >= 0 && (inside(isl, px, py, mode === 'compact' ? 6 : 2) || (bubble.classList.contains('on') && inside(bubble, px, py, 4)) || dragging > 0);
+    if (on !== hitOn) { hitOn = on; A.call('hit', on); }
+  }
+  window.addEventListener('mousemove', (e) => { px = e.clientX; py = e.clientY; rehit(); }, { passive: true });
+  document.addEventListener('mouseleave', () => { px = py = -1; rehit(); });
+
   // files dragged onto the island
   const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
-  window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragging++; isl.classList.add('dragging'); if (dragging === 1 && mods().shelf) { clearTimeout(leaveT); if (mode !== 'open') { view = 'shelf'; open('shelf'); } else if (view !== 'shelf') { view = 'shelf'; renderHead(); renderView(); layout(); } } });
+  window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragging++; px = e.clientX; py = e.clientY; rehit(); isl.classList.add('dragging'); if (dragging === 1 && mods().shelf) { clearTimeout(leaveT); if (mode !== 'open') { view = 'shelf'; open('shelf'); } else if (view !== 'shelf') { view = 'shelf'; renderHead(); renderView(); layout(); } } });
   window.addEventListener('dragover', (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
   window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; dragging = Math.max(0, dragging - 1); if (!dragging) isl.classList.remove('dragging'); });
   window.addEventListener('drop', async (e) => {
@@ -641,11 +675,14 @@
     if (mode === 'open') {
       const activeInput = document.activeElement && document.activeElement.tagName === 'INPUT' && viewEl.contains(document.activeElement);
       const rel = { timers: ['timers'], media: ['media'], match: ['match'], shelf: ['shelf', 'settings'], home: ['timers', 'media', 'match', 'glance', 'shelf'] }[view] || [];
-      if (rel.some((k) => k in p) && !(activeInput && view !== 'timers' && view !== 'match') && !seeking) {
-        if (view === 'home' && Object.keys(p).length === 1 && p.glance) { const st = viewEl.querySelector('.strip'); if (st) st.innerHTML = strip(); }
-        else renderView();
-      }
-      if ('timers' in p || 'match' in p || 'media' in p || 'glance' in p || 'settings' in p) renderHead();
+      // Only redraw when something you can see changed. Song position, the clock and live numbers are moved in place
+      // by tick(); redrawing the whole view for them made the island flicker (worst on Windows, where the media
+      // timeline reports often).
+      const key = viewKey();
+      if (rel.some((k) => k in p) && key !== lastViewKey && !(activeInput && view !== 'timers' && view !== 'match') && !seeking) renderView();
+      else if (view === 'home' && p.glance) { const st = viewEl.querySelector('.strip'); if (st) st.innerHTML = strip(); }
+      const hk = headKey();
+      if (hk !== lastHeadKey) renderHead();
     }
     if (mode === 'compact') layout();
     if (mode === 'peek' && burstNow?.kind === 'timer' && p.timers && !S.timers.list.some((t) => t.id === burstNow.id && t.state === 'done')) { ringing = null; nextBurst(); }

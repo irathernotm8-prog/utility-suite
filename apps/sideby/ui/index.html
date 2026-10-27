@@ -21,7 +21,7 @@
     <div class="home-grid">
       <div class="home-lede">
         <h1>Watch together, from anywhere.</h1>
-        <p>Open any site, press play, and everyone in your room sees the same moment. For live games and anything else, broadcast your screen instead.</p>
+        <p>Open any site, press play, and everyone in your room sees the same moment. For live games and anything else, share your screen instead.</p>
       </div>
 
       <div class="home-actions">
@@ -100,11 +100,11 @@
         </form>
         <button class="btn pill follow" id="follow-btn" hidden>Back to the host’s page</button>
         <div class="broadcast-wrap">
-          <button class="btn secondary sm" id="broadcast-btn" aria-haspopup="menu">Broadcast</button>
+          <button class="btn secondary sm" id="broadcast-btn" aria-haspopup="menu">Share screen</button>
           <div class="menu" id="broadcast-menu" role="menu" hidden>
-            <button role="menuitem" data-broadcast="stage"><strong>Broadcast this page</strong><span>Streams the stage with sound. Best for live games and streams that won’t sync.</span></button>
-            <button role="menuitem" data-broadcast="source"><strong>Share a window or screen</strong><span>Any app on your computer, like a video player.</span></button>
-            <button role="menuitem" data-broadcast="file"><strong>Play a file from my computer</strong><span>Opens it here and broadcasts it to the room.</span></button>
+            <button role="menuitem" data-broadcast="stage"><strong>Share this tab</strong><span>Streams the page open in Sideby, with sound. Best for live games and streams that won’t sync.</span></button>
+            <button role="menuitem" data-broadcast="source"><strong>Share a window or your screen</strong><span>Any app on your computer, or everything you see.</span></button>
+            <button role="menuitem" data-broadcast="file"><strong>Play a file from my computer</strong><span>Opens it in Sideby and shares it with the room.</span></button>
           </div>
         </div>
       </div>
@@ -121,11 +121,11 @@
               <p>Pick a site, then find something to watch. Everyone’s video follows yours.</p>
               <div class="launch-grid">
                 <button class="launch" data-url="https://www.youtube.com"><b>YouTube</b><span>Synced</span></button>
-                <button class="launch" data-url="https://www.twitch.tv"><b>Twitch</b><span>Synced or broadcast</span></button>
+                <button class="launch" data-url="https://www.twitch.tv"><b>Twitch</b><span>Synced or shared</span></button>
                 <button class="launch" data-url="https://vimeo.com/watch"><b>Vimeo</b><span>Synced</span></button>
                 <button class="launch" data-url="https://archive.org/details/movies"><b>Internet Archive</b><span>Free films, synced</span></button>
-                <button class="launch" data-action="file"><b>A file on this computer</b><span>Broadcast</span></button>
-                <button class="launch" data-action="source"><b>Another app or screen</b><span>Broadcast</span></button>
+                <button class="launch" data-action="file"><b>A file on this computer</b><span>Shared from you</span></button>
+                <button class="launch" data-action="source"><b>Your screen or another app</b><span>Screen share</span></button>
               </div>
             </div>
             <div class="empty-guest" id="empty-guest" hidden>
@@ -225,10 +225,10 @@
       <legend>Watching</legend>
       <label class="check"><input type="checkbox" id="set-everyone"> Let everyone play, pause and change what’s on</label>
       <label class="check"><input type="checkbox" id="set-adblock"> Block ads and pop-ups on the stage</label>
-      <label>Broadcast quality
+      <label>Screen share quality
         <select id="set-quality"></select>
       </label>
-      <p class="fine">Each friend gets their own copy of your broadcast. With four or more, 720p is smoother on most home internet.</p>
+      <p class="fine">Each friend gets their own copy of your screen share. With four or more, 720p is smoother on most home internet.</p>
     </fieldset>
 
     <details>

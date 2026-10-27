@@ -221,7 +221,9 @@ function buildMenu() {
     { label: 'Controls', submenu: [
       { label: 'Play / Pause', accelerator: 'Space', registerAccelerator: false, click: () => send('menu', 'playpause') },
       { label: 'Next', accelerator: 'CmdOrCtrl+Right', click: () => send('menu', 'next') },
-      { label: 'Previous', accelerator: 'CmdOrCtrl+Left', click: () => send('menu', 'prev') }
+      { label: 'Previous', accelerator: 'CmdOrCtrl+Left', click: () => send('menu', 'prev') },
+      { type: 'separator' },
+      { label: 'Visualizer', accelerator: 'CmdOrCtrl+Shift+V', click: () => send('menu', 'vis') }
     ] },
     { role: 'windowMenu' }
   ];

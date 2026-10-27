@@ -12,6 +12,8 @@ const S = { settings: {}, platform: 'darwin', view: 'overview', last: null, hist
 
 // ---------------------------------------------------------------- formatting
 function fmtB(b, d) { if (b == null || isNaN(b)) return '–'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (Math.abs(b) >= 1000 && i < u.length - 1) { b /= 1000; i++; } const dd = d ?? (b >= 100 || i === 0 ? 0 : 1); return `${b.toFixed(dd)} ${u[i]}`; }
+/** Memory is sized in binary units (16 GB of RAM is 16 × 2^30 bytes), like Activity Monitor and Task Manager. */
+function fmtMem(b, d) { if (b == null || isNaN(b)) return '–'; const g = b / 2 ** 30; if (g < 1) return `${Math.round(b / 2 ** 20)} MB`; return `${g.toFixed(d ?? (Number.isInteger(+g.toFixed(1)) || g >= 100 ? 0 : 1))} GB`; }
 const fmtRate = (b) => (b == null ? '–' : fmtB(b) + '/s');
 const pct = (v, d = 0) => (v == null || isNaN(v) ? '–' : `${v.toFixed(d)}%`);
 function dur(s, long) { s = Math.round(s || 0); const d = long === 'h' ? 0 : Math.floor(s / 86400), h = long === 'h' ? Math.floor(s / 3600) : Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); if (d) return `${d}d ${h}h`; if (h) return `${h}h ${String(m).padStart(long === true ? 2 : 1, '0')}m`; if (m) return `${m}m`; return `${s}s`; }
@@ -128,8 +130,8 @@ function renderOverview() {
   // memory
   const m = s.mem;
   Charts.ring($('#ring-mem'), m.pct / 100, { tone: m.pressure === 'critical' ? 'bad' : m.pressure === 'warning' ? 'warn' : 'acc' });
-  $('#ov-mem').innerHTML = `${fmtB(m.used).replace(/ (\w+)$/, '<small>$1</small>')}`;
-  $('#ov-mem-sub').textContent = `of ${fmtB(m.total, 0)}${m.swap && m.swap.used > 5e7 ? ` · ${fmtB(m.swap.used)} swap` : ''}`;
+  $('#ov-mem').innerHTML = `${fmtMem(m.used, 1).replace(/ (\w+)$/, '<small>$1</small>')}`;
+  $('#ov-mem-sub').textContent = `of ${fmtMem(m.total, 0)}${m.swap && m.swap.used > 5e7 ? ` · ${fmtB(m.swap.used)} swap` : ''}`;
   const mp = $('#ov-mem-press'); mp.className = 'pill ' + (m.pressure === 'critical' ? 'bad' : m.pressure === 'warning' ? 'warn' : 'ok'); mp.innerHTML = `<i></i>${m.pressure === 'normal' ? 'Healthy' : m.pressure === 'warning' ? 'Tight' : 'Under pressure'}`;
   const parts = isMac() ? [['App', m.app, '--s1'], ['Wired', m.wired, '--s3'], ['Compressed', m.compressed, '--s2']] : [['In use', m.used, '--s1']];
   $('#ov-mem-bar').innerHTML = parts.map(([n, v, c]) => `<i title="${n} ${fmtB(v)}" style="width:${(v / m.total * 100).toFixed(2)}%;background:var(${c})"></i>`).join('');
@@ -205,7 +207,7 @@ $('#act-q').oninput = (e) => { act.q = e.target.value.toLowerCase(); renderActiv
 $('#act-tbl thead').onclick = (e) => { const th = e.target.closest('th[data-s]'); if (!th) return; const k = th.dataset.s; if (act.sort === k) act.asc = !act.asc; else { act.sort = k; act.asc = k === 'name' || k === 'kind'; } renderActivity(); };
 function renderActStrip() {
   const s = S.last; if (!s) return; const p = S.procs;
-  $('#act-strip').innerHTML = `<span>CPU<b>${pct(s.cpu.total)}</b></span><span>Memory<b>${fmtB(s.mem.used)} / ${fmtB(s.mem.total, 0)}</b></span>${s.mem.swap && s.mem.swap.total ? `<span>Swap<b>${fmtB(s.mem.swap.used)}</b></span>` : ''}<span>GPU<b>${s.gpu.util != null ? pct(s.gpu.util) : '–'}</b></span>` +
+  $('#act-strip').innerHTML = `<span>CPU<b>${pct(s.cpu.total)}</b></span><span>Memory<b>${fmtMem(s.mem.used, 1)} / ${fmtMem(s.mem.total, 0)}</b></span>${s.mem.swap && s.mem.swap.total ? `<span>Swap<b>${fmtB(s.mem.swap.used)}</b></span>` : ''}<span>GPU<b>${s.gpu.util != null ? pct(s.gpu.util) : '–'}</b></span>` +
     (p ? `<span>Apps<b>${p.groups.filter((g) => g.kind === 'app').length}</b></span><span>Background<b>${p.groups.filter((g) => g.kind === 'background').length}</b></span><span>Processes<b>${p.count}</b></span>` : '') + `<span class="grow"></span><button class="link-btn" id="act-sysmon">Open ${isMac() ? 'Activity Monitor' : 'Task Manager'}</button>`;
   $('#act-sysmon').onclick = () => call('open-system-monitor');
 }
@@ -594,12 +596,12 @@ function renderSpecs() {
   const t = (rows) => `<table class="spec-t">${rows.filter(([, v]) => v != null && v !== '' && v !== 0).map(([k, v, cls]) => `<tr><th>${esc(k)}</th><td class="${cls || ''}">${esc(v)}</td></tr>`).join('')}</table>`;
   const serial = S.settings.showSerials ? '' : 'blur';
   const cache = sp.cpu.cache || {};
-  el.innerHTML = `<div class="card sp-hero"><div class="devic"><svg class="ic" width="44" height="44"><use href="#i-chip"/></svg></div><div><h2>${esc(sp.model)}</h2><div class="muted">${esc(sp.cpu.name)} · ${fmtB(sp.memory.total, 0)} memory · ${esc(sp.os.name)} ${esc(sp.os.version)}</div></div>
+  el.innerHTML = `<div class="card sp-hero"><div class="devic"><svg class="ic" width="44" height="44"><use href="#i-chip"/></svg></div><div><h2>${esc(sp.model)}</h2><div class="muted">${esc(sp.cpu.name)} · ${fmtMem(sp.memory.total, 0)} memory · ${esc(sp.os.name)} ${esc(sp.os.version)}</div></div>
       <div class="kv"><span>Up for</span><b>${dur(S.last ? S.last.uptime : sp.os.uptime)}</b><span>Name</span><b>${esc(sp.hostname)}</b></div></div>
     <div class="sp-grid">
       <div class="card"><div class="card-h"><span>Processor</span></div>${t([['Chip', sp.cpu.name], ['Cores', sp.cpu.performanceCores && sp.cpu.efficiencyCores ? `${sp.cpu.cores} (${sp.cpu.performanceCores} performance + ${sp.cpu.efficiencyCores} efficiency)` : sp.cpu.cores], ['Threads', sp.cpu.threads !== sp.cpu.cores ? sp.cpu.threads : null], ['Base speed', sp.cpu.speed ? `${sp.cpu.speed} GHz` : null], ['Max speed', sp.cpu.speedMax && sp.cpu.speedMax !== sp.cpu.speed ? `${sp.cpu.speedMax} GHz` : null], ['L2 cache', cache.l2 ? fmtB(cache.l2, 0) : null], ['L3 cache', cache.l3 ? fmtB(cache.l3, 0) : null], ['Architecture', sp.arch], ['Socket', sp.cpu.socket]])}</div>
-      <div class="card"><div class="card-h"><span>Memory</span></div>${t([['Installed', fmtB(sp.memory.total, 0)], ...sp.memory.modules.map((m, i) => [m.slot || `Module ${i + 1}`, [fmtB(m.size, 0), m.type, m.speed ? m.speed + ' MHz' : '', m.maker].filter(Boolean).join(' · ')])])}</div>
-      <div class="card"><div class="card-h"><span>Graphics &amp; displays</span></div>${t([...sp.gpus.map((g) => ['Graphics', [g.model, g.cores ? `${g.cores} cores` : '', typeof g.vram === 'number' ? fmtB(g.vram, 0) : g.vram].filter(Boolean).join(' · ')]), ...sp.displays.map((d) => [d.internal ? 'Built-in display' : (d.name || 'Display'), d.resolution || d.pixels])])}</div>
+      <div class="card"><div class="card-h"><span>Memory</span></div>${t([['Installed', fmtMem(sp.memory.total, 0)], ...sp.memory.modules.map((m, i) => [m.slot || `Module ${i + 1}`, [fmtMem(m.size, 0), m.type, m.speed ? m.speed + ' MHz' : '', m.maker].filter(Boolean).join(' · ')])])}</div>
+      <div class="card"><div class="card-h"><span>Graphics &amp; displays</span></div>${t([...sp.gpus.map((g) => ['Graphics', [g.model, g.cores ? `${g.cores} cores` : '', typeof g.vram === 'number' ? fmtMem(g.vram, 0) : g.vram].filter(Boolean).join(' · ')]), ...sp.displays.map((d) => [d.internal ? 'Built-in display' : (d.name || 'Display'), d.resolution || d.pixels])])}</div>
       <div class="card"><div class="card-h"><span>Storage</span></div>${t([...sp.disks.map((d) => [d.name || 'Drive', [fmtB(d.size, 0), d.type, d.interface, d.smart && d.smart !== 'unknown' ? `SMART ${d.smart}` : ''].filter(Boolean).join(' · ')]), ...((S.last && S.last.volumes) || []).map((v) => [v.name, `${fmtB(v.free)} free of ${fmtB(v.size, 0)}`])])}</div>
       <div class="card"><div class="card-h"><span>System</span></div>${t([['Operating system', `${sp.os.name} ${sp.os.version}`], ['Build', sp.os.build], ['Kernel', sp.os.kernel], ['Model ID', sp.modelId !== sp.model ? sp.modelId : null], ['Firmware', sp.firmware], ['Motherboard', sp.board], ['Serial number', sp.serial && sp.serial !== '-' ? sp.serial : null, serial], ['Booted', new Date(sp.os.bootTime).toLocaleString()]])}</div>
       <div class="card"><div class="card-h"><span>Network</span></div>${t(sp.network.map((n) => [n.name + (n.ssid ? ` (${n.ssid})` : ''), [n.type, n.ip4, n.speed > 0 ? `${n.speed} Mb/s` : ''].filter(Boolean).join(' · ')]))}</div>
@@ -609,9 +611,211 @@ function renderSpecs() {
 }
 $('#sp-copy').onclick = () => {
   const sp = S.specs; if (!sp) return;
-  const lines = [sp.model, `Processor: ${sp.cpu.name} (${sp.cpu.cores} cores)`, `Memory: ${fmtB(sp.memory.total, 0)}`, ...sp.gpus.map((g) => `Graphics: ${g.model}${g.cores ? ` (${g.cores} cores)` : ''}`), ...sp.disks.map((d) => `Storage: ${d.name} ${fmtB(d.size, 0)}`), `OS: ${sp.os.name} ${sp.os.version}${sp.os.build ? ` (${sp.os.build})` : ''}`];
+  const lines = [sp.model, `Processor: ${sp.cpu.name} (${sp.cpu.cores} cores)`, `Memory: ${fmtMem(sp.memory.total, 0)}`, ...sp.gpus.map((g) => `Graphics: ${g.model}${g.cores ? ` (${g.cores} cores)` : ''}`), ...sp.disks.map((d) => `Storage: ${d.name} ${fmtB(d.size, 0)}`), `OS: ${sp.os.name} ${sp.os.version}${sp.os.build ? ` (${sp.os.build})` : ''}`];
   navigator.clipboard.writeText(lines.join('\n')).then(() => toast('Specs copied'));
 };
+
+// ---------------------------------------------------------------- UPGRADE
+const ug = { tab: 'upgrades', scan: null, drivers: null, updates: null, drives: null, speed: {}, progress: {}, renaming: null, loading: false, drivesTimer: null };
+loaders.upgrade = (arg) => { if (arg) { ug.tab = arg; } syncSeg('#ug-tab', 't', ug.tab); showUpgrade(); };
+$('#ug-tab').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; ug.tab = b.dataset.t; syncSeg('#ug-tab', 't', ug.tab); showUpgrade(); };
+$('#ug-rescan').onclick = () => { if (ug.tab === 'upgrades') loadScan(true, true); else if (ug.tab === 'drivers') { ug.drivers = null; showUpgrade(); } else loadDrives(); };
+function showUpgrade() {
+  clearInterval(ug.drivesTimer); ug.drivesTimer = null;
+  $('#ug-rescan span').textContent = ug.tab === 'upgrades' ? 'Check my upgrade' : 'Refresh';
+  if (ug.tab === 'upgrades') { if (ug.scan) renderUpgrades(); else loadScan(false); }
+  if (ug.tab === 'drivers') { if (ug.drivers) renderDrivers(); else loadDrivers(); }
+  if (ug.tab === 'drives') { loadDrives(); ug.drivesTimer = setInterval(() => { if (S.view === 'upgrade' && ug.tab === 'drives' && !Object.keys(ug.progress).length && !ug.renaming) loadDrives(true); }, 5000); }
+}
+async function loadScan(fresh, announce) {
+  if (ug.loading) return; ug.loading = true;
+  if (!ug.scan) $('#ug-page').innerHTML = `<div class="loading">Looking inside your ${computer()}: memory slots, drives, graphics and battery…</div>`;
+  const b = $('#ug-rescan'); b.disabled = true;
+  const r = await safeCall('upgrade:scan', fresh); ug.loading = false; b.disabled = false;
+  if (!r) { if (!ug.scan) $('#ug-page').innerHTML = '<div class="empty"><b>Couldn’t read the hardware</b>Press Check my upgrade to try again.</div>'; return; }
+  ug.scan = r; badgeUpgrade();
+  if (announce) toast(r.changes.length ? `Found: ${r.changes.map((c) => c.text).join(' · ')}` : 'No hardware changes since the last check');
+  if (S.view === 'upgrade' && ug.tab === 'upgrades') renderUpgrades();
+}
+function badgeUpgrade() { const n = ug.scan ? ug.scan.advice.ideas.filter((i) => i.impact === 'high').length : 0; const nb = $('#nb-upgrade'); nb.hidden = !n; nb.textContent = n; nb.className = 'badge warn'; }
+const AREA_IC = { memory: 'i-chip', storage: 'i-drive', graphics: 'i-overview', battery: 'i-bolt', os: 'i-reload', cpu: 'i-chip', displays: 'i-overview' };
+const DIFF = { easy: 'Easy to install', moderate: 'Some disassembly', pro: 'Best done by a pro', none: 'Nothing to install' };
+function renderUpgrades() {
+  const r = ug.scan; if (!r) return; const inv = r.inv, a = r.advice;
+  $('#ug-sub').textContent = `${a.ideas.length} suggestion${a.ideas.length === 1 ? '' : 's'}`;
+  const mem = inv.memory;
+  const slotHtml = mem.soldered || !mem.slots ? `<div class="slots"><div class="slot soldered"><div><b>${fmtMem(mem.total, 0)}</b>${esc(mem.type || '')} · built in</div></div></div>`
+    : `<div class="slots">${Array.from({ length: mem.slots }, (_, i) => { const m = mem.modules.filter((x) => !x.empty)[i]; return m ? `<div class="slot full" title="${esc(m.slot)} ${esc(m.maker)} ${esc(m.part)}"><div><b>${fmtMem(m.size, 0)}</b>${esc(m.type || mem.type)}${m.speed ? ` · ${m.speed}` : ''}</div></div>` : '<div class="slot">Empty</div>'; }).join('')}</div>`;
+  const vd = (area) => a.verdicts.find((v) => v.area === area);
+  const card = (area, title, body) => { const v = vd(area); return `<div class="card"><div class="card-h"><span>${title}</span>${v ? `<span class="vchip ${v.status}"><i></i>${{ open: 'Upgradeable', fixed: 'Built in', limited: 'Limited', warn: 'Needs attention', ok: 'Good', info: 'Info', unknown: 'Unknown' }[v.status]}</span>` : ''}</div>${body}${v ? `<div class="note" style="margin-top:8px">${esc(v.text)}</div>` : ''}${v && v.link ? `<button class="link-btn" data-url="${esc(v.link.url)}">${esc(v.link.label)}</button>` : ''}</div>`; };
+  const t = (rows) => `<table class="spec-t">${rows.filter(([, v]) => v != null && v !== '').map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table>`;
+  $('#ug-page').innerHTML = `
+    ${r.changes.length ? `<div class="banner changes"><svg class="ic" width="18" height="18"><use href="#i-check"/></svg><div class="grow"><b>Upgrade detected</b> since ${dateStr(r.since)}: ${r.changes.map((c) => esc(c.text)).join(' · ')}</div></div>` : ''}
+    <div class="card ug-hero"><div><h2>${esc(inv.model)}</h2><div class="muted">${esc(inv.cpu.name)} · ${fmtMem(mem.total, 0)} memory${inv.board ? ' · ' + esc(inv.board) : ''}</div><p>${esc(a.summary)}</p>
+      <div class="verdicts">${a.verdicts.map((v) => `<span class="vchip ${v.status}" title="${esc(v.text)}"><i></i>${esc(v.title)}: ${{ open: 'upgradeable', fixed: 'built in', limited: 'limited', warn: 'needs attention', ok: 'good', info: 'info', unknown: 'unknown' }[v.status]}</span>`).join('')}</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px">${isMac() ? '<button class="btn sm" data-tool="sysinfo">System Information</button>' : ''}${isWin() ? '<button class="btn sm" data-tool="devices">Device Manager</button>' : ''}</div></div>
+    <div class="ug-sec"><h3>Suggested upgrades</h3><span class="muted">${a.ideas.length ? 'Ranked by how much difference they make. Every part listed fits this machine.' : ''}</span></div>
+    ${a.ideas.length ? `<div class="ideas">${a.ideas.map(ideaHtml).join('')}</div>` : `<div class="card"><div class="empty" style="padding:30px"><b>Nothing worth upgrading right now</b>This ${computer()} has what it needs for how you use it. Vitals will suggest something if memory gets tight or storage fills up.</div></div>`}
+    <div class="ug-sec"><h3>What’s inside</h3><span class="muted">Read from this ${computer()} just now</span></div>
+    <div class="inside">
+      ${card('memory', 'Memory', slotHtml + t([['Installed', fmtMem(mem.total, 0)], ['Type', [mem.type, mem.formFactor].filter(Boolean).join(' ')], ['Speed', mem.speed ? `${mem.speed} MT/s` : ''], ['Slots', mem.slots ? `${mem.used} of ${mem.slots} used` : ''], ['Maximum', mem.max ? fmtMem(mem.max, 0) : '']]))}
+      ${card('storage', 'Storage', t(inv.storage.map((d) => [d.name || 'Drive', [fmtB(d.size, 0), d.media, d.bus, d.system ? 'system' : '', d.wear != null ? `${d.wear}% worn` : '', d.health && !/healthy/i.test(d.health) ? d.health : ''].filter(Boolean).join(' · ')])) || '<div class="muted small">No internal drives found</div>')}
+      ${card('graphics', 'Graphics', t(inv.gpus.map((g) => [g.discrete ? 'Graphics card' : 'Graphics', [g.model, g.cores ? `${g.cores} cores` : '', typeof g.vram === 'number' ? fmtMem(g.vram, 0) : g.vram, g.driverDate ? `driver ${g.driverDate}` : ''].filter(Boolean).join(' · ')])))}
+      ${card('cpu', 'Processor', t([['Model', inv.cpu.name], ['Cores', inv.cpu.threads && inv.cpu.threads !== inv.cpu.cores ? `${inv.cpu.cores} cores / ${inv.cpu.threads} threads` : inv.cpu.cores], ['Socket', inv.cpu.socket]]))}
+      ${vd('battery') ? card('battery', 'Battery', '') : ''}
+      ${vd('displays') ? card('displays', 'Displays', '') : ''}
+    </div>`;
+}
+function ideaHtml(i, k) {
+  const impact = { high: ['ok', 'Big difference'], medium: ['info', 'Noticeable'], low: ['dim', 'Small'] }[i.impact];
+  return `<div class="idea ${i.impact}" data-i="${k}"><div class="ii"><svg class="ic" width="20" height="20"><use href="#${AREA_IC[i.area] || 'i-upgrade'}"/></svg></div><div style="min-width:0">
+    <h4>${esc(i.title)} <span class="pill ${impact[0]}">${impact[1]}</span>${i.difficulty ? `<span class="pill dim">${DIFF[i.difficulty]}</span>` : ''}</h4>
+    <p>${esc(i.why)}</p>
+    ${i.buy ? `<div class="buybox"><span>Look for</span>${esc(i.buy)}<button class="icon-btn xs" data-copy="${esc(i.buy)}" title="Copy"><svg class="ic" width="13" height="13"><use href="#i-copy"/></svg></button></div>` : ''}
+    ${(i.details || []).length ? `<ul>${i.details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}${(i.steps || []).length ? `<ul>${i.steps.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}
+    <div class="acts">${i.guide && GUIDES[i.guide] ? `<button class="btn sm primary" data-guide="${i.guide}"><svg class="ic" width="14" height="14"><use href="#i-wrench"/></svg>How to install</button>` : ''}
+      ${i.go ? `<button class="btn sm" data-go="${esc(i.go)}">See what’s using it</button>` : ''}${i.settings ? `<button class="btn sm" data-tool="updates">Open Windows Update</button>` : ''}
+      ${(i.shop || []).map((s) => `<button class="btn sm" data-url="${esc(s.url)}"><svg class="ic" width="14" height="14"><use href="#i-cart"/></svg>${esc(s.label)}</button>`).join('')}
+      ${(i.help || []).map((s) => `<button class="btn sm ghost" data-url="${esc(s.url)}"><svg class="ic" width="14" height="14"><use href="#i-ext"/></svg>${esc(s.label)}</button>`).join('')}</div>
+  </div></div>`;
+}
+function openGuide(id) {
+  const g = GUIDES[id]; if (!g) return;
+  const toolBtn = { disks: isMac() ? 'Open Disk Utility' : 'Open Disk Management', updates: isMac() ? 'Open Software Update' : 'Open Windows Update' };
+  modal(`<div class="guide"><h2>${esc(g.title)}</h2><div class="meta"><span class="pill">${esc(g.time)}</span></div>
+    ${g.tools.length ? `<h5>You’ll need</h5><ul>${g.tools.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${g.before.length ? `<h5>Before you start</h5><ul>${g.before.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <h5>Steps</h5><ol>${g.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+    <h5>Afterwards</h5><ul>${g.after.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+    <div class="foot">${(g.tools2 || []).map((k) => `<button class="btn" data-tool="${k}">${toolBtn[k]}</button>`).join('')}<span class="grow"></span><button class="btn primary" data-r="">Got it</button></div>`, { wide: true });
+}
+// shared clicks across the Upgrade page and the guide modal
+document.addEventListener('click', (e) => {
+  const u = e.target.closest('[data-url]'); if (u) { e.preventDefault(); call('open-external', u.dataset.url); return; }
+  const tl = e.target.closest('[data-tool]'); if (tl) { call('upgrade:tool', tl.dataset.tool); return; }
+  const gd = e.target.closest('[data-guide]'); if (gd) { openGuide(gd.dataset.guide); return; }
+  const cp = e.target.closest('[data-copy]'); if (cp) { navigator.clipboard.writeText(cp.dataset.copy).then(() => toast('Copied')); }
+});
+
+// drivers & updates
+async function loadDrivers() {
+  $('#ug-page').innerHTML = '<div class="loading">Checking devices and drivers…</div>';
+  const r = await safeCall('upgrade:drivers'); if (!r) return; ug.drivers = r;
+  if (!ug.scan) loadScan(false);
+  renderDrivers();
+}
+async function checkUpdates() {
+  ug.updates = { loading: true }; renderDrivers();
+  const r = await safeCall('upgrade:updates'); ug.updates = r || { error: true }; renderDrivers();
+}
+function vendorLink(name, maker) {
+  const s = `${name} ${maker || ''}`;
+  if (/nvidia|geforce|rtx|gtx/i.test(s)) return { label: 'NVIDIA app', url: 'https://www.nvidia.com/en-us/software/nvidia-app/' };
+  if (/amd|radeon|ryzen/i.test(s)) return { label: 'AMD drivers', url: 'https://www.amd.com/en/support/download/drivers.html' };
+  if (/intel/i.test(s)) return { label: 'Intel Driver Assistant', url: 'https://www.intel.com/content/www/us/en/support/detect.html' };
+  const model = ug.scan ? ug.scan.inv.model : '';
+  return { label: 'Find driver', url: `https://www.google.com/search?q=${encodeURIComponent(`${model} ${name} driver download`)}` };
+}
+function renderDrivers() {
+  const r = ug.drivers; if (!r || S.view !== 'upgrade' || ug.tab !== 'drivers') return;
+  const u = ug.updates;
+  const updCard = `<div class="card"><div class="card-h"><span>${isMac() ? 'macOS updates' : 'Windows Update'}</span><div style="display:flex;gap:6px"><button class="btn sm" id="ug-upd" ${u && u.loading ? 'disabled' : ''}>${u && u.loading ? 'Checking…' : 'Check for updates'}</button><button class="btn sm ghost" data-tool="${isWin() ? 'optional' : 'updates'}"><svg class="ic" width="14" height="14"><use href="#i-ext"/></svg>${isMac() ? 'Software Update' : 'Optional updates'}</button></div></div>
+    ${!u ? `<div class="muted small">${isMac() ? 'macOS delivers drivers through its own updates. ' : 'Windows Update also delivers drivers for most devices. '}Checking asks ${isMac() ? 'Apple' : 'Microsoft'} and can take a minute.</div>`
+      : u.loading ? '<div class="progress indet"><i></i></div>'
+      : u.error ? '<div class="muted small">Couldn’t check right now.</div>'
+      : (u.updates || []).length ? `<div class="list" style="margin-top:4px">${u.updates.map((x) => `<div class="li" style="grid-template-columns:minmax(0,1fr) auto;min-height:44px"><div class="main"><div class="t">${esc(x.title)}</div><div class="s">${x.driver ? `Driver${x.cls ? ' · ' + esc(x.cls) : ''}${x.maker ? ' · ' + esc(x.maker) : ''}` : x.restart ? 'Needs a restart' : x.version ? 'Version ' + esc(x.version) : ''}${x.size ? ' · ' + fmtB(x.size) : ''}</div></div>${x.driver ? '<span class="pill info">Driver</span>' : x.recommended ? '<span class="pill ok">Recommended</span>' : ''}</div>`).join('')}</div>
+        <div class="note">Install them from ${isMac() ? 'Software Update' : `Windows Update${u.updates.some((x) => x.driver) ? ' › Advanced options › Optional updates (driver updates are listed there)' : ''}`}.</div>`
+      : `<div class="muted small"><svg class="ic" width="14" height="14" style="color:var(--ok);vertical-align:-2px"><use href="#i-check"/></svg> You’re up to date.</div>`}</div>`;
+  let html = '';
+  if (isWin()) {
+    html += r.problems.length ? `<div class="card" style="border-color:color-mix(in srgb,var(--bad) 40%,transparent)"><div class="card-h"><span>${r.problems.length} device${r.problems.length > 1 ? 's need' : ' needs'} attention</span><button class="btn sm" data-tool="devices">Device Manager</button></div><div class="list">${r.problems.map((p) => { const l = vendorLink(p.name, ''); return `<div class="li" style="grid-template-columns:28px minmax(0,1fr) auto"><span class="appic ph" style="color:var(--bad)">!</span><div class="main"><div class="t">${esc(p.name)}</div><div class="s">${esc(p.reason)}${p.cls ? ' · ' + esc(p.cls) : ''}</div></div><button class="btn xs" data-url="${esc(l.url)}">${esc(l.label)}</button></div>`; }).join('')}</div>
+      <div class="note">“No driver installed” usually fixes itself with Windows Update’s optional updates; otherwise get the driver from your ${esc(ug.scan && ug.scan.inv.board ? 'motherboard' : 'computer')} maker’s support page.</div></div>`
+      : '<div class="banner changes" style="margin:0"><svg class="ic" width="18" height="18"><use href="#i-check"/></svg><div class="grow">Every device has a working driver.</div><button class="btn sm" data-tool="devices">Device Manager</button></div>';
+    html += `<div style="margin-top:12px">${updCard}</div>`;
+    const old = (d) => d.date && Date.now() - Date.parse(d.date) > 2 * 365 * 86400000;
+    html += `<div class="card" style="margin-top:12px"><div class="card-h"><span>Important drivers</span><span class="muted small">graphics, network, audio, storage and chipset</span></div>
+      <table class="tbl drv-t" style="font-size:12.5px"><thead><tr><th style="padding-left:0">Device</th><th>Version</th><th>Date</th><th style="padding-right:0"></th></tr></thead><tbody>${r.drivers.map((d) => { const l = vendorLink(d.name, d.provider); return `<tr><td style="padding-left:0;max-width:340px">${esc(d.name)}<div class="muted small">${esc(d.provider || d.maker || '')}</div></td><td>${esc(d.version || '')}</td><td class="${old(d) ? 'old' : ''}">${esc(d.date || '—')}${old(d) ? ' · old' : ''}</td><td style="padding-right:0;text-align:right"><button class="btn xs" data-url="${esc(l.url)}">${esc(l.label)}</button></td></tr>`; }).join('')}</tbody></table>
+      <div class="note">Drivers more than two years old are worth updating, especially graphics. For laptops and branded PCs, the maker’s own support page has drivers tested for your model.</div></div>`;
+  } else if (isMac()) {
+    html += updCard;
+    const ext = r.extensions || [], kx = r.kexts || [];
+    html += `<div class="card" style="margin-top:12px"><div class="card-h"><span>Extensions added by apps</span><button class="btn sm ghost" data-tool="extensions"><svg class="ic" width="14" height="14"><use href="#i-ext"/></svg>Login Items &amp; Extensions</button></div>
+      ${ext.length ? `<div class="list">${ext.map((x) => `<div class="li" style="grid-template-columns:minmax(0,1fr) auto"><div class="main"><div class="t">${esc(x.name)}</div><div class="s">${esc(x.bundleId)} · ${esc(x.version)}</div></div><span class="pill ${/activated enabled/.test(x.state) ? 'ok' : 'dim'}">${esc(x.state || '—')}</span></div>`).join('')}</div>` : '<div class="muted small">No apps have added system extensions.</div>'}
+      ${kx.length ? `<div class="card-h mt"><span>Kernel extensions</span><span class="pill warn">Legacy</span></div><div class="list">${kx.map((x) => `<div class="li" style="grid-template-columns:minmax(0,1fr);min-height:40px"><div class="main"><div class="t">${esc(x.bundleId)}</div><div class="s">${esc(x.version)}</div></div></div>`).join('')}</div><div class="note">Kernel extensions are the old driver style; they lower security on Apple Silicon. Check whether the maker offers a newer version without one.</div>` : ''}
+      <div class="note">Macs don’t need separate drivers for most devices — macOS updates include them. Printers, audio interfaces and some docks install their own extensions, listed here.</div></div>`;
+  } else html += updCard;
+  $('#ug-page').innerHTML = html;
+  const ub = $('#ug-upd'); if (ub) ub.onclick = checkUpdates;
+  $('#ug-sub').textContent = isWin() ? `${r.problems.length ? r.problems.length + ' to fix' : 'All devices working'}` : '';
+}
+
+// drives
+async function loadDrives(quiet) {
+  if (!quiet && !ug.drives) $('#ug-page').innerHTML = '<div class="loading">Finding drives…</div>';
+  const r = quiet ? await call('upgrade:drives').catch(() => null) : await safeCall('upgrade:drives'); if (!r) return;
+  const sig = JSON.stringify(r.map((d) => [d.id, d.name, Math.round(d.free / 1e8)]));
+  if (quiet && sig === ug.drivesSig) return; ug.drivesSig = sig;
+  ug.drives = r; if (S.view === 'upgrade' && ug.tab === 'drives') renderDrives();
+}
+V.on('upgrade:speed-progress', (p) => { ug.progress[p.id] = p; const el = document.querySelector(`.drive[data-id="${CSS.escape(p.id)}"] .progress i`); if (el && p.pct != null) el.style.width = p.pct.toFixed(0) + '%'; const st = document.querySelector(`.drive[data-id="${CSS.escape(p.id)}"] .phase`); if (st) st.textContent = { write: 'Writing…', read: 'Reading…', remount: 'Clearing cache…', running: 'Testing…' }[p.phase] || ''; });
+function driveHtml(d) {
+  const sp = ug.speed[d.id]; const prog = ug.progress[d.id]; const used = d.size ? (d.size - d.free) / d.size * 100 : 0;
+  const cls = sp ? speedClassUI(Math.min(sp.read, sp.write)) : null;
+  const sub = [d.model && d.model !== d.name ? d.model : '', d.bus, d.fs, d.ssd === true ? 'SSD' : d.ssd === false ? 'Hard drive' : ''].filter(Boolean).join(' · ');
+  const canRename = !d.system && d.writable !== false;
+  return `<div class="drive ${d.external ? 'ext' : ''}" data-id="${esc(d.id)}">
+    <div class="drive-h"><div class="di"><svg class="ic" width="20" height="20"><use href="#i-drive"/></svg></div><div style="min-width:0">
+      ${ug.renaming === d.id ? `<input id="ug-name" value="${esc(d.name)}" maxlength="64" spellcheck="false">` : `<div class="t"><span>${esc(d.name)}</span>${canRename ? `<button class="icon-btn xs" data-a="rename" title="Rename"><svg class="ic" width="13" height="13"><use href="#i-pen"/></svg></button>` : ''}</div>`}
+      <div class="s">${esc(sub || d.mount)}</div></div>
+      <div class="acts">${d.external && d.removable !== false ? `<button class="btn xs" data-a="eject"><svg class="ic" width="13" height="13"><use href="#i-eject"/></svg>Eject</button>` : ''}<button class="btn xs ghost" data-a="reveal">Show</button></div></div>
+    <div><div class="vol-h"><b>${fmtB(d.free)} free</b><span class="muted">of ${fmtB(d.size, 0)}</span></div><div class="bar ${used > 94 ? 'bad' : used > 85 ? 'warn' : ''}"><i style="width:${used.toFixed(1)}%"></i></div></div>
+    ${sp ? `<div class="speed"><div class="sp"><span>Read</span><b>${Math.round(sp.read).toLocaleString()} <small>MB/s</small></b></div><div class="sp"><span>Write</span><b>${Math.round(sp.write).toLocaleString()} <small>MB/s</small></b></div></div>
+      <div class="small"><b>${esc(cls.label)}</b>${cls.hint ? ` — ${esc(cls.hint)}` : ''}${sp.cached ? '<div class="muted">Read speed may be inflated by the system cache on this drive.</div>' : ''}</div>` : ''}
+    ${prog ? `<div><div class="progress ${prog.pct == null ? 'indet' : ''}"><i style="width:${prog.pct || 0}%"></i></div><div class="muted small phase" style="margin-top:4px">Testing…</div></div>`
+      : `<div class="acts"><button class="btn sm" data-a="speed"><svg class="ic" width="14" height="14"><use href="#i-bolt"/></svg>${sp ? 'Test again' : 'Test speed'}</button><select class="catsel" data-size><option value="256">256 MB</option><option value="1024" selected>1 GB</option><option value="4096">4 GB</option></select>${d.health && !/healthy/i.test(d.health) ? `<span class="pill bad"><i></i>${esc(d.health)}</span>` : ''}</div>`}
+  </div>`;
+}
+function speedClassUI(mbps) {
+  if (mbps < 45) return { label: 'USB 2.0 speed', hint: 'Slow — try another port (blue or USB-C) or a better cable.' };
+  if (mbps < 160) return { label: 'Hard drive or USB 3 flash drive speed', hint: 'Fine for backups and storage.' };
+  if (mbps < 600) return { label: 'SATA SSD over USB 3', hint: 'Good for photos and editing smaller video.' };
+  if (mbps < 1300) return { label: 'NVMe SSD over 10 Gb/s USB', hint: 'Great for video projects and libraries.' };
+  if (mbps < 2200) return { label: 'Fast NVMe over USB 3.2 2x2', hint: '' };
+  return { label: 'Thunderbolt / USB4 NVMe speed', hint: 'As fast as many internal drives.' };
+}
+function renderDrives() {
+  const all = ug.drives || [];
+  const ext = all.filter((d) => d.external), int = all.filter((d) => !d.external);
+  $('#ug-sub').textContent = `${ext.length} external drive${ext.length === 1 ? '' : 's'}`;
+  $('#ug-page').innerHTML = `<div class="ug-sec" style="margin-top:4px"><h3>External</h3><span class="muted">USB drives, SSDs and SD cards</span></div>
+    ${ext.length ? `<div class="drives">${ext.map(driveHtml).join('')}</div>` : `<div class="card"><div class="empty" style="padding:28px"><b>No external drives connected</b>Plug in a USB drive, SSD or SD card and it shows up here.</div></div>`}
+    <div class="ug-sec"><h3>Internal</h3><span class="muted">Speed tests write a temporary file and delete it straight after</span></div>
+    <div class="drives">${int.map(driveHtml).join('')}</div>`;
+  const inp = $('#ug-name'); if (inp) { inp.focus(); inp.select(); inp.onkeydown = (e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') { ug.renaming = null; renderDrives(); } }; inp.onblur = () => setTimeout(() => { if (ug.renaming) commitRename(); }, 100); }
+}
+async function commitRename() {
+  const d = ug.drives.find((x) => x.id === ug.renaming); const inp = $('#ug-name'); if (!d || !inp) return;
+  const name = inp.value.trim(); ug.renaming = null;
+  if (!name || name === d.name) return renderDrives();
+  const r = await safeCall('upgrade:rename', d, name);
+  if (r) { toast(`Renamed to ${name}`); d.name = name; }
+  renderDrives(); setTimeout(() => loadDrives(true), 1200);
+}
+$('#ug-page').addEventListener('click', async (e) => {
+  const b = e.target.closest('.drive [data-a]'); if (!b) return;
+  const d = ug.drives.find((x) => x.id === b.closest('.drive').dataset.id); if (!d) return;
+  const a = b.dataset.a;
+  if (a === 'reveal') call('reveal', d.mount);
+  if (a === 'rename') { ug.renaming = d.id; renderDrives(); }
+  if (a === 'eject') { b.disabled = true; const r = await safeCall('upgrade:eject', d); b.disabled = false; if (r) { toast(`${d.name} can be unplugged`); loadDrives(true); } }
+  if (a === 'speed') {
+    const size = +(b.parentElement.querySelector('[data-size]') || {}).value || 1024;
+    if (d.external && isMac() && !(await confirmBox(`Test ${d.name}?`, `Vitals writes a ${size >= 1024 ? size / 1024 + ' GB' : size + ' MB'} test file, briefly unmounts the drive to clear the cache, reads the file back and deletes it. Close any files open from ${esc(d.name)} first.`, 'Test speed'))) return;
+    ug.progress[d.id] = { pct: isWin() ? null : 0 }; renderDrives();
+    const r = await safeCall('upgrade:speed', d, size);
+    delete ug.progress[d.id]; if (r) ug.speed[d.id] = r; renderDrives();
+  }
+});
 
 // ---------------------------------------------------------------- CHECKUP
 loaders.checkup = () => runCheckup(!S.checkup);
@@ -676,6 +880,7 @@ function openSettings() {
   call('focus:summary', 1).then((r) => { S.focusToday = r.days[0]; renderFocusSide(r.current); if (S.view === 'overview') renderOvFocus(); }).catch(() => {});
   call('specs').then((sp) => { S.specs = sp; }).catch(() => {});
   setTimeout(() => call('checkup', false).then((r) => { S.checkup = r; badgeCheckup(); }).catch(() => {}), 6000);
+  setTimeout(() => { if (!ug.scan) call('upgrade:scan', false).then((r) => { if (!ug.scan) { ug.scan = r; badgeUpgrade(); } }).catch(() => {}); }, 20000);
   V.on('visible', () => redrawAll());
 })();
 })();

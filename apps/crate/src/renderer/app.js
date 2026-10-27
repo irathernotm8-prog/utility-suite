@@ -230,6 +230,7 @@ const Player = {
   init() {
     const a = this.audio;
     a.preload = 'auto';
+    a.crossOrigin = 'anonymous'; // lets the visualizer read the audio
     a.volume = S.settings.volume ?? 0.8;
     a.addEventListener('timeupdate', () => this.tick());
     a.addEventListener('play', () => this.paint());
@@ -299,6 +300,7 @@ const Player = {
         <div class="seek"><span id="t-cur">${fmtTime(a.currentTime)}</span><input type="range" class="range" id="seek" min="0" max="100" step="0.1" value="0"><span id="t-dur">${fmtTime(a.duration || (t && t.duration))}</span></div>
       </div>
       <div class="pright">
+        <button class="pbtn" id="p-vis" title="Visualizer (V)">${icon('wave', 17)}</button>
         ${t ? `<button class="pbtn ${t.loved ? 'on' : ''}" id="p-love" title="Love">${icon(t.loved ? 'heartFill' : 'heart', 16)}</button>` : ''}
         <button class="pbtn" id="p-mute" title="Mute">${icon(a.muted || a.volume === 0 ? 'mute' : 'volume', 17)}</button>
         <input type="range" class="range" id="vol" min="0" max="1" step="0.01" value="${a.volume}" style="--p:${a.volume * 100}%">
@@ -308,6 +310,7 @@ const Player = {
     $('#p-prev').onclick = () => this.prev();
     $('#p-shuf').onclick = () => { this.shuffle = !this.shuffle; this.paint(); };
     $('#p-rep').onclick = () => { this.repeat = { off: 'all', all: 'one', one: 'off' }[this.repeat]; this.paint(); };
+    $('#p-vis').onclick = () => Vis.open();
     $('#p-mute').onclick = () => { a.muted = !a.muted; this.paint(); };
     const love = $('#p-love'); if (love) love.onclick = () => api.call('lib:update', { ids: [t.id], patch: { loved: !t.loved } });
     const seek = $('#seek');
@@ -412,6 +415,7 @@ function typing(e) { const t = e.target; return t && (t.tagName === 'INPUT' || t
 document.addEventListener('keydown', (e) => {
   if (document.querySelector('.scrim')) return;
   if (e.key === ' ' && !typing(e)) { e.preventDefault(); Player.toggle(); }
+  if ((e.key === 'v' || e.key === 'V') && !typing(e) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); Vis.open(); }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i' && !typing(e)) { e.preventDefault(); toggleInspector(); }
   if ((e.key === 'Backspace' || e.key === 'Delete') && !typing(e) && S.sel.size && ['songs', 'recent', 'loved', 'attention', 'album', 'artist', 'playlist'].includes(S.view.name)) { e.preventDefault(); deleteTracks([...S.sel]); }
 });
@@ -420,7 +424,7 @@ api.on('menu', (what) => {
   if (document.querySelector('.scrim') && !['playpause'].includes(what)) return;
   ({
     download: () => go('download'), import: importDialog, export: () => go('export'), songs: () => go('songs'), albums: () => go('albums'), artists: () => go('artists'),
-    find: () => $('#q').focus(), playpause: () => Player.toggle(), next: () => Player.next(), prev: () => Player.prev()
+    find: () => $('#q').focus(), vis: () => (Vis.el ? Vis.close() : Vis.open()), playpause: () => Player.toggle(), next: () => Player.next(), prev: () => Player.prev()
   }[what] || (() => {}))();
 });
 api.on('lib:changed', () => refresh().catch(() => {}));

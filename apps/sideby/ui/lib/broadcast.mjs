@@ -41,6 +41,7 @@ export class Broadcaster {
     }
     this.stream = stream;
     this.kind = kind;
+    this.startedAt = Date.now();
     this.label = label;
     for (const track of stream.getVideoTracks()) {
       track.contentHint = 'motion';

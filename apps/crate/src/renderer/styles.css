@@ -392,3 +392,23 @@ textarea.in { height: auto; min-height: 90px; padding: 8px 10px; resize: vertica
 .dropzone { position: fixed; inset: 0; z-index: 70; background: color-mix(in srgb, var(--accent) 16%, var(--scrim)); display: grid; place-items: center; pointer-events: none; }
 .dropzone div { background: var(--panel); border: 2px dashed var(--accent); border-radius: 20px; padding: 30px 40px; font: 700 18px var(--display); text-align: center; }
 .dropzone small { display: block; font: 400 13px var(--ui); color: var(--mute); margin-top: 6px; }
+
+/* ================= visualizer ================= */
+.vis { position: fixed; inset: 0; z-index: 85; background: #000; animation: fade 0.25s; outline: none; }
+.vis-c { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: auto; cursor: pointer; }
+.vis.idle, .vis.idle .vis-c { cursor: none; }
+.vis-top { position: absolute; top: 0; left: 0; right: 0; padding: 54px 30px 40px; display: flex; justify-content: space-between; align-items: flex-start; background: linear-gradient(rgba(0,0,0,0.55), transparent); color: #fff; transition: opacity 0.4s; pointer-events: none; }
+.vis-np b { display: block; font: 700 20px var(--display); }
+.vis-np span { color: rgba(255,255,255,0.7); }
+.vis-preset { font: 600 13px var(--ui); color: rgba(255,255,255,0.85); opacity: 0; }
+.vis-preset.show { animation: visflash 2.2s ease forwards; }
+@keyframes visflash { 0% { opacity: 0; transform: translateY(-4px); } 12%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.vis-bar { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 18px; background: rgba(20,16,24,0.72); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(12px); color: #fff; transition: opacity 0.4s; }
+.vis-bar .pbtn { color: rgba(255,255,255,0.8); }
+.vis-bar .pbtn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.vis-bar .pbtn.main { background: #fff; color: #000; }
+.vis-name { min-width: 150px; text-align: center; line-height: 1.2; }
+.vis-name b { display: block; font-weight: 700; }
+.vis-name small { color: rgba(255,255,255,0.55); font-size: 11.5px; }
+.vis-sep { width: 1px; height: 22px; background: rgba(255,255,255,0.15); margin: 0 4px; }
+.vis.idle .vis-top, .vis.idle .vis-bar { opacity: 0; }

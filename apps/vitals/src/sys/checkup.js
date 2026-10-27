@@ -1,6 +1,7 @@
 // The Checkup: plain-language findings from everything Vitals knows, worst first.
 'use strict';
 const DAY = 86400000;
+const fmtMem = (b) => (b == null ? '—' : b < 2 ** 30 ? `${Math.round(b / 2 ** 20)} MB` : `${+(b / 2 ** 30).toFixed(1)} GB`);
 const fmtB = (b) => { if (b == null) return '—'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (b >= 1000 && i < u.length - 1) { b /= 1000; i++; } return `${b.toFixed(b >= 100 || i === 0 ? 0 : 1)} ${u[i]}`; };
 
 /**
@@ -22,10 +23,10 @@ function run(ctx) {
   // memory
   const m = s.mem;
   if (m) {
-    if (m.pressure === 'critical') add('bad', 'mem', 'Memory is under heavy pressure', `${fmtB(m.used)} of ${fmtB(m.total)} in use${m.swap && m.swap.used ? `, plus ${fmtB(m.swap.used)} swapped to disk` : ''}. Quitting the biggest apps will speed things up.`, { label: 'See what’s using it', go: 'activity:mem' });
-    else if (m.pressure === 'warning') add('warn', 'mem', 'Memory is running tight', `${fmtB(m.used)} of ${fmtB(m.total)} in use.`, { label: 'See what’s using it', go: 'activity:mem' });
-    else if (m.swap && m.swap.used > Math.max(4e9, m.total * 0.5)) add('warn', 'swap', 'A lot of memory has been swapped to disk', `${fmtB(m.swap.used)} in swap. A restart clears it; quitting heavy apps helps too.`, { label: 'See what’s using it', go: 'activity:mem' });
-    else add('ok', 'mem', 'Memory is fine', `${fmtB(m.used)} of ${fmtB(m.total)} in use.`);
+    if (m.pressure === 'critical') add('bad', 'mem', 'Memory is under heavy pressure', `${fmtMem(m.used)} of ${fmtMem(m.total)} in use${m.swap && m.swap.used ? `, plus ${fmtMem(m.swap.used)} swapped to disk` : ''}. Quitting the biggest apps will speed things up.`, { label: 'See what’s using it', go: 'activity:mem' });
+    else if (m.pressure === 'warning') add('warn', 'mem', 'Memory is running tight', `${fmtMem(m.used)} of ${fmtMem(m.total)} in use.`, { label: 'See what’s using it', go: 'activity:mem' });
+    else if (m.swap && m.swap.used > Math.max(4e9, m.total * 0.5)) add('warn', 'swap', 'A lot of memory has been swapped to disk', `${fmtMem(m.swap.used)} in swap. A restart clears it; quitting heavy apps helps too.`, { label: 'See what’s using it', go: 'activity:mem' });
+    else add('ok', 'mem', 'Memory is fine', `${fmtMem(m.used)} of ${fmtMem(m.total)} in use.`);
   }
 
   // CPU hogs over the last minutes
@@ -84,4 +85,4 @@ function run(ctx) {
   return { findings: f, score, bad, warn };
 }
 
-module.exports = { run, fmtB };
+module.exports = { run, fmtB, fmtMem };

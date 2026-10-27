@@ -176,6 +176,24 @@ await S(A.win, () => window.__sideby.session.stopBroadcast());
 await sleep(2500);
 check('broadcast stops cleanly', await S(B.win, () => window.__sideby.session.core.state.mode) === 'browse');
 
+// theater mode must keep a full-size stage (regression: it collapsed to 0px)
+await S(A.win, () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' })));
+await sleep(1200);
+const th = await S(A.win, () => document.getElementById('stage').getBoundingClientRect().height / innerHeight);
+check('theater mode stage fills the window', th > 0.8, `stage is ${(th * 100).toFixed(0)}% of the window height`);
+await S(A.win, () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+await sleep(800);
+
+// a guest shares their own tab; the host sees it, then ends it
+await S(B.win, () => window.__sideby.session.startBroadcast('stage'));
+await sleep(5000);
+const gs = await S(A.win, () => { const v = document.getElementById('stage-video'); const st = window.__sideby.session.core.state; return { hidden: v.hidden, w: v.videoWidth, tracks: v.srcObject?.getTracks().map(t => t.kind).join(), mode: st.mode, mine: st.broadcaster === window.__sideby.session.core.selfId, label: document.getElementById('broadcast-label').textContent }; });
+check('guest can share their tab with the host', !gs.hidden && gs.w > 0 && gs.mode === 'broadcast' && !gs.mine && /audio/.test(gs.tracks || ''), JSON.stringify(gs));
+await S(A.win, () => window.__sideby.session.stopBroadcast());
+await sleep(2500);
+const after = await S(B.win, () => ({ mode: window.__sideby.session.core.state.mode, active: window.__sideby.session.broadcaster.active }));
+check('host can end a guest\'s share', after.mode !== 'broadcast', JSON.stringify(after));
+
 // host leaves -> guest becomes host
 await S(A.win, () => window.__sideby.leaveRoom());
 await sleep(3000);

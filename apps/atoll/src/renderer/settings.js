@@ -38,11 +38,13 @@
       const g = S.geo || {};
       const pri = S.settings.priority;
       const names = { timers: ['Timers and focus', 'timer', '#ff9f0a'], match: ['Live match', 'ball', '#30d158'], media: ['Music', 'music', '#ff375f'] };
-      return `<h1>Island</h1><p class="lede">${g.notch ? 'This Mac has a notch, so the island can grow out of it.' : isMac() ? 'No notch on this display, so the island floats just under the menu bar.' : 'The island floats at the top centre of your screen.'}</p>
+      const notchSub = g.notch ? 'Notch hugs the camera housing. Floating is a pill under the menu bar.' : isMac() ? 'Notch is a black tab flush with the top of the screen, like a MacBook notch. Floating is a pill under the menu bar.' : 'Notch is a black tab flush with the top edge of the screen that grows when something is live. Floating is a pill just below the top edge.';
+      const nw = S.settings.notchWidth || g.notchWidth || 140;
+      return `<h1>Island</h1><p class="lede">${g.notch ? 'This Mac has a notch, so the island can grow out of it.' : isMac() ? 'No notch on this display. Pick the floating pill, or a notch-style tab at the top edge.' : 'Pick a floating pill, or a notch-style tab flush with the top edge of your screen.'}</p>
       <div class="group">
-        ${row('Style', isMac() ? 'Notch hugs the camera housing. Floating is a pill under the menu bar.' : 'A floating pill at the top of the screen.', seg('style', S.settings.style, isMac() ? [['auto', 'Automatic'], ['notch', 'Notch'], ['float', 'Floating']] : [['auto', 'Floating']]), 'display', '#0a84ff')}
+        ${row('Style', notchSub, seg('style', S.settings.style, [['auto', 'Automatic'], ['notch', 'Notch'], ['float', 'Floating']]), 'display', '#0a84ff')}
         ${row('Display', '', `<select class="field" data-sel="display"><option value="primary" ${S.settings.display === 'primary' ? 'selected' : ''}>Main display</option><option value="cursor" ${S.settings.display === 'cursor' ? 'selected' : ''}>The one with the pointer</option>${S.displays.map((d) => `<option value="${d.id}" ${String(S.settings.display) === String(d.id) ? 'selected' : ''}>${esc(d.label)} (${esc(d.size)})</option>`).join('')}</select>`)}
-        ${g.style === 'notch' ? row('Notch width', 'Line the wings up with your notch.', `<div class="range"><input type="range" min="150" max="240" step="2" value="${S.settings.notchWidth || g.notchWidth}" data-range="notchWidth"><span class="tnum muted" style="width:52px">${S.settings.notchWidth || g.notchWidth} pt</span></div>`) : ''}
+        ${g.style === 'notch' ? row(g.notch ? 'Notch width' : 'Tab width', g.notch ? 'Line the wings up with your notch.' : 'How wide the black tab is when nothing is live.', `<div class="range"><input type="range" min="${g.notch ? 150 : 80}" max="240" step="2" value="${nw}" data-range="notchWidth"><span class="tnum muted" style="width:52px">${nw} ${isMac() ? 'pt' : 'px'}</span></div>`) : ''}
         ${g.style !== 'notch' ? row('When nothing is going on', 'What the floating island shows when no timer, song or match is live.', seg('idle', S.settings.idle, [['clock', 'Clock'], ['dot', 'Small pill'], ['hide', 'Thin line']])) : ''}
       </div>
       <h2>Modules</h2><div class="group">
@@ -155,7 +157,7 @@
   });
   document.addEventListener('input', (e) => {
     const t = e.target;
-    if (t.dataset.range || t.dataset.focus) { const lab = t.parentElement.querySelector('span'); if (lab) lab.textContent = `${t.value} ${t.dataset.focus === 'every' ? 'sessions' : t.dataset.focus ? 'min' : t.dataset.range === 'notchWidth' ? 'pt' : ''}`; }
+    if (t.dataset.range || t.dataset.focus) { const lab = t.parentElement.querySelector('span'); if (lab) lab.textContent = `${t.value} ${t.dataset.focus === 'every' ? 'sessions' : t.dataset.focus ? 'min' : t.dataset.range === 'notchWidth' ? (isMac() ? 'pt' : 'px') : ''}`; }
     if (t.id === 'city') {
       clearTimeout(t._t); const q = t.value;
       t._t = setTimeout(async () => { try { places = q.trim().length < 2 ? null : await A.call('places', q); placeErr = null; } catch (err) { placeErr = errText(err); places = null; } const keep = q; render(); const c = $('#city'); if (c) { c.value = keep; c.focus(); } }, 300);

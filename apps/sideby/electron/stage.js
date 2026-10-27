@@ -161,8 +161,21 @@ class Stage {
     wc.on('did-fail-load', (e, code, description, url, isMainFrame) => {
       if (isMainFrame && code !== -3) this.emit('load-error', { code, description, url });
     });
-    wc.on('enter-html-full-screen', () => this.emit('fullscreen', true));
-    wc.on('leave-html-full-screen', () => this.emit('fullscreen', false));
+    // A site's own fullscreen button: let the page cover the whole window
+    // (not just the stage box), otherwise it renders larger than its view and
+    // the video ends up cropped and shifted.
+    wc.on('enter-html-full-screen', () => { this.htmlFullscreen = true; this.fillWindow(); this.emit('fullscreen', true); });
+    wc.on('leave-html-full-screen', () => {
+      this.htmlFullscreen = false;
+      this.view.setBounds(this.bounds);
+      this.setVisible(this.visible);
+      this.emit('fullscreen', false);
+    });
+    this.onWindowResize = () => { if (this.htmlFullscreen) this.fillWindow(); };
+    window.on('resize', this.onWindowResize);
+    window.on('leave-full-screen', () => {
+      if (this.htmlFullscreen && !wc.isDestroyed()) wc.executeJavaScript('document.fullscreenElement && document.exitFullscreen()', true).catch(() => {});
+    });
     wc.on('render-process-gone', (e, details) => this.emit('crashed', details.reason));
     wc.on('before-input-event', (e, input) => {
       if (input.type === 'keyDown' || input.type === 'mouseDown') this.lastGesture = Date.now();
@@ -185,12 +198,21 @@ class Stage {
     const [w, h] = this.window.getContentSize();
     const x = Math.max(0, Math.round(rect.x)), y = Math.max(0, Math.round(rect.y));
     this.bounds = { x, y, width: Math.max(0, Math.min(w - x, Math.round(rect.width))), height: Math.max(0, Math.min(h - y, Math.round(rect.height))) };
+    this.visible = rect.visible !== false;
+    if (this.htmlFullscreen) return this.fillWindow();
     this.view.setBounds(this.bounds);
-    this.setVisible(rect.visible !== false);
+    this.setVisible(this.visible);
+  }
+
+  fillWindow() {
+    const [w, h] = this.window.getContentSize();
+    this.view.setBounds({ x: 0, y: 0, width: w, height: h });
+    this.view.setVisible(true);
   }
 
   setVisible(on) {
     this.visible = !!on;
+    if (this.htmlFullscreen) return;
     this.view.setVisible(this.visible && this.bounds.width > 0 && this.bounds.height > 0);
   }
 
@@ -286,6 +308,7 @@ class Stage {
 
   destroy() {
     clearInterval(this.sweep);
+    if (!this.window.isDestroyed()) this.window.removeListener('resize', this.onWindowResize);
     const wc = this.view.webContents;
     stages.delete(wc.id);
     if (!wc.isDestroyed()) wc.close();

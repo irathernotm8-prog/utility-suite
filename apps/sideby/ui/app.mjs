@@ -35,6 +35,11 @@ function avatar(member, cls = '') {
   return el('span', { class: `avatar ${cls}`, style: { '--c': member.color } }, initial(member.name));
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function waitFor(test, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (test()) return true; await sleep(100); }
+  return test();
+}
 
 function toast(text, { action, onAction, bad = false, ms = 4200 } = {}) {
   const node = el('div', { class: `toast${bad ? ' bad' : ''}` }, el('span', {}, text));
@@ -258,7 +263,11 @@ class RoomSession {
       roomName,
       everyoneControls: settings.everyoneControls !== false
     });
-    this.broadcaster = new Broadcaster({ net: this.net, bridge: api, onStop: () => { this.core.setBroadcasting(false); this.render(); } });
+    this.broadcaster = new Broadcaster({ net: this.net, bridge: api, onStop: () => {
+      if (this.core.isHost) { if (this.core.state.broadcaster === this.core.selfId) this.core.setBroadcaster(null); }
+      else this.core.control({ action: 'share-stop' });
+      this.render();
+    } });
     this.net.bind(this.core, {
       onPeerJoin: id => { this.broadcaster.addPeer(id); this.renderPresence(); },
       onPeerLeave: id => { this.remoteStreams.delete(id); this.typingNames.delete(id); this.render(); },
@@ -388,6 +397,9 @@ class RoomSession {
       video.srcObject = null;
       video.hidden = true;
     }
+    if (this.broadcaster.active && s.broadcaster !== c.selfId && c.phase === 'live' && !c.isHost && Date.now() - (this.broadcaster.startedAt || 0) > 6000) {
+      this.broadcaster.stop(false);
+    }
     const watchingRemote = s.mode === 'broadcast' && s.broadcaster !== c.selfId;
     if (watchingRemote !== this.watchingRemote) {
       this.watchingRemote = watchingRemote;
@@ -413,11 +425,12 @@ class RoomSession {
       const mine = s.broadcaster === c.selfId;
       const viewers = c.members.size;
       $('broadcast-label').textContent = mine
-        ? `Broadcasting to ${viewers} ${viewers === 1 ? 'friend' : 'friends'}${this.broadcaster.hasAudio ? '' : ' (no sound)'}`
-        : `${c.members.get(s.broadcaster)?.name ?? 'Host'} is broadcasting`;
-      $('broadcast-stop').hidden = !mine;
+        ? `Sharing with ${viewers} ${viewers === 1 ? 'friend' : 'friends'}${this.broadcaster.hasAudio ? '' : ' (no sound)'}`
+        : `${c.members.get(s.broadcaster)?.name ?? 'Someone'} is sharing their screen`;
+      $('broadcast-stop').hidden = !(mine || c.isHost);
+      $('broadcast-stop').textContent = mine ? 'Stop' : 'End';
     }
-    $('broadcast-btn').textContent = live && s.broadcaster === c.selfId ? 'Stop broadcast' : 'Broadcast';
+    $('broadcast-btn').textContent = live && s.broadcaster === c.selfId ? 'Stop sharing' : 'Share screen';
 
     // address bar
     const addr = $('address');
@@ -821,6 +834,15 @@ class RoomSession {
       case 'seek': api.stage.apply({ seek: action.t, paused: this.local?.paused }); break;
       case 'rate': api.stage.apply({ rate: action.rate }); break;
       case 'go-live': api.stage.apply({ goLive: true, paused: false }); break;
+      case 'share-start':
+        if (who?.id && who.id !== this.core.selfId) {
+          if (this.broadcaster.active) this.broadcaster.stop(false);
+          this.core.setBroadcaster(who.id);
+        }
+        return;
+      case 'share-stop':
+        if (who?.id && this.core.state.broadcaster === who.id) this.core.setBroadcaster(null);
+        return;
       case 'navigate':
         if (this.core.state.mode === 'broadcast' && this.broadcaster.kind !== 'stage') this.broadcaster.stop();
         api.stage.load(action.url).catch(e => toast(`Couldn’t open that: ${e.message}`, { bad: true }));
@@ -874,34 +896,51 @@ class RoomSession {
 
   async startBroadcast(kind) {
     const c = this.core;
-    if (!c.isHost) { toast(`Only the host can broadcast. Ask ${c.host?.name ?? 'them'} to make you host.`); return; }
-    if (c.state.mode === 'broadcast') this.broadcaster.stop(false);
+    const hostName = c.host?.name ?? 'The host';
+    if (!c.isHost && !c.state.everyoneControls) { toast(`${hostName} has turned off sharing for guests. Ask them to make you host.`); return; }
+    if (this.broadcaster.active) this.broadcaster.stop(false);
     try {
       if (kind === 'file') {
         const file = await api.stage.openFile();
         if (!file) return;
+        if (!c.isHost) this.following = false;
         await api.stage.load(file.url);
         await sleep(500);
         kind = 'stage';
       }
       if (kind === 'stage') {
-        if (!this.nav.url || this.nav.url === 'about:blank') { toast('Open a page on the stage first, then broadcast it.'); return; }
+        if (!this.nav.url || this.nav.url === 'about:blank') { toast('Open a page in Sideby first, then share the tab.'); return; }
         await this.broadcaster.start({ kind: 'stage', quality: settings.quality, label: this.nav.title });
       } else {
         const choice = await pickSource();
         if (!choice) return;
         await this.broadcaster.start({ kind: 'source', sourceId: choice.id, quality: settings.quality, label: choice.name });
-        if (!this.broadcaster.hasAudio) toast('Sharing without sound. To include sound, use “Broadcast this page” with the video open on the stage.', { ms: 7000 });
+        if (!this.broadcaster.hasAudio) toast('Sharing without sound. To include sound, open the video in Sideby and use “Share this tab”.', { ms: 7000 });
       }
-      c.setBroadcasting(true);
+      if (c.isHost) c.setBroadcasting(true);
+      else {
+        c.control({ action: 'share-start' });
+        const started = await waitFor(() => c.state.broadcaster === c.selfId, 6000);
+        if (!started) {
+          this.broadcaster.stop(false);
+          toast(`${hostName}’s Sideby didn’t start your share. Try again in a moment.`, { bad: true });
+        }
+      }
     } catch (error) {
       console.error(error);
-      toast(error?.name === 'NotAllowedError' ? 'Screen sharing was blocked. On a Mac, allow Sideby in System Settings → Privacy & Security → Screen Recording.' : `Couldn’t start the broadcast: ${error.message || error}`, { bad: true, ms: 8000 });
+      toast(error?.name === 'NotAllowedError' ? 'Screen sharing was blocked. On a Mac, allow Sideby in System Settings → Privacy & Security → Screen Recording, then reopen Sideby.' : `Couldn’t start sharing: ${error.message || error}`, { bad: true, ms: 8000 });
     }
     this.render();
   }
 
-  stopBroadcast() { this.broadcaster.stop(); }
+  // Host can end anyone's share; the sharer stops their own.
+  endShare() {
+    const c = this.core;
+    if (c.state.broadcaster === c.selfId) this.broadcaster.stop();
+    else if (c.isHost) c.setBroadcaster(null);
+  }
+
+  stopBroadcast() { this.endShare(); }
 }
 
 function isPrivateUrl(url) { return /^sideby-media:\/\/player\/.*src=sideby-media(%3A|:)\/\/file/i.test(url) || /^sideby-media:\/\/file\//i.test(url); }
@@ -987,7 +1026,7 @@ async function pickSource() {
         : 'No windows were found to share.';
       grid.replaceChildren(info.platform === 'darwin' ? el('button', { class: 'btn primary', onclick: () => api.capture.openSettings() }, 'Open Screen Recording settings') : '');
     } else {
-      $('picker-help').textContent = info.platform === 'win32' ? 'Pick what to show the room. Your computer’s sound is included.' : 'Pick what to show the room. Sound isn’t included when sharing another app on a Mac, so for videos with sound, open them on the stage and use “Broadcast this page”.';
+      $('picker-help').textContent = info.platform === 'win32' ? 'Pick what to show the room. Your computer’s sound is included.' : 'Pick what to show the room. Sound isn’t included when sharing another app on a Mac, so for videos with sound, open them in Sideby and use “Share this tab”.';
       const screens = result.sources.filter(s => s.kind === 'screen');
       const windows = result.sources.filter(s => s.kind === 'window');
       grid.replaceChildren(...[...windows, ...screens].map(s => el('button', { class: 'pick', type: 'button', onclick: () => { chosen = s; dialog.close(); } },
@@ -1048,6 +1087,13 @@ function setTheater(on) {
   setTimeout(() => session?.syncBounds(), 50);
 }
 
+// A site's own fullscreen button (YouTube, Twitch…): the page fills the whole window.
+function setPageFullscreen(on) {
+  document.body.classList.toggle('page-fullscreen', on);
+  api.app.fullscreen(on || document.body.classList.contains('theater'));
+  setTimeout(() => session?.syncBounds(), 60);
+}
+
 function toggleChat() {
   document.body.classList.toggle('chat-hidden');
   setTimeout(() => session?.syncBounds(), 30);
@@ -1098,7 +1144,6 @@ function wireRoom() {
     e.stopPropagation();
     if (!session) return;
     if (session.core.state.mode === 'broadcast' && session.core.state.broadcaster === session.core.selfId) { session.stopBroadcast(); return; }
-    if (!session.core.isHost) { toast(`Only the host can broadcast. Ask ${session.core.host?.name ?? 'them'} to make you host.`); return; }
     if (!menu.hidden) { closeMenu(); return; }
     await session.freeze();
     menu.hidden = false;
@@ -1170,7 +1215,7 @@ function wireBridge() {
     ] });
   });
   api.stage.on('crashed', () => session?.setNotice({ title: 'The page stopped working', body: 'Reloading usually fixes it.', actions: [{ label: 'Reload', primary: true, run: () => { session.notice = null; api.stage.nav('reload'); session.render(); } }] }));
-  api.stage.on('fullscreen', on => setTheater(on));
+  api.stage.on('fullscreen', on => setPageFullscreen(on));
   api.stage.on('escape', () => { if (document.body.classList.contains('theater')) setTheater(false); });
   api.app.on('fullscreen', on => { if (!on && document.body.classList.contains('theater')) { document.body.classList.remove('theater'); setTimeout(() => session?.syncBounds(), 50); } });
   api.app.on('focus', () => checkClipboard());

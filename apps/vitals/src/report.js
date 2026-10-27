@@ -1,6 +1,6 @@
 // A printable health report (saved as PDF or HTML from the Checkup page or File menu).
 'use strict';
-const { fmtB } = require('./sys/checkup');
+const { fmtB, fmtMem } = require('./sys/checkup');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dur = (s) => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m`; };
 
@@ -33,17 +33,17 @@ function reportHtml({ specs, sample, checkup, procs, startup, focus, showSerials
   <h2>Checkup</h2>
   ${(checkup ? checkup.findings : []).map((f) => `<div class="f"><i style="background:${lvl[f.level][0]}"></i><div><b>${esc(f.title)}</b><span>${esc(f.detail || '')}</span></div></div>`).join('')}
   <div class="grid"><div>
-  <h2>This computer</h2><table>${rows([['Model', sp.model], ['Model ID', sp.modelId], ['Processor', sp.cpu && `${sp.cpu.name} · ${sp.cpu.cores} cores${sp.cpu.threads !== sp.cpu.cores ? ` / ${sp.cpu.threads} threads` : ''}`], ['Memory', sp.memory && fmtB(sp.memory.total)],
+  <h2>This computer</h2><table>${rows([['Model', sp.model], ['Model ID', sp.modelId], ['Processor', sp.cpu && `${sp.cpu.name} · ${sp.cpu.cores} cores${sp.cpu.threads !== sp.cpu.cores ? ` / ${sp.cpu.threads} threads` : ''}`], ['Memory', sp.memory && fmtMem(sp.memory.total)],
     ['Graphics', (sp.gpus || []).map((g) => g.model + (g.cores ? ` (${g.cores} cores)` : '')).join(', ')], ['Operating system', sp.os && `${sp.os.name} ${sp.os.version}${sp.os.build ? ` (${sp.os.build})` : ''}`],
     ['Serial number', showSerials ? sp.serial : null], ['Up for', s.uptime ? dur(s.uptime) : null]])}</table>
   </div><div>
-  <h2>Right now</h2><table>${rows([['Processor', s.cpu ? `${s.cpu.total.toFixed(0)}%` : null], ['Memory', s.mem ? `${fmtB(s.mem.used)} of ${fmtB(s.mem.total)} (${s.mem.pressure})` : null], ['Swap', s.mem && s.mem.swap ? fmtB(s.mem.swap.used) : null],
+  <h2>Right now</h2><table>${rows([['Processor', s.cpu ? `${s.cpu.total.toFixed(0)}%` : null], ['Memory', s.mem ? `${fmtMem(s.mem.used)} of ${fmtMem(s.mem.total)} (${s.mem.pressure})` : null], ['Swap', s.mem && s.mem.swap ? fmtMem(s.mem.swap.used) : null],
     ['Graphics', s.gpu && s.gpu.util != null ? `${s.gpu.util.toFixed(0)}%` : null], ['Processor temperature', t.cpu != null ? `${t.cpu.toFixed(0)} °C` : null], ['Thermal pressure', t.state],
     ['Battery', b.present ? `${b.percent ?? '–'}%${b.health != null ? ` · health ${b.health}%` : ''}${b.cycles ? ` · ${b.cycles} cycles` : ''}` : null]])}
     ${(s.volumes || []).map((v) => `<tr><th>${esc(v.name)}</th><td>${fmtB(v.free)} free of ${fmtB(v.size)}</td></tr>`).join('')}</table>
   </div></div>
   <div class="grid"><div>
-  <h2>Most memory</h2><table>${topMem.map((g) => `<tr><td>${esc(g.name)}</td><td class="num">${fmtB(g.mem)}</td></tr>`).join('')}</table>
+  <h2>Most memory</h2><table>${topMem.map((g) => `<tr><td>${esc(g.name)}</td><td class="num">${fmtMem(g.mem)}</td></tr>`).join('')}</table>
   </div><div>
   <h2>Most processor</h2><table>${topCpu.map((g) => `<tr><td>${esc(g.name)}</td><td class="num">${g.cpu.toFixed(1)}%</td></tr>`).join('')}</table>
   </div></div>

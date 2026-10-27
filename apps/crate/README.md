@@ -12,6 +12,7 @@ Your MP3 library, built for the phone. Download songs, albums and playlists from
 - **Albums**: drag songs to reorder (Crate renumbers 1 of n…), **Find album info** matches every song to the catalog's track list, and you can drop a cover onto the album.
 - **Edit audio**: a waveform editor to trim intros and outros (drag the handles, or **Trim silence**), add fade in/out, change the volume or even out loudness, all with a live preview. Edits always re-render from the original download, which is kept, so **Undo all edits** puts it back exactly.
 - **Player**: queue, shuffle, repeat, media keys and Now Playing, play counts, loved songs.
+- **Visualizer** (V, or the wave button in the player): full-screen retro visualizations in the spirit of the old Windows Media Player ones: Bars, Ocean Mist, Fire Storm, Scope, Spiral Tunnel, Kaleidoscope, Swirl and Album Art. ← → switch, F for full screen, Esc to close; Crate remembers your last pick.
 - **Send to phone**: **Apple Music → iPhone** copies new or changed songs into Music's "Automatically Add" folder; then sync in Finder, or let Sync Library upload them. **Folder / USB / Android** mirrors Artist/Album folders and writes `.m3u8` playlists. Crate remembers what it already sent.
 - **Import**: drop MP3s (or M4A, FLAC, WAV, … which are converted) anywhere in the window. Files you copy into the library folder yourself are picked up on launch or with **Rescan**.
 
@@ -55,6 +56,6 @@ src/core/metadata.js   title clean-up, iTunes catalog (songs, albums, track list
 src/core/library.js    the library: index, naming/organizing, artwork cache, edits + originals, import, rescan, albums, playlists
 src/core/downloader.js yt-dlp probe/search, the download queue and pipeline (fetch → info → art → MP3 → library)
 src/core/exporter.js   Apple Music "Automatically Add" and folder export with .m3u8
-src/renderer/          app.js (shell, player, dialogs), views.js, inspector.js, editor.js, download.js, export.js, settings.js
+src/renderer/          app.js (shell, player, dialogs), views.js, inspector.js, editor.js, download.js, export.js, settings.js, visualizer.js
 test/run.js            node checks (no Electron)
 ```

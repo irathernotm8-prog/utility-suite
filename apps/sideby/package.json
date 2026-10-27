@@ -1,6 +1,6 @@
 {
   "name": "sideby",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Watch anything together with friends, in sync",
   "main": "electron/main.js",
   "scripts": {
@@ -42,7 +42,7 @@
       "category": "public.app-category.entertainment",
       "extendInfo": {
         "NSScreenCaptureUsageDescription": "Sideby shares a window or your screen with friends when you choose to broadcast.",
-        "NSMicrophoneUsageDescription": "Sideby doesn\u2019t use your microphone."
+        "NSMicrophoneUsageDescription": "Sideby doesn’t use your microphone."
       }
     },
     "win": {

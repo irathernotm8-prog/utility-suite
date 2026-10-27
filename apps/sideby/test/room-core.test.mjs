@@ -135,3 +135,27 @@ test('clock requests reach the host', async () => {
   await net.settle();
   assert.equal(await b.requestClock(), 42);
 });
+
+test('any member can share their screen when the host allows it', async () => {
+  const net = network();
+  const a = net.add('aaa', { profile: { name: 'Host' }, startAsHost: true });
+  const b = net.add('bbb', { profile: { name: 'Guest' } });
+  await net.settle();
+  a.on('control', (action, who) => {
+    if (action.action === 'share-start') a.setBroadcaster(who.id);
+    if (action.action === 'share-stop' && a.state.broadcaster === who.id) a.setBroadcaster(null);
+  });
+  b.control({ action: 'share-start' });
+  await net.settle();
+  assert.equal(b.state.mode, 'broadcast');
+  assert.equal(b.state.broadcaster, 'bbb');
+  assert.ok(a.messages.some(m => /Guest started sharing/.test(m.text)));
+  b.control({ action: 'share-stop' });
+  await net.settle();
+  assert.notEqual(b.state.mode, 'broadcast');
+  b.control({ action: 'share-start' });
+  await net.settle();
+  net.remove('bbb');
+  await net.settle();
+  assert.notEqual(a.state.mode, 'broadcast');
+});

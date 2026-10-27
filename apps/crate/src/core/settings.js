@@ -23,6 +23,7 @@ const DEFAULTS = {
   exportPlaylists: true,
   toolsCheckedAt: 0,
   volume: 0.8,
+  visPreset: 'bars',
   window: null
 };
 

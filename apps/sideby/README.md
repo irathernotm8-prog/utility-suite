@@ -10,14 +10,14 @@ Everyone has a **personal room code** that never changes (unless you make a new 
 
 **Two ways to watch:**
 
-| | Synced watching | Broadcast |
+| | Synced watching | Screen share |
 |---|---|---|
-| What it is | Everyone opens the same page in Sideby's built-in browser. Sideby finds the video on the page and keeps everyone's play, pause, seek and speed matched. | The host streams a page, window or screen (with sound) to everyone. |
+| What it is | Everyone opens the same page in Sideby's built-in browser. Sideby finds the video on the page and keeps everyone's play, pause, seek and speed matched. | Anyone in the room streams a tab, window or their whole screen (with sound) to everyone. |
 | Works with | Any site with a normal video player: YouTube, Vimeo, Twitch VODs, Internet Archive, embedded players, direct MP4/WebM/HLS links. | Anything you can see, including live sports, local files and other apps. |
 | Picture quality | Full quality for everyone; each person streams from the site. | Up to 1080p60, limited by the host's upload speed. |
 | Best for | Movies, shows, YouTube. | Live games, streams that won't sync, files on your computer. |
 
-Netflix, Disney+, Max and other DRM services won't play in Sideby's browser (Electron has no Widevine), and they show black when broadcast.
+Netflix, Disney+, Max and other DRM services won't play in Sideby's browser (Electron has no Widevine), and they show black when screen shared.
 
 ## Using it
 
@@ -25,7 +25,7 @@ Netflix, Disney+, Max and other DRM services won't play in Sideby's browser (Ele
 2. Press **Invite** (or click the code chip) and send the invite. Friends paste it on their home screen. If they copied it, Sideby notices and offers to join. `sideby://join/CODE` links also open Sideby directly.
 3. Search YouTube or paste any link in the address bar. Everyone's stage follows the host.
 4. Play, pause and seek in the page's own player or with Sideby's controls. By default anyone can control playback. The host can turn that off in Settings.
-5. For live games: open the stream page, then **Broadcast → Broadcast this page**.
+5. For live games: open the stream page, then **Share screen → Share this tab**. Anyone can share (the host can turn that off in Settings, and can end anyone's share).
 
 Click a friend's seat on the couch to make them host. If the host leaves, the next person in the room takes over automatically.
 

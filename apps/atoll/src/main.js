@@ -195,6 +195,7 @@ function applyLogin() {
 const API = {
   state: () => snapshot(),
   size: (s) => island.setSize(s),
+  hit: (on) => island.setHit(on),
   expanded: (on) => { island.expanded = !!on; media.setFast(on); glance.live(on); if (on) shelf.prune(); },
   openSettings: (section) => openSettings(section),
   openIsland: (v) => openIsland(v),

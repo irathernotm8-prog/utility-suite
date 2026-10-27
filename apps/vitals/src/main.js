@@ -15,6 +15,8 @@ const startup = require('./sys/startup');
 const perms = require('./sys/perms');
 const specs = require('./sys/specs');
 const checkup = require('./sys/checkup');
+const upgrade = require('./sys/upgrade');
+const advisor = require('./sys/advisor');
 const { FocusTracker } = require('./sys/focus');
 const { stopShells, withTimeout, run: runCmd } = require('./sys/run');
 const crypto = require('crypto');
@@ -190,6 +192,39 @@ function registerIpc() {
     return checkup.run({ sample: sampler.last, procs: procs.groups, apps: cacheOf.apps, startup: cacheOf.startup, perms: cacheOf.perms, platform: process.platform, history: sampler.history, cores: os.cpus().length });
   });
   h('report', () => exportReport());
+  // ---- Upgrade tab
+  h('upgrade:scan', async (fresh) => {
+    if (fresh || !cacheOf.inventory) cacheOf.inventory = await withTimeout(upgrade.inventory(), 90000, null);
+    const inv = cacheOf.inventory; if (!inv) throw new Error('Reading the hardware took too long. Try again.');
+    if (!cacheOf.apps) { try { await withTimeout(listApps(), 30000, null); } catch (_) {} }
+    const prev = kv.get('inventory');
+    const changes = prev ? advisor.diffInventory(prev.inv, inv) : [];
+    if (!prev || changes.length || Date.now() - prev.at > 7 * 86400000) kv.set('inventory', { at: Date.now(), inv });
+    const advice = advisor.advise(inv, { sample: sampler.last, history: sampler.history, apps: cacheOf.apps });
+    return { inv: { ...inv, serial: settings().showSerials ? inv.serial : '' }, advice, changes, since: prev && changes.length ? prev.at : null };
+  });
+  h('upgrade:drivers', () => withTimeout(upgrade.drivers(), 90000, { problems: [], drivers: [], timedOut: true }));
+  h('upgrade:updates', () => upgrade.updates());
+  h('upgrade:drives', () => upgrade.drives());
+  h('upgrade:speed', (drive, sizeMB) => upgrade.speedTest(drive, { sizeMB, tempDir: app.getPath('temp'), onProgress: (p) => send('upgrade:speed-progress', { id: drive.id, ...p }) }));
+  h('upgrade:rename', (drive, name) => upgrade.rename(drive, String(name || '').trim()));
+  h('upgrade:eject', (drive) => upgrade.eject(drive));
+  h('upgrade:tool', (k) => {
+    const cp = require('child_process');
+    const open = (cmd, args) => cp.spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: false }).unref();
+    if (process.platform === 'win32') {
+      if (k === 'devices') open('mmc.exe', ['devmgmt.msc']);
+      else if (k === 'disks') open('mmc.exe', ['diskmgmt.msc']);
+      else if (k === 'updates') shell.openExternal('ms-settings:windowsupdate');
+      else if (k === 'optional') shell.openExternal('ms-settings:windowsupdate-optionalupdates');
+    } else if (isMac) {
+      if (k === 'disks') shell.openPath('/System/Applications/Utilities/Disk Utility.app');
+      else if (k === 'updates' || k === 'optional') shell.openExternal('x-apple.systempreferences:com.apple.Software-Update-Settings.extension');
+      else if (k === 'extensions') shell.openExternal('x-apple.systempreferences:com.apple.LoginItems-Settings.extension');
+      else if (k === 'sysinfo') shell.openPath('/System/Applications/Utilities/System Information.app');
+    }
+    return true;
+  });
   h('icons', async (paths) => { const out = {}; for (const p of (paths || []).slice(0, 80)) out[p] = await iconFor(p); return out; });
   h('reveal', (p) => { if (p) shell.showItemInFolder(p); return true; });
   h('open-external', (u) => { if (/^(https?:|x-apple\.systempreferences:|ms-settings:)/.test(u)) shell.openExternal(u); return true; });
@@ -266,6 +301,7 @@ function menu() {
     { role: 'editMenu' },
     { label: 'View', submenu: [
       ...['overview', 'activity', 'apps', 'startup', 'permissions', 'focus', 'thermals', 'specs', 'checkup'].map((p, i) => ({ label: p === 'specs' ? (isMac ? 'This Mac' : 'This PC') : p[0].toUpperCase() + p.slice(1), accelerator: `CmdOrCtrl+${i + 1}`, click: () => send('navigate', p) })),
+      { label: 'Upgrade', accelerator: 'CmdOrCtrl+U', click: () => send('navigate', 'upgrade') },
       { type: 'separator' }, { role: 'reload', accelerator: 'CmdOrCtrl+Shift+R' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' }
   ];

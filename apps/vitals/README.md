@@ -14,6 +14,7 @@ A better task manager and system dashboard for Mac and Windows, part of the Util
 | **Time & Focus** | Which app is in front, tracked while Vitals runs (even with the window closed). Active time, deep-focus sessions, app switches per hour, a focus score, the day hour by hour, a session timeline, and 7/30-day views. Mark apps Focus, Neutral or Distracting |
 | **Thermals & Power** | Processor and graphics temperatures, thermal pressure, per-core load and temperature, fans, battery health, cycles, capacity, temperature and power draw |
 | **This Mac / This PC** | Model, chip, cores, memory modules, graphics, displays, drives, OS, firmware, network. Copy specs in one click; serial numbers hidden until you click |
+| **Upgrade** | **Upgrades:** reads what's inside (memory slots and type, drives, graphics, processor socket, battery, display support) and says what can be upgraded. Then suggests compatible parts ranked by impact: the exact memory kit to look for (type, form factor, speed, how many sticks, within the board's maximum), SSD moves, graphics cards for desktops, battery replacement, Windows 11 on Windows 10 PCs, external SSDs for Apple Silicon. Each has shop links, iFixit guides and a step-by-step install guide. *Check my upgrade* rescans and confirms what changed. **Drivers & updates:** Windows devices with missing or failed drivers, important driver versions and ages with vendor links, and pending Windows Update items (including driver updates); on a Mac, pending macOS updates plus the system and kernel extensions apps have added. **Drives:** every external and internal drive with free space, connection and file system; a real read/write speed test (uncached); rename; eject |
 | **Checkup** | Plain-language findings, worst first: full disk, memory pressure, swap, hot or throttled processor, worn battery, long uptime, too many or broken startup items, apps unused for 6 months, sensitive permissions. **Save report** as PDF or HTML |
 
 Also: a menu-bar (Mac) / tray (Windows) item showing CPU, memory or temperature; alerts when the computer runs hot or memory runs out; open at login; light and dark themes; Cmd/Ctrl+1–9 to jump between pages.
@@ -30,6 +31,9 @@ Also: a menu-bar (Mac) / tray (Windows) item showing CPU, memory or temperature;
 | Apps | `/Applications`, `~/Applications`, `/System/Applications`; Info.plist; Spotlight (`mdls`) for last used | Uninstall registry keys (HKLM, WOW6432Node, HKCU) + `Get-AppxPackage` |
 | Startup | System Events login items, LaunchAgents/LaunchDaemons, `launchctl enable/disable` | Run keys + StartupApproved (what Task Manager uses), Startup folders, `schtasks` |
 | Permissions | TCC databases via `sqlite3` (needs Full Disk Access for Vitals), `tccutil reset` | CapabilityAccessManager ConsentStore |
+| Upgrade inventory | `system_profiler` (hardware, memory incl. `is_memory_upgradeable`, NVMe/SATA, displays, power) | `Win32_PhysicalMemory`/`MemoryArray`, `Get-PhysicalDisk` + reliability counters, `Win32_VideoController` + registry VRAM, enclosure type |
+| Drivers & updates | `softwareupdate --list`, `systemextensionsctl list`, `kmutil showloaded` | `Win32_PnPEntity` problem codes, `Win32_PnPSignedDriver`, Windows Update Agent COM search |
+| Drives | `diskutil list/info`, `diskutil rename/eject`; speed test remounts external volumes to clear the cache | `Get-Volume`/`Get-Disk`; speed test is C# with `FILE_FLAG_NO_BUFFERING`; `Set-Volume` (UAC `label` fallback); Shell eject |
 | Front app | `lsappinfo front` | `GetForegroundWindow` through a persistent PowerShell |
 
 Windows commands share long-lived PowerShell processes (`src/sys/run.js`) so polling stays cheap.
@@ -50,6 +54,9 @@ src/sys/perms.js       privacy permissions
 src/sys/focus.js       time tracker, per-day JSON in userData/focus
 src/sys/specs.js       hardware info
 src/sys/checkup.js     findings and score
+src/sys/upgrade.js     Upgrade tab: hardware inventory, drivers/updates, drives, speed test, rename, eject
+src/sys/advisor.js     turns the inventory into verdicts and ranked upgrade suggestions (pure, tested)
+src/renderer/guides.js install guides shown from suggestions
 src/renderer/          index.html, styles.css, charts.js (canvas charts), app.js
 build/make-icon.py     regenerates icon.png and the menu-bar template images
 ```
@@ -57,8 +64,9 @@ build/make-icon.py     regenerates icon.png and the menu-bar template images
 ## Tests
 
 ```bash
-npm test                         # 23 parser/grouping/focus/checkup/crash-guard checks (Node only)
+npm test                         # parser, grouping, focus, checkup, advisor and crash-guard checks (Node only)
 VITALS_PWSH=pwsh node test/ps-runner.js   # the Windows PowerShell runner against a real PowerShell
 test/e2e/run.sh                  # Linux + Xvfb: drives every page, 19 checks, screenshots in test/e2e/out
-VITALS_DEMO=1 test/e2e/run.sh    # same, pretending to be a Mac with sensors, apps, startup items and permissions
+VITALS_DEMO=1 test/e2e/run.sh    # same, pretending to be a Mac with sensors, apps, drives, startup items and permissions
+VITALS_DEMO=win test/e2e/run.sh  # same, pretending to be a Windows desktop
 ```

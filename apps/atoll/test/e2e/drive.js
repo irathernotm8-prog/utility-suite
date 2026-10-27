@@ -21,10 +21,14 @@ module.exports = async function drive({ app, island, openSettings, settingsWin, 
   const shot = async (name, win = island().win) => {
     await sleep(80);
     log(`    shot ${name} visible=${win.isVisible()}`);
-    const img = await win.webContents.capturePage();
     const f = path.join(OUT, `${String(++n).padStart(2, '0')}-${name}.png`);
+    if (win !== island().win) { const img = await win.webContents.capturePage(); fs.writeFileSync(f, img.toPNG()); return img.getSize(); }
+    // the island: crop to the island (and its bubble) with room for the shadow, report the island's own size
+    const r = await js(`(() => { const a = document.querySelector('#island').getBoundingClientRect(), b = document.querySelector('#bubble'); let x0 = a.left, x1 = a.right, y1 = a.bottom; if (b.classList.contains('on')) { const q = b.getBoundingClientRect(); x0 = Math.min(x0, q.left); x1 = Math.max(x1, q.right); y1 = Math.max(y1, q.bottom); } return { x0, x1, y1, w: a.width, h: a.height, W: innerWidth, H: innerHeight }; })()`);
+    const x = Math.max(0, Math.floor(r.x0 - 30)), w = Math.min(r.W - x, Math.ceil(r.x1 - r.x0 + 60)), h = Math.min(r.H, Math.ceil(r.y1 + 40));
+    const img = await win.webContents.capturePage({ x, y: 0, width: w, height: h });
     fs.writeFileSync(f, img.toPNG());
-    return img.getSize();
+    return { width: Math.round(r.w), height: Math.round(r.h) };
   };
   const errors = [];
   island().win.webContents.on('console-message', (e) => { const level = e.level ?? e.params?.level; const msg = e.message ?? e.params?.message; if (level === 'error' || level === 3) errors.push(msg); });
@@ -59,7 +63,7 @@ module.exports = async function drive({ app, island, openSettings, settingsWin, 
     timers.add(4 * 60e3 + 32e3, 'Tea');
     await sleep(700);
     sz = await shot('float-compact-timer-and-bubble');
-    check('compact island shows the timer with a bubble for the match', sz.width > 200, `${sz.width}×${sz.height}`);
+    check('compact island shows the timer with a bubble for the match', sz.width > 120, `${sz.width}×${sz.height}`);
     const hasBubble = await js("document.querySelector('#bubble').classList.contains('on')");
     check('second live activity sits in the bubble', hasBubble);
 
@@ -119,19 +123,38 @@ module.exports = async function drive({ app, island, openSettings, settingsWin, 
     sw.close();
 
     // a notched MacBook
-    if (process.env.ATOLL_FAKE_NOTCH) {
+    // notch style: a real MacBook notch with ATOLL_FAKE_NOTCH=1, otherwise the notch-style tab Windows gets
+    {
+      const tag = process.env.ATOLL_FAKE_NOTCH ? 'notch' : 'tab';
+      timers.add(3 * 60e3, 'Tea');
       API.setSettings({ style: 'notch' }); await sleep(900);
-      sz = await shot('notch-compact');
-      check('notch island hugs the notch', await js("document.body.classList.contains('notch')"), `${sz.width}×${sz.height}`);
-      await js("window.__atoll.open('home')"); await sleep(700); await shot('notch-open-home');
-      await js("window.__atoll.open('match')"); await sleep(700); await shot('notch-open-match');
-      await js("window.__atoll.open('media')"); await sleep(700); await shot('notch-open-media');
+      await shot(`${tag}-compact-timer`);
+      check(`${tag}: notch style is available here`, await js("document.body.classList.contains('notch')"));
+      sz = await shot(`${tag}-compact`);
+      await js("window.__atoll.open('home')"); await sleep(700); await shot(`${tag}-open-home`);
+      await js("window.__atoll.open('match')"); await sleep(700); await shot(`${tag}-open-match`);
+      await js("window.__atoll.open('media')"); await sleep(700); await shot(`${tag}-open-media`);
       await js('window.__atoll.close()'); await sleep(700);
       timers.list.slice().forEach((t) => timers.remove(t.id)); match.clear(); await sleep(700);
-      await shot('notch-compact-music');
+      await shot(`${tag}-compact-music`);
       extraGoal = 0;
     }
   } catch (e) { check('run finished', false, e.stack); }
+
+  // fixed-size window (Windows/Linux): it never resizes, and only takes clicks over the island
+  if (API.state().geo?.fixed) {
+    try {
+      const w = island().win; const b0 = w.getBounds();
+      await js("window.__atoll.open('home')"); await sleep(700); await js('window.__atoll.close()'); await sleep(700);
+      const b1 = w.getBounds();
+      check('window keeps one size while the island opens and closes', b0.width === b1.width && b0.height === b1.height, `${b1.width}×${b1.height}`);
+      const r = await js("(() => { const a = document.querySelector('#island').getBoundingClientRect(); return { x: Math.round(a.left + a.width / 2), y: Math.round(a.top + a.height / 2) }; })()");
+      w.webContents.sendInputEvent({ type: 'mouseMove', x: r.x, y: r.y }); await sleep(300);
+      const over = island().hit;
+      w.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: b1.height - 5 }); await sleep(300);
+      check('clicks go to the island only when the pointer is over it', over === true && island().hit === false, `over=${over} away=${island().hit}`);
+    } catch (e) { check('fixed window checks', false, e.message); }
+  }
 
   check('no errors in the island page', errors.length === 0, errors.slice(0, 3).join(' | '));
   const failed = results.filter((r) => !r.ok).length;

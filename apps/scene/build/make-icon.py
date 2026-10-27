@@ -1,6 +1,6 @@
 # Regenerates build/icon.png and build/trayTemplate*.png (run: python3 build/make-icon.py). Needs Pillow.
-# A warm dark tile lit by a soft spotlight, with three window panes arranged like a layout:
-# a tall gold pane on the left, a rose and a lilac pane stacked on the right.
+# Same family as the other suite icons: a dark tile with one bold, glowing glyph in a single gradient.
+# Scene's glyph is a screen with its layout inside (a tall pane on the left, two stacked on the right), gold to rose.
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 import math, os
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -20,60 +20,52 @@ def lin(size, c0, c1, angle=0):
 def P(v): return v * N / 1024
 
 mask = squircle(N, int(N * 0.085))
-bg = lin((N, N), (40, 27, 30), (14, 11, 16), 0)
-# spotlight: a soft warm cone from above
-spot = Image.new('RGBA', (N, N), (0, 0, 0, 0)); sd = ImageDraw.Draw(spot)
-sd.polygon([(P(420), P(-40)), (P(604), P(-40)), (P(930), P(900)), (P(94), P(900))], fill=(255, 196, 120, 46))
-bg = Image.alpha_composite(bg, spot.filter(ImageFilter.GaussianBlur(P(70))))
-pool = Image.new('RGBA', (N, N), (0, 0, 0, 0))
-ImageDraw.Draw(pool).ellipse((P(150), P(700), P(874), P(930)), fill=(255, 150, 110, 60))
-bg = Image.alpha_composite(bg, pool.filter(ImageFilter.GaussianBlur(P(60))))
+bg = lin((N, N), (36, 26, 32), (12, 10, 14), 0)
+glow = Image.new('RGBA', (N, N), (0, 0, 0, 0))
+ImageDraw.Draw(glow).ellipse((P(190), P(200), P(840), P(820)), fill=(255, 140, 110, 62))
+bg = Image.alpha_composite(bg, glow.filter(ImageFilter.GaussianBlur(P(130))))
 
-def pane(box, c0, c1, angle, r=46):
-    x0, y0, x1, y1 = box
-    m = Image.new('L', (N, N), 0); ImageDraw.Draw(m).rounded_rectangle((P(x0), P(y0), P(x1), P(y1)), radius=P(r), fill=255)
-    g = lin((N, N), c0, c1, angle); layer = Image.new('RGBA', (N, N), (0, 0, 0, 0)); layer.paste(g, mask=m)
-    # title bar band and three dots, like a window
-    tb = Image.new('L', (N, N), 0); ImageDraw.Draw(tb).rounded_rectangle((P(x0), P(y0), P(x1), P(y0 + 58)), radius=P(r), fill=255)
-    tb = ImageChops.multiply(tb, m)
-    band = Image.new('RGBA', (N, N), (255, 255, 255, 0)); band.putalpha(tb.point(lambda v: v * 46 // 255))
-    layer = Image.alpha_composite(layer, band)
-    dd = ImageDraw.Draw(layer)
-    for k in range(3):
-        cx = x0 + 34 + k * 30; cy = y0 + 29
-        dd.ellipse((P(cx - 9), P(cy - 9), P(cx + 9), P(cy + 9)), fill=(255, 255, 255, 150))
-    sh = Image.new('RGBA', (N, N), (0, 0, 0, 0)); sh.paste((10, 4, 8, 150), mask=m)
-    sh = ImageChops.offset(sh, 0, int(P(22))).filter(ImageFilter.GaussianBlur(P(28)))
-    glow = Image.new('RGBA', (N, N), (0, 0, 0, 0)); glow.paste(c0 + (90,), mask=m); glow = glow.filter(ImageFilter.GaussianBlur(P(40)))
-    return sh, glow, layer
+# the glyph, as one mask: a thick rounded screen outline, a short stand, and three panes inside
+g = Image.new('L', (N, N), 0); d = ImageDraw.Draw(g)
+X0, Y0, X1, Y1, W = 214, 250, 810, 690, 50
+d.rounded_rectangle((P(X0), P(Y0), P(X1), P(Y1)), radius=P(84), fill=255)
+d.rounded_rectangle((P(X0 + W), P(Y0 + W), P(X1 - W), P(Y1 - W)), radius=P(40), fill=0)
+gap = 26; ix0, iy0, ix1, iy1 = X0 + W + gap, Y0 + W + gap, X1 - W - gap, Y1 - W - gap
+split = ix0 + (ix1 - ix0) * 0.56
+mid = (iy0 + iy1) / 2
+d.rounded_rectangle((P(ix0), P(iy0), P(split - gap / 2), P(iy1)), radius=P(22), fill=255)
+d.rounded_rectangle((P(split + gap / 2), P(iy0), P(ix1), P(mid - gap / 2)), radius=P(22), fill=255)
+d.rounded_rectangle((P(split + gap / 2), P(mid + gap / 2), P(ix1), P(iy1)), radius=P(22), fill=255)
+d.rounded_rectangle((P(452), P(Y1 + 10), P(572), P(Y1 + 66)), radius=P(10), fill=255)       # neck
+d.rounded_rectangle((P(352), P(Y1 + 54), P(672), P(Y1 + 104)), radius=P(25), fill=255)      # foot
 
-layers = []
-for box, c0, c1, ang in [
-    ((196, 262, 548, 794), (255, 205, 96), (255, 136, 92), -70),
-    ((584, 262, 832, 508), (255, 118, 150), (214, 98, 230), -40),
-    ((584, 548, 832, 794), (190, 172, 255), (118, 150, 255), -40),
-]:
-    layers.append(pane(box, c0, c1, ang))
+grad = lin((N, N), (255, 204, 92), (255, 92, 140), -55)
+glyph = Image.new('RGBA', (N, N), (0, 0, 0, 0)); glyph.paste(grad, mask=g)
+# a soft top highlight on the glyph, like the others
+hl = lin((N, N), (255, 255, 255), (255, 255, 255), 0); hm = Image.linear_gradient('L').rotate(180).resize((N, N)).point(lambda v: max(0, v - 150))
+hm = ImageChops.multiply(hm, g); hlay = Image.new('RGBA', (N, N), (0, 0, 0, 0)); hlay.paste(hl, mask=hm.point(lambda v: v * 40 // 255))
+halo = Image.new('RGBA', (N, N), (0, 0, 0, 0)); halo.paste((255, 130, 110, 170), mask=g); halo = halo.filter(ImageFilter.GaussianBlur(P(34)))
+shadow = Image.new('RGBA', (N, N), (0, 0, 0, 0)); shadow.paste((0, 0, 0, 150), mask=g)
+shadow = ImageChops.offset(shadow, 0, int(P(16))).filter(ImageFilter.GaussianBlur(P(20)))
+
 out = bg
-for sh, _, _ in layers: out = Image.alpha_composite(out, sh)
-for _, glow, _ in layers: out = Image.alpha_composite(out, glow)
-for _, _, l in layers: out = Image.alpha_composite(out, l)
-
+for layer in (shadow, halo, glyph, hlay): out = Image.alpha_composite(out, layer)
 sheen = Image.new('RGBA', (N, N), (0, 0, 0, 0))
 ImageDraw.Draw(sheen).ellipse((P(-200), P(-640), P(1224), P(300)), fill=(255, 255, 255, 12))
 out = Image.alpha_composite(out, sheen.filter(ImageFilter.GaussianBlur(P(30))))
 rim = ImageChops.subtract(mask, mask.filter(ImageFilter.MinFilter(int(N * .004) * 2 + 1)))
 out.putalpha(mask)
-rl = Image.new('RGBA', (N, N), (255, 214, 170, 255)); rl.putalpha(rim.point(lambda v: v * 46 // 255)); out = Image.alpha_composite(out, rl)
+rl = Image.new('RGBA', (N, N), (255, 214, 190, 255)); rl.putalpha(rim.point(lambda v: v * 44 // 255)); out = Image.alpha_composite(out, rl)
 out.resize((1024, 1024), Image.LANCZOS).save(os.path.join(HERE, 'icon.png'))
 
-# menu bar / tray: the same three panes as a template image (macOS tints it)
+# menu bar / tray: the same glyph as a template image (macOS tints it)
 def tray(px):
-    T = px * 8; im = Image.new('L', (T, T), 0); d = ImageDraw.Draw(im)
-    r = T * .1; w = max(2, int(T * .09))
-    d.rounded_rectangle((T * .08, T * .16, T * .52, T * .84), radius=r, fill=255)
-    d.rounded_rectangle((T * .60, T * .16, T * .92, T * .46), radius=r, outline=255, width=w)
-    d.rounded_rectangle((T * .60, T * .54, T * .92, T * .84), radius=r, outline=255, width=w)
+    T = px * 8; im = Image.new('L', (T, T), 0); d = ImageDraw.Draw(im); w = max(2, int(T * .1))
+    d.rounded_rectangle((T * .06, T * .14, T * .94, T * .74), radius=T * .12, outline=255, width=w)
+    d.rounded_rectangle((T * .22, T * .28, T * .52, T * .60), radius=T * .04, fill=255)
+    d.rounded_rectangle((T * .58, T * .28, T * .78, T * .41), radius=T * .03, fill=255)
+    d.rounded_rectangle((T * .58, T * .47, T * .78, T * .60), radius=T * .03, fill=255)
+    d.rounded_rectangle((T * .30, T * .80, T * .70, T * .90), radius=T * .05, fill=255)
     a = im.resize((px, px), Image.LANCZOS)
     o = Image.new('RGBA', (px, px), (0, 0, 0, 0)); o.putalpha(a); return o
 tray(16).save(os.path.join(HERE, 'trayTemplate.png'))

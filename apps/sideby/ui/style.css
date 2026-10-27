@@ -269,8 +269,8 @@ body.chat-hidden .side { visibility: hidden; }
 
 /* ---------- theater ---------- */
 body.theater .topbar, body.theater .addressbar { display: none; }
-body.theater #room { grid-template-rows: 0 1fr; }
-body.theater .stage-col { padding: 0 0 8px; gap: 8px; }
+body.theater #room { grid-template-rows: 1fr; }
+body.theater .stage-col { grid-template-rows: 1fr auto; padding: 0 0 8px; gap: 8px; }
 body.theater .stage { border-radius: 0; box-shadow: none; }
 body.theater .transport { padding: 0 14px; }
 

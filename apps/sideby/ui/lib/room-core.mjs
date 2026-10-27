@@ -357,11 +357,19 @@ export class RoomCore extends Emitter {
     this.emit('change');
   }
 
-  setBroadcasting(on) {
+  setBroadcasting(on) { this.setBroadcaster(on ? this.selfId : null); }
+
+  /** Host only: who is sharing their screen right now (any member, or null). */
+  setBroadcaster(id) {
     if (!this.isHost) return;
-    this.state.mode = on ? 'broadcast' : (this.state.url ? 'browse' : 'idle');
-    this.state.broadcaster = on ? this.selfId : null;
-    this._system(on ? 'You started broadcasting' : 'You stopped broadcasting');
+    if (id && id !== this.selfId && !this.members.has(id)) return;
+    const prev = this.state.broadcaster;
+    if (prev === id) return;
+    this.state.mode = id ? 'broadcast' : (this.state.url ? 'browse' : 'idle');
+    this.state.broadcaster = id || null;
+    const name = id => (id === this.selfId ? 'You' : this.members.get(id)?.name ?? 'Someone');
+    if (id) this._system(`${name(id)} started sharing ${id === this.selfId ? 'your' : 'their'} screen`);
+    else if (prev) this._system(`${name(prev)} stopped sharing`);
     this._broadcastState();
     this.emit('change');
   }
@@ -426,6 +434,7 @@ function sanitizeControl(a) {
     case 'rate': return finite(a.rate) && a.rate > 0 && a.rate <= 4 ? { action: 'rate', rate: a.rate } : null;
     case 'navigate': return typeof a.url === 'string' && /^(https?|sideby-media):/i.test(a.url) ? { action: 'navigate', url: a.url.slice(0, 4096) } : null;
     case 'go-live': return { action: 'go-live' };
+    case 'share-start': case 'share-stop': return { action: a.action };
     default: return null;
   }
 }
