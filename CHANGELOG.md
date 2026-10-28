@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-28 10:38 — **Relay 2.1.0** — The Library moved to Vantage, the new Utility Suite browser (it keeps using your Relay Files folder). New icon in the same style as the rest of the suite.
+- 2026-10-28 10:38 — **Vantage 0.1.0** — First release: the suite's browser. Up to four pages on one screen (six layouts, drag tabs into place, focus mode), ad and tracker blocking with per-site control, a built-in VPN for the browser (free Cloudflare WARP, any WireGuard config, or a proxy) with kill switch, multi-connection downloads that resume after restarts, the password vault with autofill, save prompts and 2FA codes (imports Relay's vault), and the Library, Player and Reader moved over from Relay. Plus tab sleeping, containers, private windows, reader view, history, bookmarks import and a command palette.
 - 2026-10-28 14:15 — **Atoll 0.2.0** — Add-ons: Docket, Scene, Beam, Vitals and Relay on the island, each in its own tab and off until you turn it on in Settings › Add-ons. Docket shows your recording and asks to take notes when a call starts; Scene switches scenes; Beam sends files, copied text or the shelf to nearby devices; Vitals shows live machine stats; Relay shows new email and unread counts. Each needs that app's latest version.
 - 2026-10-28 14:15 — **Relay 2.0.1** — Works with Atoll: new email and unread counts on the island with the Relay add-on.
 - 2026-10-28 14:15 — **Vitals 0.2.1** — Works with Atoll: processor, memory, graphics and temperature on the island with the Vitals add-on.

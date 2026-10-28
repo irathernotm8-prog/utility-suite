@@ -1,5 +1,5 @@
-/* Relay — Library: Books & Comics, Movies & Shows, Music.
-   Your files live in plain folders inside "Relay Files"; this tab turns them into a poster wall
+/* Vantage — Library: Books & Comics, Movies & Shows, Music.
+   Your files live in plain folders inside "your Library folder"; this tab turns them into a poster wall
    with custom covers, resume points, series/seasons/albums, and favorites. */
 (() => {
   const R = () => window.RelayApp;
@@ -12,21 +12,21 @@
   const SECTIONS = {
     continue: { label: 'Continue', icon: 'clock', color: 'var(--library)' },
     books: { label: 'Books & Comics', icon: 'book', color: '#f97316', noun: 'book', folder: 'Books & Comics',
-      blurb: 'PDFs, comics (.cbz) and folders of pages. Put a series in its own folder and Relay groups the volumes.' },
+      blurb: 'PDFs, comics (.cbz) and folders of pages. Put a series in its own folder and Vantage groups the volumes.' },
     video: { label: 'Movies & Shows', icon: 'film', color: '#e5484d', noun: 'video', folder: 'Movies & Shows',
       blurb: 'A video on its own is a movie. A folder of episodes (S01E01…) or Season folders becomes a show.' },
     music: { label: 'Music', icon: 'music', color: '#a855f7', noun: 'track', folder: 'Music',
       blurb: 'Albums come from your folders and the songs’ own tags, with their built-in artwork.' },
     favorites: { label: 'Favorites', icon: 'heart', color: '#ec4899' }
   };
-  const prefs = (() => { try { return JSON.parse(localStorage.getItem('relay-library') || '{}'); } catch { return {}; } })();
+  const prefs = (() => { try { return JSON.parse(localStorage.getItem('vantage-library') || '{}'); } catch { return {}; } })();
   const L = {
     section: prefs.section || 'books', sort: prefs.sort || 'added', vfilter: 'all', query: '', detail: null,
     data: {}, loading: {}, el: null, side: null, root: null, failed: new Set(), queued: new Set(), queue: [], working: false
   };
-  const savePrefs = () => { try { localStorage.setItem('relay-library', JSON.stringify({ section: L.section, sort: L.sort })); } catch {} };
+  const savePrefs = () => { try { localStorage.setItem('vantage-library', JSON.stringify({ section: L.section, sort: L.sort })); } catch {} };
   const items = (k) => L.data[k]?.items || [];
-  const on = () => R().state.ui.platform === 'library';
+  const on = () => R().isShown('library');
 
   async function load(kind, force = false) {
     if (L.data[kind] && !force) return L.data[kind];
@@ -115,7 +115,7 @@
       </nav>
       <div class="dl-folder lib-side-note">
         <div class="side-title" style="padding:0 0 8px">Your files live in</div>
-        <button class="dl-path" id="libRoot" title="${esc(L.root || '')}">${ic('folder', 16)}<span>${esc(short || 'Relay Files')}</span></button>
+        <button class="dl-path" id="libRoot" title="${esc(L.root || '')}">${ic('folder', 16)}<span>${esc(short || 'your Library folder')}</span></button>
         <div class="dl-folder-actions"><button class="btn ghost" id="libChange">Change…</button><button class="btn ghost" id="libRescan">Rescan</button></div>
       </div>
     </div>`;
@@ -124,7 +124,7 @@
     $('#libRescan', side).onclick = async () => { await loadAll(true); refresh(); R().toast('Library updated'); };
     $('#libChange', side).onclick = async () => {
       const r = await relay.library.chooseRoot();
-      if (r) { L.root = r; L.data = {}; await loadAll(true); refresh(); R().toast('Relay Files is now ' + r.replace(/^\/Users\/[^/]+/, '~')); }
+      if (r) { L.root = r; L.data = {}; await loadAll(true); refresh(); R().toast('Library folder is now ' + r.replace(/^\/Users\/[^/]+/, '~')); }
     };
   }
 
@@ -194,7 +194,7 @@
       list = sorted(filtered(list));
       count = list.length;
       grid = list.map(it => cardHTML(it, L.section)).join('');
-      emptyMsg = items(L.section).length ? 'Nothing matches.' : `Nothing here yet. Drop files onto this window, press <b>Add</b>, or put them in <b>Relay Files › ${esc(sec.folder)}</b>.`;
+      emptyMsg = items(L.section).length ? 'Nothing matches.' : `Nothing here yet. Drop files onto this window, press <b>Add</b>, or put them in <b>your Library folder › ${esc(sec.folder)}</b>.`;
     }
     const title = L.section === 'continue' ? 'Pick up where you left off' : L.section === 'favorites' ? 'Your favorites' : sec.label;
     el.innerHTML = `<div class="home-scroll lib-view" id="libScroll">
@@ -215,7 +215,7 @@
       </header>
       ${L.section === 'video' ? `<div class="lib-chips">${[['all', 'All'], ['movie', 'Movies'], ['show', 'Shows']].map(([v, l]) => `<button data-vf="${v}" class="${L.vfilter === v ? 'on' : ''}">${l}<span>${v === 'all' ? items('video').length : items('video').filter(x => x.type === v).length}</span></button>`).join('')}</div>` : ''}
       ${count ? `<div class="lib-grid ${L.section === 'music' ? 'square' : ''}">${grid}</div>` : `<div class="card-empty tall card lib-empty">${ic(sec.icon, 26)}<span>${emptyMsg}</span></div>`}
-      <div class="lib-drop" id="libDrop"><div>${ic('download', 26)}<b>Drop to add to ${esc(SECTIONS[L.section].folder ? sec.label : 'your library')}</b><small>Files are copied into Relay Files</small></div></div>
+      <div class="lib-drop" id="libDrop"><div>${ic('download', 26)}<b>Drop to add to ${esc(SECTIONS[L.section].folder ? sec.label : 'your library')}</b><small>Files are copied into your Library folder</small></div></div>
     </div>`;
     const s = $('#libSearch', el);
     if (s) { s.oninput = () => { L.query = s.value; render(el); }; if (keepFocus) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }
@@ -373,7 +373,7 @@
         </div>
       </header>
       ${body}
-      <div class="lib-drop" id="libDrop"><div>${ic('download', 26)}<b>Drop to add to ${esc(sec.label)}</b><small>Files are copied into Relay Files</small></div></div>
+      <div class="lib-drop" id="libDrop"><div>${ic('download', 26)}<b>Drop to add to ${esc(sec.label)}</b><small>Files are copied into your Library folder</small></div></div>
     </div>`;
     $('#ldBack', el).onclick = () => { L.detail = null; render(el); };
     $('#ldPlay', el).onclick = () => quickPlay(it, kind);
@@ -456,7 +456,7 @@
   function editDetails(it, kind) {
     const subLabel = kind === 'music' ? 'Artist' : kind === 'books' ? 'Author / writer' : 'Tagline';
     R().openModal({
-      title: 'Edit details', subtitle: 'Only changes how it shows in Relay — your files aren’t renamed.', icon: 'edit', color: SECTIONS[kind].color,
+      title: 'Edit details', subtitle: 'Only changes how it shows in Vantage — your files aren’t renamed.', icon: 'edit', color: SECTIONS[kind].color,
       body: `<div class="lib-form"><div class="field"><label>Title</label><input class="input" id="leTitle" value="${esc(it.title)}"></div>
         <div class="lib-form-row"><div class="field"><label>${subLabel}</label><input class="input" id="leSub" value="${esc(it.sub || it.artist || '')}"></div>
         <div class="field" style="width:110px"><label>Year</label><input class="input" id="leYear" inputmode="numeric" value="${esc(it.year || '')}"></div></div>

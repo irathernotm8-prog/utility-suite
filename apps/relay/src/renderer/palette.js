@@ -11,7 +11,7 @@
     const tab = (id, label, icon, hint) => out.push({ group: 'Go to', label, icon, hint, run: () => R().setPlatform(id) });
     tab('home', 'Home', 'home', '⌘1');
     for (const [id, p] of Object.entries(PLATFORMS)) tab(id, p.label, id === 'chats' ? 'chat' : 'mail');
-    [['calendar', 'Calendar', 'calendar'], ['storage', 'Storage', 'cloud'], ['browser', 'Browser', 'globe'], ['vault', 'Vault', 'lock'], ['library', 'Library', 'library'], ['downloads', 'Downloads', 'download'], ['tracking', 'Package tracking', 'box']].forEach(([id, l, i]) => tab(id, l, i));
+    [['calendar', 'Calendar', 'calendar'], ['storage', 'Storage', 'cloud'], ['browser', 'Browser', 'globe'], ['vault', 'Vault', 'lock'], ['downloads', 'Downloads', 'download'], ['tracking', 'Package tracking', 'box']].forEach(([id, l, i]) => tab(id, l, i));
     for (const a of state.accounts) {
       const sub = a.platform === 'chats' ? chatService(a)?.label : PLATFORMS[a.platform]?.label;
       out.push({ group: 'Accounts', label: a.name || a.email || sub, sub: [sub, a.email].filter(Boolean).join(' · '), avatar: R().avatarHTML(a, 'sm'),

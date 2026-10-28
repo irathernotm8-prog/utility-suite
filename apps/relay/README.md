@@ -13,8 +13,8 @@ All your inboxes, calendars and AI in one Mac app.
 - **Look** — dark purple-and-black by default; pick any accent color or switch back to the colorful Legacy palette (Settings → General). Inboxes can match Relay (purple & black) automatically; Relay leaves a provider's own dark theme alone
 - **Storage** (⌘7) — Google Drive, OneDrive, Dropbox, MEGA, iCloud Drive, Box. Drive and OneDrive reuse your Gmail/Outlook sign-in
 - **Browser** (⌘8) — tabs, bookmarks, incognito (⌘⇧N), find (⌘F); links from your email open here
-- **Library** (⌘⇧L) — Books & Comics, Movies & Shows, and Music from plain folders in `Relay Files`: posters/covers (automatic, artwork next to the file, embedded album art, or your own — drag an image onto a poster), series, seasons & episodes, albums, resume where you left off, Continue and Favorites
-- **Downloads** (⌘⇧J) — every download lands in `~/Downloads/Relay/Relay Files/Downloads` (changeable) with full history; move to Library, remove from history or move to Trash
+- **Library** — moved to **Vantage**, the Utility Suite browser, in Relay 2.1 (it keeps using `Relay Files`)
+- **Downloads** (⌘⇧J) — every download lands in `~/Downloads/Relay/Relay Files/Downloads` (changeable) with full history; remove from history or move to Trash
 - **Slim sidebar** (⌘\) — collapse any left sidebar to an icon rail and back
 - **Relay Player** (⌘⌥P) — opt-in player for video & audio: speed, picture-in-picture, Chromecast casting, AirPlay via QuickTime, download. Send media from the Browser tab (film button or right-click → Play in Relay Player), including HLS streams; YouTube opens in a full-window cinema view; streamed/DRM video can be popped out picture-in-picture
 - **Relay Reader** (⌘⌥R) — images, folders, .cbz comics and PDFs: whole page / fit width, two-page spreads, manga mode, zoom & pan

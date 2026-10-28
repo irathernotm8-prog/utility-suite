@@ -18,7 +18,7 @@
 - User data lives outside the app, in `app.getPath('userData')` or the app's data folder (Relay Files, Onward Files, Slate's Statements).
 - Keep `productName`, `build.appId` and `build/icon.png` stable, `electron-builder` in `devDependencies`, and `package-lock.json` current.
 - Native modules are fine; tell the Utility Package chat when you add a new one so Windows cross-builds get checked.
-- `src/suitelink.js` (Atoll, Docket, Scene, Beam, Vitals, Relay) is a copy of `tools/suitelink.js`, the Utility Suite link that lets apps talk to each other. Don't edit the copy; ask the Utility Package chat, which changes `tools/suitelink.js` and copies it to every app. Each app's handoff lists what it offers on the link.
+- `src/suitelink.js` (Atoll, Docket, Scene, Beam, Vitals, Relay, Vantage) is a copy of `tools/suitelink.js`, the Utility Suite link that lets apps talk to each other. Don't edit the copy; ask the Utility Package chat, which changes `tools/suitelink.js` and copies it to every app. Each app's handoff lists what it offers on the link.
 
 ## Apps and their handoffs
 
@@ -27,6 +27,7 @@
 | Assist | `apps/assist` | `docs/handoffs/Assist.md` |
 | Atoll | `apps/atoll` | `docs/handoffs/Atoll.md` (vendors Touchline's data layer: `npm run sync-touchline`; no native modules) |
 | Beam | `apps/beam` | `docs/handoffs/Beam.md` (no native modules; needs Local Network on Mac and Private-network firewall access on Windows) |
+| Vantage | `apps/vantage` | `docs/handoffs/Vantage.md` (no native modules; downloads wireproxy at runtime for the VPN) |
 | Waypoint | `apps/waypoint` | `docs/handoffs/Waypoint.md` (no native modules; phone hand-off needs Private-network firewall access on Windows) |
 | Bench | `apps/bench` | `docs/handoffs/Bench.md` (MCP plugin for Claude/Codex; ssh2 is pure JS, `.npmrc` omits its optional native parts; downloads Tart at runtime on Apple Silicon) |
 | Cadence | `apps/cadence` | `docs/handoffs/Cadence.md` (MCP plugin for Claude/Codex; no native modules) |

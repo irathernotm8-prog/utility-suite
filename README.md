@@ -22,13 +22,14 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
 | **RO2** | Quick, easy designs and photo edits (a lighter Canva): shapes, icons, text, free photos, any size or aspect ratio, export to PNG/JPG/WebP/SVG/PDF, and on-device AI: background remover, magic eraser, magic grab, magic expand | `apps/ro2` |
 | **RO3** | Photo editing, video editing and file conversion | `apps/ro3` |
-| **Relay** | Inboxes, calendars, browser, library and AI | `apps/relay` |
+| **Relay** | Inboxes, calendars, chats, browser and AI | `apps/relay` |
 | **Scene** | Workspace layouts: save and switch apps, window positions on each display, links, volume, appearance and wallpaper for work, gaming or match day | `apps/scene` |
 | **Sideby** | Watch parties with shared playback and room chat | `apps/sideby` |
 | **Slate** | Accounts, retirement, credit and savings in one place | `apps/slate` |
 | **Trace** | Paths, decisions, org charts and folder plans you can trace, with notes and screenshot guides | `apps/trace` |
 | **Vitals** | Task manager and system dashboard: live CPU, memory, GPU and temperatures, apps and uninstalling, startup items, permissions, time and focus, upgrade advice with drivers and drive speed tests, checkup | `apps/vitals` |
 | **Touchline** | Football scores, tables, match stats, squads and player histories for every league and season | `apps/touchline` |
+| **Vantage** | The suite's browser: up to four pages on one screen, built-in ad blocking and VPN (Cloudflare WARP, WireGuard, proxy), multi-connection downloads, the password vault with autofill and 2FA codes, and the Library, Player and Reader (moved from Relay) | `apps/vantage` |
 | **Waypoint** | Travel planning and booking: search and book flights and hotels, trips with interactive day timelines, bookings, documents, budgets and research, all offline; to your phone by QR code, to another computer with Beam | `apps/waypoint` |
 | **Utility Hub** | Installs, updates and removes the apps on each computer | `apps/hub` |
 
@@ -49,7 +50,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 
 ## Apps talking to each other (Utility Suite link)
 
-`tools/suitelink.js` lets suite apps on the same computer talk to each other, for the signed-in user only: a Unix socket in `~/Library/Application Support/Utility Suite/link` on a Mac, a per-user named pipe on Windows. Each app that takes part carries an identical copy in `src/suitelink.js`. Today Docket, Scene, Beam, Vitals and Relay offer a few calls and events on it, and Atoll's add-ons use them (each add-on is off until turned on in Atoll). What each app offers is in its handoff.
+`tools/suitelink.js` lets suite apps on the same computer talk to each other, for the signed-in user only: a Unix socket in `~/Library/Application Support/Utility Suite/link` on a Mac, a per-user named pipe on Windows. Each app that takes part carries an identical copy in `src/suitelink.js`. Today Docket, Scene, Beam, Vitals, Relay and Vantage offer a few calls and events on it, and Atoll's add-ons use them (each add-on is off until turned on in Atoll). What each app offers is in its handoff.
 
 ## Personal data that stays outside
 
@@ -57,7 +58,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 
 | App | Data folder |
 |---|---|
-| Relay | `~/Downloads/Relay/Relay Files` (library and downloads) |
+| Relay | `~/Downloads/Relay/Relay Files` (downloads; also Vantage's Library) |
 | Onward | `~/Downloads/Onward/Onward Files` (resume, credentials, applications) |
 | Slate | `~/Documents/Slate/Statements` |
 | Atoll | its app-data folder: `settings.json`, `state.json` (timers, the shelf list, the followed team or match), `cache/` (Touchline match data and crests), `artwork/` (scratch). Shelf files stay where they are; clipboard history is never saved |
@@ -72,6 +73,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
 | RO2 | `~/Documents/RO2` (one `.ro2` file per design, pictures inside; change in Settings). Its app-data folder holds `Models/` (the AI models, 300–500 MB, downloaded on first use), `settings.json` and `index.json` (Home thumbnails) |
 | Vitals | its app-data folder (`focus/` holds one small file per day of time tracking) |
+| Vantage | its app-data folder: `vantage-data.json` (settings, bookmarks, open tabs, downloads list), `history.json`, `vantage-vault.json` (encrypted), filter lists, `bin/wireproxy` (VPN engine, downloaded on first connect), browser profiles. The Library uses Relay's `~/Downloads/Relay/Relay Files` when it exists, otherwise `~/Downloads/Vantage/Vantage Files` |
 | Waypoint | `~/Documents/Waypoint` (one folder per trip: `trip.json` and `Documents/`; change it in Settings). Its app-data folder holds `private.bin` (booking keys and saved travelers, encrypted with the system keychain) and the booking browser's sign-ins |
 | All apps | their app-data folder (`~/Library/Application Support/<App>`, `%APPDATA%\<App>`) |
 

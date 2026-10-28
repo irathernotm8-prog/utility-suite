@@ -40,27 +40,7 @@ contextBridge.exposeInMainWorld('relay', {
     saveProgress: (o) => ipcRenderer.invoke('media:progress', o),
     getProgress: (file) => ipcRenderer.invoke('media:get-progress', file)
   },
-  library: {
-    root: () => ipcRenderer.invoke('library:root'),
-    scan: (kind) => ipcRenderer.invoke('library:scan', kind),
-    meta: (kind, key, patch) => ipcRenderer.invoke('library:meta', { kind, key, patch }),
-    opened: (kind, key) => ipcRenderer.invoke('library:opened', { kind, key }),
-    pickCover: (kind, key) => ipcRenderer.invoke('library:pick-cover', { kind, key }),
-    setCover: (kind, key, from) => ipcRenderer.invoke('library:set-cover', { kind, key, from }),
-    resetCover: (kind, key) => ipcRenderer.invoke('library:reset-cover', { kind, key }),
-    saveThumb: (o) => ipcRenderer.invoke('library:save-thumb', o),
-    fileBytes: (p) => ipcRenderer.invoke('library:file-bytes', p),
-    zipFirst: (p) => ipcRenderer.invoke('library:zip-first', p),
-    openFolder: (kind) => ipcRenderer.invoke('library:open-folder', kind),
-    show: (p) => ipcRenderer.invoke('library:show', p),
-    openExternal: (p) => ipcRenderer.invoke('library:open-external', p),
-    trash: (p) => ipcRenderer.invoke('library:trash', p),
-    add: (kind) => ipcRenderer.invoke('library:add', kind),
-    importFiles: (kind, paths, move) => ipcRenderer.invoke('library:import', { kind, paths, move }),
-    kindFor: (p) => ipcRenderer.invoke('library:kind-for', p),
-    chooseRoot: () => ipcRenderer.invoke('library:choose-root'),
-    onChanged: (cb) => ipcRenderer.on('library:changed', () => cb())
-  },
+
   reader: {
     open: (p) => ipcRenderer.invoke('reader:open', p),
     page: (id, index) => ipcRenderer.invoke('reader:page', { id, index }),

@@ -40,7 +40,7 @@ npm run install-app   # optional: quick install into /Applications while develop
 
 ## Specific to Relay
 
-- **`~/Downloads/Relay/Relay Files` stays exactly where it is.** It's Relay's default library and download folder (`src/library.js`), with about 7.6 GB of your media. Only the source code moved. Never copy `Relay Files` into `apps/relay`, and don't change the default path without a migration.
+- **`~/Downloads/Relay/Relay Files` stays exactly where it is.** It's Relay's default download folder (`src/files.js`) and the Library folder Vantage now uses, with about 7.6 GB of your media. Only the source code moved. Never copy `Relay Files` into `apps/relay`, and don't change the default path without a migration.
 - `npm run install-app` still works. Utility Hub recognises the copy in `/Applications` and updates it like any other.
 - The README's `cd ~/Downloads/Relay` instructions are out of date; use `apps/relay`.
 
@@ -58,3 +58,10 @@ Relay now offers a few things to other suite apps (Atoll's add-ons) over the **U
 - Offers: `unread`, `recent`, `open(accountId)`; events `unread` and `mail`. The renderer pushes them through `relay.suitePush` (preload): `suiteUnread()` in `renderer/app.js` sends the counts, and when a mail inbox's count goes up it reads the newest unread email with `Briefing.latest()` (the briefing scraper) at most every 20 s per inbox.
 - Nothing changes when no other app is connected: events are only sent while something is listening.
 - If you rename or remove one of these, tell the Utility Package chat so Atoll keeps working.
+
+## 2.1.0 — the Library moved to Vantage, new icon
+
+- The Library tab (books & comics, movies & shows, music) moved to **Vantage**, the suite's browser (`apps/vantage`). Relay no longer has `src/library.js` or `renderer/library.js`; `src/files.js` keeps `root()` (the Relay Files folder, still the default downloads location) and the player's resume points (`media:progress`). Vantage uses the same `Relay Files` folder in place and copied Relay's covers, favorites and resume points once on first launch.
+- Opening the old Library (a saved tab, ⌘⇧L) lands on Home with a note that it lives in Vantage. Downloads lost "Move to Library".
+- New icon in the suite family (mail card with a chat bubble behind it): `build/icon.svg`/`icon.png`/`icon.ico` and the in-app `assets/relay-mark*.png`. Drawn by `apps/vantage/build/make-icon.py relay apps/relay`.
+- The browser tab, Vault, Player and Reader stay in Relay.

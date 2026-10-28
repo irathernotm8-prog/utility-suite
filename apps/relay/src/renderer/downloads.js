@@ -164,7 +164,6 @@
       R().popMenu(r.right - 230, r.bottom + 4, [
         ...(done && playable(x) ? [{ label: 'Play in Relay Player', icon: 'play', onClick: () => window.Player?.open({ src: x.path, title: x.name, kind: x.kind }) }] : []),
         ...(done && readable(x) ? [{ label: 'Read in Relay Reader', icon: 'book', onClick: () => window.Reader?.open(x.path) }] : []),
-        ...(done && (playable(x) || readable(x)) && !x.inLibrary ? [{ label: 'Move to Library', icon: 'library', onClick: async () => { if (await window.Library?.addFromDownload(x.path, x.name)) { d.list = await relay.downloads.list(); refresh(); } } }] : []),
         ...(done ? [{ label: 'Open with default app', icon: 'external', onClick: () => relay.downloads.open(x.id) }, { label: 'Show in Finder', icon: 'folder', onClick: () => relay.downloads.show(x.id) }] : []),
         ...(x.url && /^https?:/.test(x.url) ? [{ label: 'Copy download link', icon: 'link', onClick: () => { navigator.clipboard.writeText(x.url); R().toast('Link copied'); } }] : []),
         '-',

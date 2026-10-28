@@ -1,9 +1,9 @@
-// Relay — personal media library.
-// Everything lives in plain folders inside "Relay Files" (default ~/Downloads/Relay/Relay Files):
+// Vantage — personal media library.
+// Everything lives in plain folders inside a library folder (Relay Files if Relay had one, otherwise ~/Downloads/Vantage/Vantage Files):
 //   Downloads/ · Books & Comics/ · Movies & Shows/ · Music/
-// Relay scans those folders, groups files into books/series, movies/shows and albums, and keeps
-// covers: your own (saved in Relay Files/.covers), artwork next to the file (cover.jpg, poster.jpg,
-// <name>.jpg), embedded album art, or an automatic one (first page / a video frame) cached by Relay.
+// Vantage scans those folders, groups files into books/series, movies/shows and albums, and keeps
+// covers: your own (saved in Vantage Files/.covers), artwork next to the file (cover.jpg, poster.jpg,
+// <name>.jpg), embedded album art, or an automatic one (first page / a video frame) cached by Vantage.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -24,7 +24,11 @@ const fileUrl = (p) => (p ? 'file://' + encodeURI(p.replace(/\\/g, '/')).replace
 /* ---------- folders ---------- */
 function root() {
   const s = ctx.getStore().settings;
-  return s.filesRoot || path.join(app.getPath('downloads'), 'Relay', 'Relay Files');
+  if (s.filesRoot) return s.filesRoot;
+  // Library moved here from Relay: keep using Relay's folder in place when it exists, so nothing has to move.
+  const relay = path.join(app.getPath('downloads'), 'Relay', 'Relay Files');
+  if (fs.existsSync(relay)) return relay;
+  return path.join(app.getPath('downloads'), 'Vantage', 'Vantage Files');
 }
 function folder(kind) { return path.join(root(), FOLDERS[kind]); }
 function ensureFolders() {
@@ -412,7 +416,7 @@ function register(c) {
   ipcMain.handle('library:import', (_e, { kind, paths, move }) => importFiles(kind || kindForFile(paths[0]) || 'books', paths, !!move));
   ipcMain.handle('library:kind-for', (_e, p) => kindForFile(p || ''));
   ipcMain.handle('library:choose-root', async () => {
-    const r = await dialog.showOpenDialog(ctx.getWin(), { title: 'Choose where Relay keeps your files', properties: ['openDirectory', 'createDirectory'], defaultPath: root() });
+    const r = await dialog.showOpenDialog(ctx.getWin(), { title: 'Choose where Vantage keeps your files', properties: ['openDirectory', 'createDirectory'], defaultPath: root() });
     if (r.canceled || !r.filePaths[0]) return null;
     ctx.getStore().settings.filesRoot = r.filePaths[0];
     ctx.saveStore();

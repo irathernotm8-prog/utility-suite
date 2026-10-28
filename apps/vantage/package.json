@@ -1,0 +1,57 @@
+{
+  "name": "vantage",
+  "productName": "Vantage",
+  "version": "0.1.0",
+  "description": "A fast, private browser: up to four pages on one screen, built-in ad blocking and VPN, multi-connection downloads, the password vault with autofill, and your Library.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.18.2",
+    "@ghostery/adblocker-electron-preload": "^2.18.2",
+    "@mozilla/readability": "^0.6.0",
+    "castv2-client": "^1.2.0",
+    "hls.js": "^1.7.3",
+    "multicast-dns": "^7.2.5",
+    "music-metadata": "^7.14.0",
+    "pdfjs-dist": "^6.4.299",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.vantage",
+    "productName": "Vantage",
+    "copyright": "Personal use",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "build/trayTemplate.png", "build/trayTemplate@2x.png", "package.json", "node_modules/**/*"],
+    "protocols": [{ "name": "Web page", "schemes": ["http", "https"] }],
+    "fileAssociations": [
+      { "ext": ["html", "htm", "xhtml", "shtml"], "name": "Web page", "role": "Viewer", "rank": "Alternate" },
+      { "ext": ["pdf"], "name": "PDF document", "role": "Viewer", "rank": "Alternate" }
+    ],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Websites you allow can use the camera, for example for video calls.",
+        "NSMicrophoneUsageDescription": "Websites you allow can use the microphone, for example for video calls.",
+        "NSLocationUsageDescription": "Websites you allow can see your approximate location.",
+        "NSLocalNetworkUsageDescription": "Vantage finds Chromecasts and TVs on your network so you can cast videos.",
+        "NSBluetoothAlwaysUsageDescription": "Websites you allow can connect to Bluetooth devices."
+      }
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: http: blob: file:; media-src 'self' https: http: blob: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; connect-src 'self' https: http: blob: data:; frame-src 'self' data: blob: https://www.youtube.com https://www.youtube-nocookie.com;" />
+  <title>Vantage</title>
+  <link rel="stylesheet" href="ported.css" />
+  <link rel="stylesheet" href="vantage.css" />
+</head>
+<body>
+  <div id="app" class="shell">
+    <header class="strip" id="strip">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <button class="strip-btn" id="newTab" title="New tab (⌘T) — right-click for a container tab"></button>
+      <div class="strip-fill"></div>
+      <div class="private-badge" id="privateBadge" hidden></div>
+    </header>
+    <div class="toolbar" id="toolbar">
+      <div class="nav">
+        <button class="tb" id="btnBack" title="Back (⌘[)"></button>
+        <button class="tb" id="btnFwd" title="Forward (⌘])"></button>
+        <button class="tb" id="btnReload" title="Reload (⌘R)"></button>
+      </div>
+      <form class="omni" id="omniForm" autocomplete="off">
+        <button type="button" class="omni-site" id="omniSite" title="Site settings"></button>
+        <input id="omni" spellcheck="false" placeholder="Search or enter address" />
+        <button type="button" class="omni-act" id="omniZoom" hidden title="Reset zoom"></button>
+        <button type="button" class="omni-act" id="omniReader" hidden title="Reader view (⌘⌥R)"></button>
+        <button type="button" class="omni-act" id="omniStar" title="Bookmark this page (⌘D)"></button>
+        <button type="button" class="omni-shield" id="omniShield" title="Ad blocking"></button>
+      </form>
+      <div class="tools">
+        <button class="vpn-pill" id="btnVpn" title="VPN (⌘⇧U)"><span class="dot"></span><span class="t">VPN</span></button>
+        <button class="tb" id="btnSplit" title="Split view: up to four pages side by side"></button>
+        <button class="tb" id="btnDownloads" title="Downloads (⌘⇧J)"><span class="ring"></span></button>
+        <button class="tb" id="btnVault" title="Passwords (⌘⌥K)"></button>
+        <button class="tb" id="btnLibrary" title="Library (⌘⇧L)"></button>
+        <button class="tb" id="btnMenu" title="Menu"></button>
+      </div>
+    </div>
+    <div class="bmbar" id="bmbar"></div>
+    <div class="suggest" id="suggest" hidden></div>
+    <main class="stage" id="stage">
+      <div class="views" id="views"></div>
+      <div class="dividers" id="dividers"></div>
+      <div class="drop-layer" id="dropLayer" hidden></div>
+      <div class="drag-shield" id="dragShield" hidden></div>
+    </main>
+    <div class="focus-reveal" id="focusReveal"></div>
+  </div>
+
+  <div class="pop-root" id="popRoot"></div>
+  <div class="modal-root" id="modalRoot"></div>
+  <div class="menu-root" id="menuRoot"></div>
+  <div class="toast-root" id="toastRoot"></div>
+
+  <script src="icons.js"></script>
+  <script src="shell.js"></script>
+  <script src="tabs.js"></script>
+  <script src="toolbar.js"></script>
+  <script src="pages.js"></script>
+  <script src="vault.js"></script>
+  <script src="../../node_modules/hls.js/dist/hls.min.js"></script>
+  <script src="player.js"></script>
+  <script src="reader.js"></script>
+  <script src="library.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

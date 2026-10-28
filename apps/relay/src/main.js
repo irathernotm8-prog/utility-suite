@@ -7,7 +7,7 @@ const { IDENTITIES, identityFor, rewriteHeaders, navigatorPatch } = require('./i
 const vault = require('./vault');
 const adblock = require('./adblock');
 const downloads = require('./downloads');
-const library = require('./library');
+const files = require('./files');
 const plugins = require('./plugins');
 const media = require('./media');
 const tracking = require('./tracking');
@@ -427,7 +427,7 @@ ipcMain.handle('storage:remove', async (_e, id) => {
 ipcMain.handle('browser:save', (_e, patch) => { store.browser = { ...(store.browser || {}), ...patch }; saveStore(); return true; });
 ipcMain.handle('browser:clear-incognito', async () => { try { await session.fromPartition(INCOGNITO_PARTITION).clearStorageData(); await session.fromPartition(INCOGNITO_PARTITION).clearCache(); } catch {} return true; });
 ipcMain.handle('browser:clear-data', async () => { await session.fromPartition(BROWSER_PARTITION).clearStorageData(); await session.fromPartition(BROWSER_PARTITION).clearCache(); return true; });
-// Drag a file out of Relay (Downloads, Library) into a web page — e.g. upload to Dropbox in split view
+// Drag a file out of Relay (Downloads) into a web page — e.g. upload to Dropbox in split view
 ipcMain.on('drag-out', (e, p) => {
   try {
     if (!p || !fs.existsSync(p)) return;
@@ -751,7 +751,6 @@ function buildMenu() {
       { label: 'Storage', accelerator: 'CmdOrCtrl+7', click: send('menu', 'tab:storage') },
       { label: 'Browser', accelerator: 'CmdOrCtrl+8', click: send('menu', 'tab:browser') },
       { label: 'Vault', accelerator: 'CmdOrCtrl+9', click: send('menu', 'tab:vault') },
-      { label: 'Library', accelerator: 'CmdOrCtrl+Shift+L', click: send('menu', 'tab:library') },
       { label: 'Downloads', accelerator: 'CmdOrCtrl+Shift+J', click: send('menu', 'tab:downloads') },
       { label: 'Tracking', accelerator: 'CmdOrCtrl+Shift+K', click: send('menu', 'tab:tracking') },
       { type: 'separator' },
@@ -803,9 +802,9 @@ app.whenReady().then(() => {
   createWindow();
   vault.register(ipcMain, () => win);
   const ctx = { getStore: () => store, saveStore, getWin: () => win, encryptKey, decryptKey, describeSource };
-  library.register(ctx);
+  files.register(ctx);
   plugins.register(ctx);
-  downloads.register({ ...ctx, filesRoot: () => library.root() });
+  downloads.register({ ...ctx, filesRoot: () => files.root() });
   media.register({ ...ctx, downloadsDir: () => downloads.dir() });
   tracking.register(ctx);
   setupPlayerSession();

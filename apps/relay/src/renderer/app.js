@@ -140,7 +140,7 @@ function applyTheme() {
 mq.addEventListener('change', applyTheme);
 
 /* ---------- tabs ---------- */
-const VIEWS = { home: () => window.Home, calendar: () => window.Calendar, vault: () => window.Vault, browser: () => window.Browser, downloads: () => window.Downloads, tracking: () => window.Tracking, library: () => window.Library };
+const VIEWS = { home: () => window.Home, calendar: () => window.Calendar, vault: () => window.Vault, browser: () => window.Browser, downloads: () => window.Downloads, tracking: () => window.Tracking };
 const isView = (p) => !!VIEWS[p];
 
 function renderTabs() {
@@ -163,7 +163,6 @@ function renderTabs() {
       ${tab('storage', 'Storage', 'var(--storage)', 'cloud')}
       ${tab('browser', 'Browser', 'var(--browser)', 'globe')}
       ${tab('vault', 'Vault', 'var(--vault)', 'lock')}
-      ${tab('library', 'Library', 'var(--library)', 'library')}
       ${tab('downloads', 'Downloads', 'var(--downloads)', 'download')}
       ${tab('tracking', 'Tracking', 'var(--tracking)', 'box')}
     </div>`;
@@ -171,6 +170,8 @@ function renderTabs() {
 }
 
 function setPlatform(p) {
+  // the Library moved to Vantage (Relay 2.1)
+  if (p === 'library') { p = 'home'; setTimeout(() => toast('Your Library now lives in Vantage, the Utility Suite browser'), 300); }
   const changed = state.ui.platform !== p;
   if (PLATFORMS[p] || p === 'storage') state.ui.lastWeb = p;
   if (changed) { closeFind(); hidePackageChip(); }
@@ -472,7 +473,7 @@ async function tryGrabAvatar(id) {
 function renderMain() {
   const p = state.ui.platform;
   const empty = $('#empty'), wvs = $('#webviews');
-  const sections = { home: $('#home'), calendar: $('#calendar'), vault: $('#vault'), browser: $('#browser'), downloads: $('#downloads'), tracking: $('#tracking'), library: $('#library') };
+  const sections = { home: $('#home'), calendar: $('#calendar'), vault: $('#vault'), browser: $('#browser'), downloads: $('#downloads'), tracking: $('#tracking') };
   Object.entries(sections).forEach(([k, el]) => { el.hidden = k !== p; });
   if (isView(p)) {
     wvs.hidden = true; empty.hidden = true;

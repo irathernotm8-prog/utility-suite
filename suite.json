@@ -42,7 +42,7 @@
     {
       "id": "relay",
       "name": "Relay",
-      "description": "Inboxes, calendars, browser, library and AI in one place",
+      "description": "Inboxes, calendars, chats, browser and AI in one place",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [
@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -246,6 +246,16 @@
       "exclude": [
         "test/e2e-out",
         "test/shots"
+      ]
+    },
+    {
+      "id": "vantage",
+      "name": "Vantage",
+      "description": "A fast, private browser: up to four pages on one screen, built-in ad blocking and VPN, multi-connection downloads, the password vault with autofill, and your Library.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [
+        "test/e2e-out"
       ]
     }
   ],
