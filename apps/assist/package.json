@@ -1,6 +1,6 @@
 {
   "name": "assist",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Private, on-device AI chat and reply assistant.",
   "main": "main.js",
   "scripts": {

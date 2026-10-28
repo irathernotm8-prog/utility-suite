@@ -17,6 +17,7 @@
 - No personal data or secrets in the source tree. `.env`, `node_modules`, `dist` and `releases` are ignored by git.
 - User data lives outside the app, in `app.getPath('userData')` or the app's data folder (Relay Files, Onward Files, Slate's Statements).
 - Keep `productName`, `build.appId` and `build/icon.png` stable, `electron-builder` in `devDependencies`, and `package-lock.json` current.
+- `build/icon.png` (1024px) is the app's only icon. The Windows `.ico` is made from it at build time, so there's no need to keep an `icon.ico` or Windows icon settings; to change the icon, replace `icon.png` and bump the version.
 - Native modules are fine; tell the Utility Package chat when you add a new one so Windows cross-builds get checked.
 - `src/suitelink.js` (Atoll, Docket, Scene, Beam, Vitals, Relay, Vantage) is a copy of `tools/suitelink.js`, the Utility Suite link that lets apps talk to each other. Don't edit the copy; ask the Utility Package chat, which changes `tools/suitelink.js` and copies it to every app. Each app's handoff lists what it offers on the link.
 

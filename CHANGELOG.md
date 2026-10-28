@@ -2,6 +2,34 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-28 19:22 — **Bench 0.1.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **RO2 0.3.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Atoll 0.2.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Facet 0.3.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Waypoint 0.2.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Beam 0.1.4** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Cadence 0.2.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Decomp 0.1.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Droid 0.1.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Scene 0.1.3** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Touchline 0.2.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Vitals 0.2.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Glean 0.1.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Docket 0.1.4** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Trace 0.1.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Lumen 0.7.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Crate 0.1.4** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Kiln 0.1.8** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Sideby 2.1.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Onward 0.2.2** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Fresh Desk 1.0.3** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Relay 2.1.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **RO3 1.4.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Datum 1.6.1** — Windows: the app icon is now the right size, matching the rest of the suite
+- 2026-10-28 19:22 — **Utility Hub 1.1.1** — Windows: app icons refresh right after an update, and every app's icon is the same size
+- 2026-10-28 19:22 — **Vantage 0.1.1** — New app icon, in line with the rest of the suite
+- 2026-10-28 19:22 — **Assist 2.0.1** — New app icon, in line with the rest of the suite
+- 2026-10-28 19:22 — **Slate 1.1.1** — New app icon, in line with the rest of the suite
 - 2026-10-28 12:35 — **RO2 0.3.0** — Touch up: paint (hold Alt / Option to pick a colour from the picture), heal flaws, erase to see-through or restore, to tidy up any photo or Make editable result. Colour grade: 16 one-click looks, shift the whole colour scheme, or swap a picture's colours for new ones or your brand's, on one photo or the whole page, and change it back any time. Make editable now reads text far better, including small, letter-spaced and tilted text, and Magic grab cut-outs have cleaner edges.
 - 2026-10-28 10:38 — **Relay 2.1.0** — The Library moved to Vantage, the new Utility Suite browser (it keeps using your Relay Files folder). New icon in the same style as the rest of the suite.
 - 2026-10-28 10:38 — **Vantage 0.1.0** — First release: the suite's browser. Up to four pages on one screen (six layouts, drag tabs into place, focus mode), ad and tracker blocking with per-site control, a built-in VPN for the browser (free Cloudflare WARP, any WireGuard config, or a proxy) with kill switch, multi-connection downloads that resume after restarts, the password vault with autofill, save prompts and 2FA codes (imports Relay's vault), and the Library, Player and Reader moved over from Relay. Plus tab sleeping, containers, private windows, reader view, history, bookmarks import and a command palette.

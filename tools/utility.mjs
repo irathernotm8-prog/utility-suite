@@ -18,6 +18,7 @@ import crypto from 'node:crypto';
 import readline from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { makeWindowsIco, checkExeIcon } from './winicon.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const P = {
@@ -386,12 +387,43 @@ function checkNativeDeps(stage, platform, arch, app) {
   ok(`${app.name}: ${platform}-${arch} native binaries in place`);
 }
 
-function electronBuilder(stage, args) {
+function electronBuilder(stage, args, { app, tKey } = {}) {
   const bin = path.join(stage, 'node_modules', '.bin', IS_WIN ? 'electron-builder.cmd' : 'electron-builder');
   if (!fs.existsSync(bin)) fail(`electron-builder isn't in ${path.basename(stage)}'s devDependencies. Add it to the project: npm i -D electron-builder`);
   fs.rmSync(path.join(stage, 'dist'), { recursive: true, force: true });
   const env = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
+  const icon = tKey === 'win' && app ? windowsIcon(app, stage) : null;
+  if (icon) args = [...args, `-c.win.icon=${icon.file}`, '-c.win.signAndEditExecutable=true'];
   run(q(bin), args, { cwd: stage, env });
+  if (icon) verifyWindowsIcon(app, stage, icon);
+}
+
+// Windows icons: every build makes a fresh .ico from the app's build/icon.png (the one source of truth),
+// sized so all apps match, forces it into the .exe (whatever the app's own config says), then checks it landed.
+function windowsIcon(app, stage) {
+  const pkg = pkgOf(stage);
+  const png = [path.join(stage, 'build', 'icon.png'), pkg.build?.icon && path.join(stage, String(pkg.build.icon))]
+    .find((f) => f && /\.png$/i.test(f) && fs.existsSync(f));
+  if (!png) { warn(`${app.name} has no build/icon.png, so its Windows icon comes from its own settings.`); return null; }
+  const dir = path.join(P.build, 'icons');
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    return makeWindowsIco(png, path.join(dir, `${app.id}.ico`));
+  } catch (e) {
+    warn(`${app.name}: couldn't make its Windows icon (${e.message}); using its own settings.`);
+    return null;
+  }
+}
+
+function verifyWindowsIcon(app, stage, icon) {
+  const dir = path.join(stage, 'dist', 'win-unpacked');
+  const name = productName(pkgOf(stage)).toLowerCase();
+  const exe = fs.existsSync(dir) && (fs.readdirSync(dir).find((f) => f.toLowerCase() === `${name}.exe`)
+    || fs.readdirSync(dir).find((f) => f.endsWith('.exe') && !/^(Uninstall|elevate)/i.test(f)));
+  if (!exe) return warn(`${app.name}: couldn't find its .exe to check the icon.`);
+  const r = checkExeIcon(path.join(dir, exe), icon);
+  if (!r.ok) fail(`${app.name}: the Windows icon didn't make it into ${exe}: ${r.reason}.`);
+  ok(`${app.name}: Windows icon embedded (${icon.sizes.length} sizes)`);
 }
 
 function archFlag(arch) { return `--${arch}`; }
@@ -420,7 +452,7 @@ function cmdBuild(which, opts) {
       const { stage, pkg, cross } = stageApp(app, tKey, arch);
       const args = [TARGETS[tKey].flag, archFlag(arch), '--publish', 'never'];
       if (cross) args.push('-c.npmRebuild=false');
-      electronBuilder(stage, args);
+      electronBuilder(stage, args, { app, tKey });
       const out = path.join(P.releases, 'apps', app.id, pkg.version, tKey);
       fs.rmSync(out, { recursive: true, force: true });
       fs.mkdirSync(out, { recursive: true });
@@ -484,7 +516,7 @@ function cmdSuite(opts) {
       const args = [TARGETS[tKey].flag, 'dir', archFlag(arch), '--publish', 'never'];
       if (tKey === 'mac') args.push('-c.mac.identity=null');
       if (cross) args.push('-c.npmRebuild=false');
-      electronBuilder(stage, args);
+      electronBuilder(stage, args, { app, tKey });
       const u = findUnpacked(path.join(stage, 'dist'), tKey);
       if (!u) fail(`Couldn't find the built ${app.name} in ${path.join(stage, 'dist')}`);
       const exe = tKey === 'win' ? fs.readdirSync(u.item).find((f) => f.toLowerCase() === `${productName(pkg).toLowerCase()}.exe`) || fs.readdirSync(u.item).find((f) => f.endsWith('.exe') && !/^(Uninstall|elevate)/i.test(f)) : null;
@@ -527,7 +559,7 @@ function buildDir(app, tKey, opts) {
   const args = [TARGETS[tKey].flag, 'dir', archFlag(arch), '--publish', 'never'];
   if (tKey === 'mac') args.push('-c.mac.identity=null');
   if (cross) args.push('-c.npmRebuild=false');
-  electronBuilder(stage, args);
+  electronBuilder(stage, args, { app, tKey });
   const u = findUnpacked(path.join(stage, 'dist'), tKey);
   if (!u) fail(`Couldn't find the built ${app.name} in ${path.join(stage, 'dist')}`);
   const name = productName(pkg);

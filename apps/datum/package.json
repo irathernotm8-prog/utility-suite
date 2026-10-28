@@ -1,6 +1,6 @@
 {
   "name": "datum",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Datum — linked spreadsheets, slides, documents and dashboards in one workspace",
   "main": "main.js",
   "scripts": {

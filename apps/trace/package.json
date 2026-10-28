@@ -1,7 +1,7 @@
 {
   "name": "trace",
   "productName": "Trace",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Map out paths, decisions, org charts and folder plans, trace them with a smooth zoom, keep notes on every step, capture screenshots for tutorials, and present or export it all to PDF.",
   "main": "src/main.js",
   "author": "Bilal",

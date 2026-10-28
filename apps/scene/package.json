@@ -1,7 +1,7 @@
 {
   "name": "scene",
   "productName": "Scene",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Save and switch whole setups in one click: the apps, where every window sits on which display, the sites and files that open, volume, appearance and wallpaper, for work, gaming, match day or anything else.",
   "main": "src/main.js",
   "author": "Bilal",

@@ -160,6 +160,7 @@ class Apps {
     if (this.isWin) {
       await legacy.unblock(target);
       this.writeShortcuts(meta, target);
+      this.refreshIcons();
     }
     this.state.apps[id] = { version: meta.version, path: target, installedAt: new Date().toISOString(), name: meta.name };
     this.saveState();
@@ -192,6 +193,13 @@ class Apps {
         this.ctx.shell.writeShortcutLink(path.join(dir, `${meta.name}.lnk`), 'create', opts);
       } catch {}
     }
+  }
+
+  // Windows keeps an icon cache keyed by path, so an updated app can keep showing its old icon.
+  // ie4uinit -show asks Explorer to reload icons (no admin needed, harmless if it's missing).
+  refreshIcons() {
+    const exe = path.join(this.ctx.env.SystemRoot || 'C:\\Windows', 'System32', 'ie4uinit.exe');
+    if (exists(exe)) run(exe, ['-show'], { allowFail: true }).catch(() => {});
   }
 
   removeShortcuts(meta) {

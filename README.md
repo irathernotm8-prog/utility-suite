@@ -143,5 +143,6 @@ The release page has two permanent links: `Utility-Hub-Setup-mac.zip` and `Utili
 
 - **Mac builds** must run on a Mac. Apps and the hub are ad-hoc signed so they open on Apple Silicon. Assist, Datum and the hub are universal; the rest are Apple Silicon only (`macArch` in `suite.json`).
 - **Windows builds run from the Mac.** For RO3 the tool installs the Windows sharp/FFmpeg binaries and checks them. If a Windows cross-build ever fails, use the GitHub workflow.
+- **App icons come from `build/icon.png` only.** For Windows, every build makes a fresh multi-size `.ico` from it, scaled so all apps are the same size, forces it into the `.exe` (whatever the app's own settings say) and checks it landed; a build whose icon didn't make it in fails instead of shipping the Electron icon. After an update, Utility Hub tells Windows to refresh its icon cache.
 - **Not code-signed**, so the first launch of the hub shows the usual warning; the READ ME in each download explains it.
 - **Same version = same app.** The hub only offers an update when the version number goes up.

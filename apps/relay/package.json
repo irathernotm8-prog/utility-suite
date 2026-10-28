@@ -1,7 +1,7 @@
 {
   "name": "relay",
   "productName": "Relay",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "All your inboxes, calendars and AI in one place.",
   "main": "src/main.js",
   "author": "Bilal",

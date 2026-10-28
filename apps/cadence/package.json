@@ -1,7 +1,7 @@
 {
   "name": "cadence",
   "productName": "Cadence",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Automations that run on your schedule: pull reports from sites, file them in folders named for the week, and turn the data into PowerPoint slides and reports, with Claude and Codex plugged in.",
   "main": "src/main.js",
   "author": "Bilal",

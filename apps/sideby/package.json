@@ -1,6 +1,6 @@
 {
   "name": "sideby",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Watch anything together with friends, in sync",
   "main": "electron/main.js",
   "scripts": {

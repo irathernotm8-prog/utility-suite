@@ -1,7 +1,7 @@
 {
   "name": "utility-hub",
   "productName": "Utility Hub",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Install, update and remove the Utility Suite apps",
   "main": "main.js",
   "author": "Bilal",

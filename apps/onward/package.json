@@ -1,7 +1,7 @@
 {
   "name": "onward",
   "productName": "Onward",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Job hunting, tailored resumes and applications — with your AI plugged in.",
   "main": "src/main.js",
   "author": "Onward",

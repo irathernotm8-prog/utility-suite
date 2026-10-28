@@ -1,7 +1,7 @@
 {
   "name": "ro3",
   "productName": "RO3",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "RO3 (Rule of 3s) — photo editing, video editing and file conversion",
   "main": "main.js",
   "author": "Bilal",

@@ -1,7 +1,7 @@
 {
   "name": "touchline",
   "productName": "Touchline",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Football scores, tables, match stats, squads and player histories for every league and every season.",
   "main": "src/main.js",
   "author": "Bilal",

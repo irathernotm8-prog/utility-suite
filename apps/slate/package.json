@@ -1,7 +1,7 @@
 {
   "name": "slate",
   "productName": "Slate",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Accounts, retirement, credit cards, credit score and a monthly savings plan in one place.",
   "main": "src/main.js",
   "author": "Bilal",

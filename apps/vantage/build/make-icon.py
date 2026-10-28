@@ -1,3 +1,5 @@
+# NOTE: build/icon.png and icon.svg are now the Utility Suite globe icon (drawn in the Utility Package chat).
+# Running this script for Vantage overwrites them with the old design; keep only its tray-icon output if you rerun it.
 # Writes build/icon.svg (the Utility Suite icon family: dark tinted squircle, soft top sheen, a gradient glyph
 # with a glow) and renders build/icon.png (1024px) plus the small tray glyphs. Needs: pip install resvg-py pillow
 #   python3 build/make-icon.py            -> Vantage
