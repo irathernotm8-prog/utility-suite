@@ -21,6 +21,13 @@ To ship a change, bump `version` in `package.json`, then from the Utility Packag
 
 Pull before starting work. Stay inside `apps/ro2`; `tools/`, `suite.json` and `apps/hub` belong to the Utility Package chat.
 
+## What 0.3.0 added
+
+- **Touch up** (studio mode `touchup` in `ai/studio.js`): Paint / Heal / Pick / Erase / Restore / Move view, with size, softness, opacity. A stroke is stamped at full strength into its own layer (`strokeLayer` → `applyStroke`) and merged on release, so opacity doesn't build up. Alt (Option) is the colour picker. Heal reuses the eraser path (`eraseNow`). Shortcuts B, J, E, R, H.
+- **Colour grade** (`js/grade.js` + studio mode `grade`): looks are plain functions on 0..1 RGB; hue shift rotates a*/b* in Lab; palette swap moves each picture colour toward its new one in Lab with Gaussian weights; all of it is baked into a 33³ LUT (`gradeData`) so full-size pictures apply quickly. The photo keeps its ungraded original in `ro2GradeSrc` (an asset id, kept by `toFile` and copy/paste) and the settings in `ro2Grade`; reopening starts from the original, and "Reset all" + Apply restores it. "Apply to everything on this page" (`app.js → applyGrade`) regrades other photos from their own originals and passes shape, text, stroke, shadow and page-background colours through `gradeHex`.
+- **Text reader is now PP-OCRv6** (model `ocrpro`: `det.onnx`, `rec.onnx`, `rec.yml` with the dictionary). `ai.worker.js → ocrPro` does DB detection (components → convex hull → minimum-area rectangle → unclip), straightened 48-px crops, CTC decoding with per-character positions. `layerize.js → readPro` turns lines into runs; `respace` puts back spaces that letter-spaced type loses (from empty ink columns); tilted lines (≥2.5°) go through `tiltedText`, which refines the angle from the ink and matches the font on a straightened mask; the text box gets that angle. Tesseract (`ocr`, now optional) is the fallback.
+- **Magic grab** edges: the piece's alpha is guided-filtered against the picture on a slightly padded crop.
+
 ## What 0.2.0 added
 
 - **Make editable** (AI tools, the photo's Edit menu, and a Home card): takes a flat picture apart. `ai/layerize.js` does the work, `ai/layers-studio.js` is its screen, `app.js → applyLayers` puts the result on the page.
@@ -28,7 +35,7 @@ Pull before starting work. Stay inside `apps/ro2`; `tools/`, `suite.json` and `a
   2. *Objects*: SlimSAM decoded on a 10×10 grid (`samAuto` in the worker), filtered, pieces of a word joined (`mergeRow`). Big flat regions touching the frame count as background. Flat pieces become vectors traced at full resolution from their own colour (rect, rounded rect with radius, ellipse, or a smoothed path); gradients and textured pieces become photo layers with guided-filter edges.
   3. *Photos* (detected by fine texture): if the background remover is installed its matte becomes one **Subject** layer and SAM pieces outside it are listed but switched off.
   4. *Background*: holes (text ink + objects) are grouped into parts and filled by LaMa one by one; `colourMatch` in the worker removes LaMa's colour shift at the seam (this also improves the Magic eraser).
-  Dev loop: `RO2_MODELS=… test/lz.sh` (driver `test/layerize-dev.js`, `LZ_TPL=0,2,p` picks templates or the photo) saves source / studio / result / rebuilt-background shots in `test/layerize-out`.
+  Dev loop: `RO2_MODELS=… test/lz.sh` (driver `test/layerize-dev.js`, `LZ_TPL=0,2,p` picks templates or the photo) saves source / studio / result / page / rebuilt-background shots in `test/layerize-out`.
 - **Light theme** (Dark / Light / System in Settings, sun/moon in the title bar). Colours are CSS variables; `editor.applyTheme()` reads the workspace colours from them; `main.js app:theme` updates the native title bar.
 - **Brand kits** (`src/brand.js`, rail tab "Brand"): logos stored under app-data `Brand/<kit>/`, colours (also first in every colour picker), heading / subheading / body fonts, "Apply brand to this page".
 - **QR codes** (Elements → QR code; editable link via "Edit QR" in the bar), **curved text** (Curve slider; `Ro2CurvedText` in `editor/fab.js`), **several resized copies at once** (Resize → "Make resized copies").

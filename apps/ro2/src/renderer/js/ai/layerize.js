@@ -154,6 +154,88 @@ function invertedGrey(img) {
   x.putImageData(id, 0, 0); return c;
 }
 
+async function readTesseract(img, cv, W, H, onProgress) {
+  const w = await ocrWorker((m) => { if (m.status === 'recognizing text') onProgress(`Reading the text… ${Math.round(m.progress * 100)}%`); });
+  // two passes: the picture as it is, and a stretched, inverted grey copy (catches light-on-dark and low-contrast text)
+  const raw = [];
+  const pass = async (canvas, tag) => {
+    const { data } = await w.recognize(canvas, {}, { blocks: true, text: false });
+    for (const b of data.blocks || []) for (const p of b.paragraphs || []) for (const l of p.lines || []) for (const run of splitLine(l)) raw.push({ ...run, para: tag + (b.bbox.x0 + ',' + b.bbox.y0) + '/' + (p.bbox.x0 + ',' + p.bbox.y0) });
+  };
+  await pass(cv, 'a');
+  onProgress('Reading the text… (second look)');
+  await w.setParameters({ tessedit_pageseg_mode: '11' }); // sparse text: finds small, spaced-out and scattered words
+  try { await pass(invertedGrey(img), 'b'); } finally { await w.setParameters({ tessedit_pageseg_mode: '3' }); }
+  if (Math.max(W, H) >= 700) { // very big display type reads better smaller
+    onProgress('Reading the text… (big type)');
+    const k = 0.4; const c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); const cx = c.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(invertedGrey(img), 0, 0, c.width, c.height);
+    const n0 = raw.length; await pass(c, 'c');
+    for (const r of raw.slice(n0)) { r.x0 /= k; r.y0 /= k; r.x1 /= k; r.y1 /= k; r.x0 = Math.round(r.x0); r.y0 = Math.round(r.y0); r.x1 = Math.min(W, Math.round(r.x1)); r.y1 = Math.min(H, Math.round(r.y1)); }
+    for (let i = raw.length - 1; i >= n0; i--) if (raw[i].y1 - raw[i].y0 < H * 0.05) raw.splice(i, 1); // only trust it for big text
+  }
+  return raw;
+}
+// is (x, y) inside a rotated box (grown by k)?
+function rotTest(r, k = 1) { if (!r) return null; const ca = Math.cos((r.angle * Math.PI) / 180), sa = Math.sin((r.angle * Math.PI) / 180); const hw = (r.w * k) / 2, hh = (r.h * k) / 2 + r.h * (k - 1);
+  return (x, y) => { const dx = x - r.cx, dy = y - r.cy; const u = dx * ca + dy * sa, v = -dx * sa + dy * ca; return Math.abs(u) <= hw && Math.abs(v) <= hh; }; }
+// A tilted line: straighten its ink into a local mask, match the font there, and keep the angle
+async function tiltedText(res, W, l) {
+  const H = res.textMask.length / W; const r = { ...l.rot };
+  { // refine the angle from the ink: the angle at which this line's letters are thinnest from top to bottom
+    const ca0 = Math.cos((r.angle * Math.PI) / 180), sa0 = Math.sin((r.angle * Math.PI) / 180); const pts = [];
+    const inside = (x, y) => { const dx = x - r.cx, dy = y - r.cy; return Math.abs(dx * ca0 + dy * sa0) <= r.w * 0.48 && Math.abs(-dx * sa0 + dy * ca0) <= r.h * 0.34; }; // the core: the detector's box is padded and overlaps the next line
+    for (let y = Math.max(0, l.y0); y < Math.min(H, l.y1); y++) for (let x = Math.max(0, l.x0); x < Math.min(W, l.x1); x++) if (res.textMask[y * W + x] && inside(x, y)) pts.push(x - r.cx, y - r.cy);
+    if (pts.length > 40) {
+      let best = r.angle, bh = Infinity; const n = pts.length / 2; const vs = new Float32Array(n);
+      for (let a = r.angle - 8; a <= r.angle + 8; a += 0.5) { const c = Math.cos((a * Math.PI) / 180), s2 = Math.sin((a * Math.PI) / 180); for (let i = 0; i < n; i++) vs[i] = -pts[2 * i] * s2 + pts[2 * i + 1] * c; vs.sort(); const hh = vs[Math.floor(n * 0.97)] - vs[Math.floor(n * 0.03)]; if (hh < bh) { bh = hh; best = a; } }
+      r.angle = best;
+    }
+  }
+  const pad = r.h * 0.15; const lw = Math.ceil(r.w + pad * 2), lh = Math.ceil(r.h + pad * 2);
+  const ca = Math.cos((r.angle * Math.PI) / 180), sa = Math.sin((r.angle * Math.PI) / 180); const m = new Uint8Array(lw * lh);
+  for (let v = 0; v < lh; v++) for (let u = 0; u < lw; u++) { const du = u + 0.5 - lw / 2, dv = v + 0.5 - lh / 2; if (Math.abs(dv) > r.h * 0.4) continue; const X = Math.round(r.cx + du * ca - dv * sa), Y = Math.round(r.cy + du * sa + dv * ca); if (X >= 0 && Y >= 0 && X < W && Y < H) m[v * lw + u] = res.textMask[Y * W + X]; }
+  const local = { text: l.text, box: [0, 0, lw, lh], x0: Math.round(pad), y0: Math.round(pad), x1: Math.round(pad + r.w), y1: Math.round(pad + r.h) };
+  const fm = await matchFont(m, lw, local, l.text === l.text.toUpperCase());
+  const ib = inkBand(m, lw, 0, 0, lw, lh) || [local.x0, local.y0, local.x1, local.y1];
+  const icu = (ib[0] + ib[2]) / 2 - lw / 2, icv = (ib[1] + ib[3]) / 2 - lh / 2;
+  const icx = r.cx + icu * ca - icv * sa, icy = r.cy + icu * sa + icv * ca;
+  return { kind: 'text', on: true, text: l.text, x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1, ink: null, lines: 1, color: toHex({ r: l.ink[0], g: l.ink[1], b: l.ink[2] }), fontSize: fm.fs, fontWeight: fm.weight, fontFamily: fm.family, align: 'center', charSpacing: fm.spacing || 0, lineHeight: 1.15, conf: Math.round(l.conf),
+    rot: { cx: icx, cy: icy, inkW: ib[2] - ib[0], inkH: ib[3] - ib[1], angle: r.angle, box: { cx: r.cx, cy: r.cy, w: r.w, h: r.h } } };
+}
+// Spaces from the picture itself: columns with no ink that are much wider than the gaps between letters
+function respace(l, img) {
+  if (!l.chars || l.chars.length < 5) return l.text;
+  const W = img.width; const x0 = Math.max(0, Math.round(l.cx - l.w / 2)), x1 = Math.min(W, Math.round(l.cx + l.w / 2)), y0 = Math.max(0, Math.round(l.cy - l.h * 0.35)), y1 = Math.min(img.height, Math.round(l.cy + l.h * 0.35));
+  if (x1 - x0 < 10) return l.text;
+  const bg = inkAndPaper(img, Math.max(0, x0 - 4), Math.max(0, y0 - 4), Math.min(W, x1 + 4), Math.min(img.height, y1 + 4)); if (!bg || bg.contrast < 28) return l.text;
+  const col = []; for (let x = x0; x < x1; x++) { let n = 0; for (let y = y0; y < y1; y++) { const i = (y * W + x) * 4; if (d2([img.data[i], img.data[i + 1], img.data[i + 2]], bg.ink) < d2([img.data[i], img.data[i + 1], img.data[i + 2]], bg.paper)) n++; } col.push(n > 0); }
+  const runs = []; let st = -1; col.forEach((on, i) => { if (!on && st < 0) st = i; if (on && st >= 0) { runs.push([st, i]); st = -1; } });
+  const inner = runs.filter(([a]) => a > 0).map(([a, b]) => ({ a, b, w: b - a })); if (inner.length < 3) return l.text;
+  const med = inner.map((r) => r.w).sort((a, b) => a - b)[inner.length >> 1]; const hh = (y1 - y0) / 0.7;
+  const cuts = inner.filter((r) => r.w > Math.max(med * 2.2, hh * 0.22)).map((r) => (r.a + r.b) / 2 / (x1 - x0));
+  if (!cuts.length) return l.text;
+  // rebuild: keep existing spaces, add one before the first letter past each cut
+  const words = l.text.split(' '); let k = 0; const flat = []; words.forEach((w, wi) => { for (const ch of w) flat.push({ ch, p: l.chars[k++]?.[1] ?? 0, sp: false }); if (wi < words.length - 1 && flat.length) flat[flat.length - 1].sp = true; });
+  for (const c of cuts) { const j = flat.findIndex((f) => f.p > c); if (j > 0) flat[j - 1].sp = true; }
+  return flat.map((f) => f.ch + (f.sp ? ' ' : '')).join('').trim();
+}
+// PP-OCRv6 lines → runs (split at wide gaps like tesseract lines); tilted lines keep their rotated box in .rot
+async function readPro(img, onProgress) {
+  const W = img.width, H = img.height;
+  const { lines } = await call('ocrPro', { img: { data: new Uint8ClampedArray(img.data), w: W, h: H } }, { onProgress: (p) => p?.text && onProgress(p.text) });
+  const raw = [];
+  for (const [i, l] of lines.entries()) {
+    const para = 'p' + i; const tilt = Math.abs(l.angle) >= 2.5;
+    // the detector already separates blocks of text, so each line is one run (no gap splitting)
+    const lw = l.w, lh = l.h; const ca = Math.cos((l.angle * Math.PI) / 180), sa = Math.sin((l.angle * Math.PI) / 180);
+    const cs = [[-lw / 2, -lh / 2], [lw / 2, -lh / 2], [lw / 2, lh / 2], [-lw / 2, lh / 2]].map(([x, y]) => [l.cx + x * ca - y * sa, l.cy + x * sa + y * ca]);
+    if (!tilt) l.text = respace(l, img); // letter-spaced words that came back glued together
+    raw.push({ text: fixWords(l.text), conf: l.conf, para, x0: Math.max(0, Math.floor(Math.min(...cs.map((c) => c[0])))), y0: Math.max(0, Math.floor(Math.min(...cs.map((c) => c[1])))), x1: Math.min(W, Math.ceil(Math.max(...cs.map((c) => c[0])))), y1: Math.min(H, Math.ceil(Math.max(...cs.map((c) => c[1])))),
+      rot: tilt ? { cx: l.cx, cy: l.cy, w: lw, h: lh, angle: l.angle } : undefined });
+  }
+  return raw;
+}
+
 // ───── analyse ─────
 // img: ImageData (full size). Returns { texts, objects, aw, ah, small } with everything in full-size pixels except object masks (aw × ah).
 export async function analyze(img, { onProgress = () => {}, key, ocr = true, objects = true } = {}) {
@@ -168,24 +250,11 @@ export async function analyze(img, { onProgress = () => {}, key, ocr = true, obj
 
   if (ocr) {
     onProgress('Reading the text…');
-    const w = await ocrWorker((m) => { if (m.status === 'recognizing text') onProgress(`Reading the text… ${Math.round(m.progress * 100)}%`); });
-    // two passes: the picture as it is, and a stretched, inverted grey copy (catches light-on-dark and low-contrast text)
-    const raw = [];
-    const pass = async (canvas, tag) => {
-      const { data } = await w.recognize(canvas, {}, { blocks: true, text: false });
-      for (const b of data.blocks || []) for (const p of b.paragraphs || []) for (const l of p.lines || []) for (const run of splitLine(l)) raw.push({ ...run, para: tag + (b.bbox.x0 + ',' + b.bbox.y0) + '/' + (p.bbox.x0 + ',' + p.bbox.y0) });
-    };
-    await pass(cv, 'a');
-    onProgress('Reading the text… (second look)');
-    await w.setParameters({ tessedit_pageseg_mode: '11' }); // sparse text: finds small, spaced-out and scattered words
-    try { await pass(invertedGrey(img), 'b'); } finally { await w.setParameters({ tessedit_pageseg_mode: '3' }); }
-    if (Math.max(W, H) >= 700) { // very big display type reads better smaller
-      onProgress('Reading the text… (big type)');
-      const k = 0.4; const c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); const cx = c.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(invertedGrey(img), 0, 0, c.width, c.height);
-      const n0 = raw.length; await pass(c, 'c');
-      for (const r of raw.slice(n0)) { r.x0 /= k; r.y0 /= k; r.x1 /= k; r.y1 /= k; r.x0 = Math.round(r.x0); r.y0 = Math.round(r.y0); r.x1 = Math.min(W, Math.round(r.x1)); r.y1 = Math.min(H, Math.round(r.y1)); }
-      for (let i = raw.length - 1; i >= n0; i--) if (raw[i].y1 - raw[i].y0 < H * 0.05) raw.splice(i, 1); // only trust it for big text
+    let raw = null;
+    if (await installed('ocrpro').catch(() => false)) { // PP-OCRv6: better on stylised, small, spaced-out and tilted text
+      try { raw = await readPro(img, onProgress); res.reader = 'ppocr'; } catch (e) { console.warn('text reader fell back to tesseract', e); raw = null; }
     }
+    if (!raw) { raw = await readTesseract(img, cv, W, H, onProgress); res.reader = 'tesseract'; }
     if (window.__lzDebug) window.__lzRaw = raw.map((r) => [r.text, Math.round(r.conf), r.para[0], r.x0, r.y0, r.x1, r.y1]);
     const lines = [];
     for (const r of dedupeRuns(raw)) {
@@ -196,28 +265,30 @@ export async function analyze(img, { onProgress = () => {}, key, ocr = true, obj
       const pad = Math.round((y1 - y0) * 0.12), down = /[gjpqy,;]/.test(t) ? Math.round((y1 - y0) * 0.3) : pad; // room for descenders
       const bx0 = Math.max(0, x0 - pad), by0 = Math.max(0, y0 - pad), bx1 = Math.min(W, x1 + pad), by1 = Math.min(H, y1 + down);
       const cp = inkAndPaper(img, bx0, by0, bx1, by1); if (!cp || cp.contrast < 28) continue;
-      lines.push({ text: t, x0, y0, x1, y1, h: y1 - y0, conf: r.conf, para: r.para, ...cp, box: [bx0, by0, bx1, by1] });
+      lines.push({ text: t, x0, y0, x1, y1, h: y1 - y0, conf: r.conf, para: r.para, ...cp, box: [bx0, by0, bx1, by1], rot: r.rot });
     }
     lines.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
     // ink mask: pixels in each line's box nearer the ink colour than the paper colour
     for (const l of lines) {
-      const [bx0, by0, bx1, by1] = l.box; let n = 0;
-      for (let y = by0; y < by1; y++) for (let x = bx0; x < bx1; x++) { const i = (y * W + x) * 4; const p = [img.data[i], img.data[i + 1], img.data[i + 2]]; if (d2(p, l.ink) < (l.contrast * 0.55) ** 2 && d2(p, l.ink) < d2(p, l.paper)) { res.textMask[y * W + x] = 1; n++; } }
+      const [bx0, by0, bx1, by1] = l.box; let n = 0; const inRot = rotTest(l.rot, 1.15);
+      for (let y = by0; y < by1; y++) for (let x = bx0; x < bx1; x++) { if (inRot && !inRot(x, y)) continue; const i = (y * W + x) * 4; const p = [img.data[i], img.data[i + 1], img.data[i + 2]]; if (d2(p, l.ink) < (l.contrast * 0.55) ** 2 && d2(p, l.ink) < d2(p, l.paper)) { res.textMask[y * W + x] = 1; n++; } }
       l.inkFrac = n / ((bx1 - bx0) * (by1 - by0));
     }
     // tighten each line to its own band of ink (drops an underline or a rule that OCR swept into the box)
-    for (const l of lines) { const b = inkBand(res.textMask, W, ...l.box); if (b) { l.band = b; l.y0 = Math.max(l.y0, b[1] - 1); l.y1 = Math.min(l.y1, b[3] + 1); l.h = l.y1 - l.y0; } }
+    for (const l of lines) { if (l.rot) continue; const b = inkBand(res.textMask, W, ...l.box); if (b) { l.band = b; l.y0 = Math.max(l.y0, b[1] - 1); l.y1 = Math.min(l.y1, b[3] + 1); l.h = l.y1 - l.y0; } }
     for (const l of lines) { if (!l.band) continue; const [bx0, by0, bx1, by1] = l.box; const pad = Math.max(2, Math.round(l.h * 0.08));
       for (let y = by0; y < by1; y++) { if (y >= l.band[1] - pad && y < l.band[3] + pad) continue; if (lines.some((o) => o !== l && o.band && y >= o.band[1] - pad && y < o.band[3] + pad && o.box[0] < bx1 && o.box[2] > bx0)) continue; for (let x = bx0; x < bx1; x++) res.textMask[y * W + x] = 0; } }
     // lines → text boxes: same paragraph, similar height and colour, close together
     const groups = [];
     for (const l of lines) {
-      const g = groups.find((g2) => { const last = g2[g2.length - 1]; const ov = Math.min(l.x1, last.x1) - Math.max(l.x0, last.x0);
+      if (l.rot) { groups.push([l]); continue; } // tilted lines stay on their own
+      const g = groups.find((g2) => { const last = g2[g2.length - 1]; if (last.rot) return false; const ov = Math.min(l.x1, last.x1) - Math.max(l.x0, last.x0);
         return ov > 0.25 * Math.min(l.x1 - l.x0, last.x1 - last.x0) && Math.abs(l.h - last.h) < Math.max(l.h, last.h) * 0.3 && Math.sqrt(d2(l.ink, last.ink)) < 60 && l.y0 - last.y1 < last.h * 1.1 && l.y0 > last.y0; });
       if (g) g.push(l); else groups.push([l]);
     }
     let id = 0;
     for (const g of groups) {
+      if (g[0].rot) { const t = await tiltedText(res, W, g[0]); if (t) res.texts.push({ id: 't' + id++, ...t }); continue; }
       const x0 = Math.min(...g.map((l) => l.x0)), x1 = Math.max(...g.map((l) => l.x1)), y0 = Math.min(...g.map((l) => l.y0)), y1 = Math.max(...g.map((l) => l.y1));
       const text = g.map((l) => l.text).join('\n'); const ref = g.reduce((a, b) => (a.x1 - a.x0 > b.x1 - b.x0 ? a : b));
       const ink = g[0].ink.map((v, i) => g.reduce((s2, l) => s2 + l.ink[i], 0) / g.length);

@@ -7,7 +7,7 @@ import { analyze, build, objectAt } from './layerize.js';
 const HUES = [158, 196, 268, 32, 330, 90, 220, 0, 52, 290];
 export function openLayersStudio({ src }) {
   return new Promise(async (resolve) => {
-    if (!(await ensure(['ocr', 'slimsam', 'lama'], 'Make editable'))) return resolve(null);
+    if (!(await ensure(['ocrpro', 'slimsam', 'lama'], 'Make editable'))) return resolve(null);
     let img; try { img = await imageDataFromUrl(src, 4096); } catch (e) { toastErr(e); return resolve(null); }
     new LayersStudio(img, resolve).mount();
   });
@@ -63,8 +63,9 @@ class LayersStudio {
     x.globalAlpha = 1;
     for (const t of this.res.texts) {
       const hot = this.hover === t; x.lineWidth = (hot ? 3 : 2) / this.v.s; x.setLineDash(t.on ? [] : [6 / this.v.s, 4 / this.v.s]);
-      x.strokeStyle = t.on ? (hot ? '#ffffff' : '#3fd2ea') : 'rgba(255,255,255,.4)'; x.strokeRect(t.x0 - 3, t.y0 - 3, t.x1 - t.x0 + 6, t.y1 - t.y0 + 6);
-      if (t.on) { x.fillStyle = 'rgba(63,210,234,.12)'; x.fillRect(t.x0 - 3, t.y0 - 3, t.x1 - t.x0 + 6, t.y1 - t.y0 + 6); }
+      x.strokeStyle = t.on ? (hot ? '#ffffff' : '#3fd2ea') : 'rgba(255,255,255,.4)'; x.fillStyle = 'rgba(63,210,234,.12)';
+      if (t.rot) { const b = t.rot.box; x.save(); x.translate(b.cx, b.cy); x.rotate((t.rot.angle * Math.PI) / 180); x.strokeRect(-b.w / 2 - 3, -b.h / 2 - 3, b.w + 6, b.h + 6); if (t.on) x.fillRect(-b.w / 2 - 3, -b.h / 2 - 3, b.w + 6, b.h + 6); x.restore(); }
+      else { x.strokeRect(t.x0 - 3, t.y0 - 3, t.x1 - t.x0 + 6, t.y1 - t.y0 + 6); if (t.on) x.fillRect(t.x0 - 3, t.y0 - 3, t.x1 - t.x0 + 6, t.y1 - t.y0 + 6); }
     }
     x.setLineDash([]);
   }

@@ -30,8 +30,18 @@ const CATALOG = [
     ],
   },
   {
-    id: 'ocr', task: 'ocr', name: 'Text reader',
-    blurb: 'Reads the words in a picture so Make editable can turn them into real, editable text (Tesseract, English).',
+    id: 'ocrpro', task: 'ocr', name: 'Text reader',
+    blurb: 'Reads the words in a picture (also small, stylised, spaced-out and tilted text) so Make editable can turn them into real, editable text (PP-OCRv6).',
+    license: 'Apache-2.0', source: 'PaddlePaddle PP-OCRv6 small (detection + recognition)',
+    files: [
+      { name: 'det.onnx', url: HF('PaddlePaddle/PP-OCRv6_small_det_onnx', 'inference.onnx'), size: 9880512 },
+      { name: 'rec.onnx', url: HF('PaddlePaddle/PP-OCRv6_small_rec_onnx', 'inference.onnx'), size: 21159378 },
+      { name: 'rec.yml', url: HF('PaddlePaddle/PP-OCRv6_small_rec_onnx', 'inference.yml'), size: 150579 },
+    ],
+  },
+  {
+    id: 'ocr', task: 'ocr', name: 'Text reader: classic', optional: true,
+    blurb: 'The previous text reader (Tesseract, English). Only used if the main text reader is not downloaded or cannot run.',
     license: 'Apache-2.0', source: 'tesseract-ocr/tessdata (via tesseract.js-data)',
     files: [{ name: 'eng.traineddata.gz', url: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz', size: 2952873 }],
   },

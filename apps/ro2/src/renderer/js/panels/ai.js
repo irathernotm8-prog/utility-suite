@@ -11,6 +11,8 @@ export const TOOLS = [
   { mode: 'grab', name: 'Magic grab', icon: 'hand-grab', text: 'Lift an object out into its own layer to move or resize it. The gap behind is filled in.' },
   { mode: 'layers', name: 'Make editable', icon: 'layers', text: 'Take a flat picture apart: real text you can retype, objects and shapes as their own layers, the background rebuilt.' },
   { mode: 'expand', name: 'Magic expand', icon: 'expand', text: 'Grow a photo past its edges to fill the page or a new shape.' },
+  { mode: 'touchup', name: 'Touch up', icon: 'brush', text: 'Fix things by hand: paint (hold Alt to pick a colour), heal, erase to see-through or restore.' },
+  { mode: 'grade', name: 'Colour grade', icon: 'palette', text: 'One-click looks, shift the whole colour scheme, or swap its colours for new ones (or your brand’s).' },
 ];
 let gpuInfo = null;
 register('ai', {

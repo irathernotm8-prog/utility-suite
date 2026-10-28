@@ -1,7 +1,7 @@
 {
   "name": "ro2",
   "productName": "RO2",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "RO2: the quick, easy design and photo editor. Shapes, icons, text and photos, any size or aspect ratio, a background remover, a magic eraser and grab, Make editable (flat pictures into layers), brand kits, light and dark themes, and export to PNG, JPG, WebP, SVG and PDF.",
   "main": "src/main.js",
   "author": "Bilal",

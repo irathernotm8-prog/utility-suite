@@ -22,7 +22,7 @@ module.exports = async function drive({ win }) {
       fs.writeFileSync(path.join(OUT, `t${ti}-src.${ti === 'p' ? 'jpg' : 'png'}`), Buffer.from(flat.split(',')[1], 'base64'));
       await js(`window.__flat = ${JSON.stringify(flat)}; const ed = ${E}; ed.userObjects().forEach(o => ed.canvas.remove(o)); ed.doc.pages[ed.page].background = { type: 'color', color: '#ffffff' }; await window.__ro2app.addImage(window.__flat, { name: 'flat', fit: 'page' }); window.__lzDebug = true; window.__ro2app.runStudio(${E}.active(), 'layers');`);
       let ok = false; for (let i = 0; i < 600 && !ok; i++) { await sleep(500); ok = await js(`return !!window.__layers?.res && !!document.querySelector('.studio')`); }
-      const r = await js(`const r = window.__layers.res; return { texts: r.texts.map(t => [t.text, t.fontFamily, t.fontWeight, Math.round(t.fontSize), t.charSpacing, t.conf]), objects: r.objects.map(o => [o.kind, o.color, +(o.frac).toFixed(3), o.on]), photo: r.photo, fg: !!r.fg }`);
+      const r = await js(`const r = window.__layers.res; return { texts: r.texts.map(t => [t.text, t.fontFamily, t.fontWeight, Math.round(t.fontSize), t.charSpacing, t.conf].concat(t.rot ? [JSON.stringify({ a: +t.rot.angle.toFixed(1), cx: Math.round(t.rot.cx), cy: Math.round(t.rot.cy), w: Math.round(t.rot.inkW), h: Math.round(t.rot.inkH), bw: Math.round(t.rot.box.w), bh: Math.round(t.rot.box.h) })] : [])), objects: r.objects.map(o => [o.kind, o.color, +(o.frac).toFixed(3), o.on]), photo: r.photo, fg: !!r.fg }`);
       log(`T${ti} analyse ${((Date.now() - t0) / 1000).toFixed(1)}s\n  texts: ${JSON.stringify(r.texts)}\n  objects: ${JSON.stringify(r.objects)} photo=${r.photo} fg=${r.fg}`);
       log('  raw: ' + JSON.stringify(await js('return window.__lzRaw')));
       log('  font: ' + JSON.stringify(await js('const f = window.__lzFont || []; window.__lzFont = []; const by = {}; for (const r of f) (by[r[0]] ||= []).push(r); return Object.values(by).map(a => a.sort((x, y) => y[5] - x[5]).slice(0, 4))')));
@@ -33,6 +33,7 @@ module.exports = async function drive({ win }) {
       log(`  layers: ${lay}  (${((Date.now() - t0) / 1000).toFixed(1)}s total)`);
       log('  shapes: ' + JSON.stringify(await js('return window.__lzShape || []')));
       await shot(`t${ti}-after`);
+      { const u = await js(`const R = await import('./js/editor/render.js'); return (await R.pageCanvas(${E}, 0, { scale: 1 })).toDataURL('image/png');`); fs.writeFileSync(path.join(OUT, `t${ti}-page.png`), Buffer.from(u.split(',')[1], 'base64')); }
       const bgUrl = await js(`const b = ${E}.userObjects().find(o => o.ro2Name === 'Background'); const el = b._originalElement; const c = document.createElement('canvas'); c.width = el.naturalWidth; c.height = el.naturalHeight; c.getContext('2d').drawImage(el, 0, 0); return c.toDataURL('image/png');`);
       const hu = await js('return window.__lzHole || ""'); if (hu) fs.writeFileSync(path.join(OUT, `t${ti}-hole.png`), Buffer.from(hu.split(',')[1], 'base64'));
       fs.writeFileSync(path.join(OUT, `t${ti}-bgfull.png`), Buffer.from(bgUrl.split(',')[1], 'base64'));

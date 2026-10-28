@@ -22,7 +22,7 @@ async function session(id, file, { cpuOnly = false } = {}) {
   const key = `${id}/${file}`;
   if (sessions.has(key)) return sessions.get(key);
   const gpu = !cpuOnly && (await hasGpu());
-  progress(`Loading the ${id === 'lama' ? 'eraser' : id === 'slimsam' ? 'selection' : 'cut-out'} model${gpu ? ' on the GPU' : ''}…`);
+  progress(`Loading the ${id === 'lama' ? 'eraser' : id === 'slimsam' ? 'selection' : id === 'ocrpro' ? 'text reader' : 'cut-out'} model${gpu ? ' on the GPU' : ''}…`);
   let s, ep;
   try {
     if (!gpu) throw new Error('no gpu');
@@ -365,8 +365,94 @@ async function inpaintParts({ img, parts }) {
   return { data };
 }
 
+// ───── text reader (PP-OCRv6: DB text detection + CTC recognition) ─────
+// Returns one entry per detected line: { text, conf, cx, cy, w, h, angle (degrees, the text direction), words: [{text, a, b}] }
+// where a..b is the word's span along the line (0..1). Boxes are rotated rectangles in picture pixels.
+let ocrDict = null;
+async function ocrDictLoad() {
+  if (ocrDict) return ocrDict;
+  const yml = await (await fetch(MODEL('ocrpro', 'rec.yml'))).text(); const lines = yml.split('\n'); const out = ['']; let on = false;
+  for (const ln of lines) {
+    if (/^\s*character_dict:\s*$/.test(ln)) { on = true; continue; }
+    if (!on) continue; const m = ln.match(/^\s*- (.*)$/); if (!m) { if (ln.trim()) break; continue; }
+    let v = m[1]; if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1).replace(/''/g, "'"); else if (v.startsWith('"') && v.endsWith('"')) v = JSON.parse(v);
+    out.push(v);
+  }
+  out.push(' '); ocrDict = out; return out;
+}
+function hull(pts) { // monotone chain, pts [[x,y]]
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]); const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = []; for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  const up = []; for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function minRect(hp) { // rotating calipers over the hull's edges
+  let best = null;
+  for (let i = 0; i < hp.length; i++) {
+    const a = hp[i], b = hp[(i + 1) % hp.length]; let ux = b[0] - a[0], uy = b[1] - a[1]; const L = Math.hypot(ux, uy); if (!L) continue; ux /= L; uy /= L;
+    let mnU = Infinity, mxU = -Infinity, mnV = Infinity, mxV = -Infinity;
+    for (const p of hp) { const u = p[0] * ux + p[1] * uy, v = -p[0] * uy + p[1] * ux; if (u < mnU) mnU = u; if (u > mxU) mxU = u; if (v < mnV) mnV = v; if (v > mxV) mxV = v; }
+    const area = (mxU - mnU) * (mxV - mnV);
+    if (!best || area < best.area) { const cu = (mnU + mxU) / 2, cv = (mnV + mxV) / 2; best = { area, cx: cu * ux - cv * uy, cy: cu * uy + cv * ux, w: mxU - mnU, h: mxV - mnV, ux, uy }; }
+  }
+  return best;
+}
+async function ocrPro({ img }) {
+  const dict = await ocrDictLoad();
+  // detection at most 1280 px on the long side (multiples of 32)
+  const k = Math.min(1, 1280 / Math.max(img.w, img.h)); const dw = Math.max(32, Math.round((img.w * k) / 32) * 32), dh = Math.max(32, Math.round((img.h * k) / 32) * 32);
+  progress('Finding the text…');
+  const small = resizeRGBA(img, dw, dh); const n = dw * dh; const x = new Float32Array(3 * n); const mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225];
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) x[c * n + i] = (small[i * 4 + 2 - c] / 255 - mean[c]) / std[c]; // BGR, as PaddleOCR reads images
+  const ds = await session('ocrpro', 'det.onnx');
+  const out = await run('ocrpro', 'det.onnx', { [ds.s.inputNames[0]]: new ort.Tensor('float32', x, [1, 3, dh, dw]) });
+  const prob = out[Object.keys(out)[0]].data;
+  // components of the text map
+  const bm = new Uint8Array(n); for (let i = 0; i < n; i++) bm[i] = prob[i] > 0.2 ? 1 : 0;
+  const lab = new Int32Array(n); const boxes = []; const st = []; let id = 0; const sx = img.w / dw, sy = img.h / dh;
+  for (let i = 0; i < n; i++) {
+    if (!bm[i] || lab[i]) continue; id++; lab[i] = id; st.push(i); const pts = []; let ps = 0, cnt = 0;
+    while (st.length) { const j = st.pop(); const X = j % dw, Y = (j / dw) | 0; ps += prob[j]; cnt++;
+      if (X === 0 || Y === 0 || X === dw - 1 || Y === dh - 1 || !bm[j - 1] || !bm[j + 1] || !bm[j - dw] || !bm[j + dw]) pts.push([X, Y], [X + 1, Y], [X, Y + 1], [X + 1, Y + 1]);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const XX = X + dx, YY = Y + dy; if (XX < 0 || YY < 0 || XX >= dw || YY >= dh) continue; const q = YY * dw + XX; if (bm[q] && !lab[q]) { lab[q] = id; st.push(q); } } }
+    if (cnt < 6 || ps / cnt < 0.45) continue;
+    const r = minRect(hull(pts)); if (!r || Math.min(r.w, r.h) < 2) continue;
+    const d = (r.w * r.h * 1.4) / (2 * (r.w + r.h)); // unclip: the map is a shrunk version of the text
+    boxes.push({ cx: r.cx * sx, cy: r.cy * sy, w: (r.w + 2 * d) * Math.hypot(r.ux * sx, r.uy * sy), h: (r.h + 2 * d) * Math.hypot(-r.uy * sx, r.ux * sy), ux: r.ux, uy: r.uy });
+  }
+  // recognise each line on a straightened crop 48 px tall
+  const [srcC, sctx] = canvas(img.w, img.h); sctx.putImageData(new ImageData(new Uint8ClampedArray(img.data), img.w, img.h), 0, 0);
+  const rs = await session('ocrpro', 'rec.onnx'); const lines = [];
+  for (const [bi, b] of boxes.entries()) {
+    progress(`Reading the text… ${bi + 1} of ${boxes.length}`);
+    let { w, h, ux, uy } = b; if (h > w * 1.5) { [w, h] = [h, w]; [ux, uy] = [-uy, ux]; } // tall box: vertical text
+    let ang = Math.atan2(uy, ux); if (ang > Math.PI / 2) ang -= Math.PI; if (ang <= -Math.PI / 2) ang += Math.PI; // upright text: -90..90°
+    const H = 48, W = Math.max(16, Math.min(3200, Math.round((w * H) / Math.max(1, h))));
+    const [cc, cx] = canvas(W, H); cx.imageSmoothingQuality = 'high';
+    cx.translate(W / 2, H / 2); cx.scale(W / w, H / h); cx.rotate(-ang); cx.translate(-b.cx, -b.cy); cx.drawImage(srcC, 0, 0);
+    const d = cx.getImageData(0, 0, W, H).data; const N = W * H; const t = new Float32Array(3 * N);
+    for (let i = 0; i < N; i++) for (let c = 0; c < 3; c++) t[c * N + i] = (d[i * 4 + 2 - c] / 255 - 0.5) / 0.5;
+    const o = await run('ocrpro', 'rec.onnx', { [rs.s.inputNames[0]]: new ort.Tensor('float32', t, [1, 3, H, W]) });
+    const ten = o[Object.keys(o)[0]]; const [, T, C] = ten.dims; const p = ten.data;
+    let text = '', last = 0; const conf = [], pos = [];
+    for (let s2 = 0; s2 < T; s2++) { let bi2 = 0, bv = -Infinity; for (let c = 0; c < C; c++) { const v = p[s2 * C + c]; if (v > bv) { bv = v; bi2 = c; } } if (bi2 !== 0 && bi2 !== last && dict[bi2] != null) { text += dict[bi2]; conf.push(bv); pos.push((s2 + 0.5) / T); } last = bi2; }
+    // letter-spaced type often loses its spaces: put one back where the gap between letters is much wider than usual
+    { const cs = [...text]; const gaps = []; for (let i = 1; i < cs.length; i++) if (cs[i] !== ' ' && cs[i - 1] !== ' ') gaps.push(pos[i] - pos[i - 1]);
+      if (gaps.length >= 3) { const med = gaps.slice().sort((a2, b2) => a2 - b2)[gaps.length >> 1]; let t2 = cs[0], p2 = [pos[0]], c2 = [conf[0]];
+        for (let i = 1; i < cs.length; i++) { if (cs[i] !== ' ' && cs[i - 1] !== ' ' && pos[i] - pos[i - 1] > med * 1.85) { t2 += ' '; p2.push((pos[i] + pos[i - 1]) / 2); c2.push(conf[i]); } t2 += cs[i]; p2.push(pos[i]); c2.push(conf[i]); }
+        text = t2; pos.length = 0; pos.push(...p2); conf.length = 0; conf.push(...c2); } }
+    const tr = text.trim(); if (!tr) continue;
+    // words: runs of characters between spaces, as fractions along the line
+    const words = []; let cur = null;
+    [...text].forEach((ch, i) => { if (ch === ' ') { cur = null; return; } if (!cur) { cur = { text: '', a: pos[i], b: pos[i] }; words.push(cur); } cur.text += ch; cur.b = pos[i]; });
+    const step = 0.5 / T; words.forEach((wd) => { wd.a = Math.max(0, wd.a - step * 1.6); wd.b = Math.min(1, wd.b + step * 1.6); });
+    lines.push({ text: tr.replace(/\s+/g, ' '), chars: [...text].map((ch, i) => [ch, pos[i]]).filter((c) => c[0] !== ' '), conf: (conf.reduce((a2, v) => a2 + v, 0) / Math.max(1, conf.length)) * 100, cx: b.cx, cy: b.cy, w, h, angle: (ang * 180) / Math.PI, words });
+  }
+  return { lines };
+}
+
 async function info() { return { gpu: await hasGpu(), threads: ort.env.wasm.numThreads, isolated: self.crossOriginIsolated }; }
-const API = { removebg, samEmbed, samDecode, inpaint, expand, samAuto, refineMask, inpaintParts, info, reset: async () => { samCache = null; return true; } };
+const API = { removebg, samEmbed, samDecode, inpaint, expand, samAuto, refineMask, inpaintParts, ocrPro, info, reset: async () => { samCache = null; return true; } };
 self.onmessage = async (e) => {
   const { id, method, args } = e.data; curId = id;
   try {

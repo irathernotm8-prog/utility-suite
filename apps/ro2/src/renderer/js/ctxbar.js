@@ -110,10 +110,12 @@ export function renderCtx() {
   } else if (k === 'image') {
     const img = a;
     el.append(cbtn('Edit photo', (e, b) => {
-      const m = h('div', { style: { width: '300px' } }, h('div', { style: { fontWeight: 800, marginBottom: '8px' } }, 'AI tools'));
+      const m = h('div', { style: { width: '300px', maxHeight: '70vh', overflow: 'auto' } }, h('div', { style: { fontWeight: 800, marginBottom: '8px' } }, 'Edit photo'));
       for (const t of TOOLS) m.append(h('div.ai-card', { on: { click: () => { closePopover(); runStudio(img, t.mode); } } }, h('div.qi', { html: ico(t.icon) }), h('div', h('b', t.name), h('span', t.text))));
       popover(b, m);
     }, { icon: 'sparkles', cls: 'accent' }));
+    el.append(cbtn('Touch up', () => runStudio(img, 'touchup'), { icon: 'brush', title: 'Paint, heal, erase or restore by hand' }));
+    el.append(cbtn('Colours', () => runStudio(img, 'grade'), { icon: 'palette', title: 'Colour grade: looks, colour scheme, swap colours', on: !!img.ro2Grade }));
     el.append(cbtn('Adjust', () => openPanel('adjust'), { icon: 'sliders-horizontal' }));
     el.append(cbtn('Crop', () => startCrop(E, img, { onEnd: (applied) => { if (applied && img.ro2Frame) { applyFrame(img, img.ro2Frame); E.canvas.requestRenderAll(); E.commit(); } renderCtx(); } }).then(renderCtx), { icon: 'crop' }));
     el.append(cbtn('Frame', (e, b) => popover(b, h('div', { style: { width: '290px' } }, h('div', { style: { fontWeight: 800, marginBottom: '8px' } }, 'Shape this photo'), framesGrid((id) => { applyFrame(img, id); E.canvas.requestRenderAll(); E.commit(); closePopover(); }, img.ro2Frame))), { icon: 'square-dashed-bottom' }));
@@ -223,6 +225,8 @@ export function contextMenu(at) {
     k === 'image' ? '-' : null,
     k === 'image' ? { label: 'Remove background', icon: 'scissors', run: () => runStudio(a, 'removebg') } : null,
     k === 'image' ? { label: 'Magic eraser', icon: 'eraser', run: () => runStudio(a, 'erase') } : null,
+    k === 'image' ? { label: 'Touch up', icon: 'brush', run: () => runStudio(a, 'touchup') } : null,
+    k === 'image' ? { label: 'Colour grade', icon: 'palette', run: () => runStudio(a, 'grade') } : null,
     k === 'image' ? { label: a.ro2Role === 'bgimage' ? 'Detach from background' : 'Set as background', icon: 'image-upscale', run: () => (a.ro2Role === 'bgimage' ? detachBackground(a) : setAsBackground(a)) } : null,
     '-', { label: 'Copy as PNG', icon: 'image-down', key: MOD + '⇧C', run: () => import('./modals/export.js').then((m) => m.copyPng(true)) },
   ]);

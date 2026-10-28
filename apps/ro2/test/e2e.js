@@ -335,8 +335,54 @@ module.exports = async function drive({ win, app }) {
       check('expanded photo is wider', await js(`const i = ${E}.active(); return i && i.width / i.height > 1.7`), await js(`const i = ${E}.active(); return i ? Math.round(i.width) + 'x' + Math.round(i.height) : 'none'`));
       await shot('editor-after-expand');
 
+      // ── touch up: Alt-click picks a colour, paint, heal, erase ──
+      await js(`const ed = ${E}; await ed.addPage(); await window.__ro2app.addImage(${JSON.stringify(fixture('person.jpg'))}, { name: 'person.jpg', fit: 'page' });`); await sleep(600);
+      await js(`window.__ro2app.runStudio(${E}.active(), 'touchup')`); await sleep(1500);
+      await shot('studio-touchup');
+      const tu = await js(`const s = window.__studio; const r = s.canvas.getBoundingClientRect(); return { x: r.left + s.view.x, y: r.top + s.view.y, s: s.view.s, W: s.W, H: s.H }`);
+      const TX = (u) => tu.x + u * tu.W * tu.s, TY = (v) => tu.y + v * tu.H * tu.s;
+      // the sky is blue-ish: pick it with Alt
+      await click(TX(0.5), TY(0.25), { mods: ['alt'] });
+      const picked = await js(`return window.__studio.paintOpt.color`);
+      const px = (u, v) => js(`const s = window.__studio; const d = s.work.x.getImageData(Math.round(${u} * s.W), Math.round(${v} * s.H), 1, 1).data; return [...d]`);
+      check('Alt-click picks a colour from the picture', /^#[0-9a-f]{6}$/.test(picked) && picked !== '#ffffff', picked);
+      await js(`const s = window.__studio; s.tool = 'paint'; s.paintOpt.opacity = 1; s.paintOpt.hard = 0.9; s.setBrush(60); s.buildSide();`); await sleep(200);
+      await drag(TX(0.1), TY(0.9), TX(0.3), TY(0.9), 10);
+      const painted = await px(0.2, 0.9); const pr = parseInt(picked.slice(1, 3), 16), pg = parseInt(picked.slice(3, 5), 16), pb = parseInt(picked.slice(5, 7), 16);
+      check('painting uses the picked colour', Math.abs(painted[0] - pr) + Math.abs(painted[1] - pg) + Math.abs(painted[2] - pb) < 24, JSON.stringify(painted) + ' vs ' + picked);
+      await shot('studio-touchup-painted');
+      await js(`const s = window.__studio; s.tool = 'erasepx'; s.buildSide();`); await drag(TX(0.75), TY(0.1), TX(0.95), TY(0.1), 8);
+      check('erase makes it see-through', (await px(0.85, 0.1))[3] < 20, JSON.stringify(await px(0.85, 0.1)));
+      await js(`const s = window.__studio; s.tool = 'restorepx'; s.buildSide();`); await drag(TX(0.8), TY(0.1), TX(0.9), TY(0.1), 6);
+      check('restore brings the original back', (await px(0.85, 0.1))[3] > 240);
+      await js(`const s = window.__studio; s.tool = 'heal'; s.setBrush(50); s.buildSide();`); await drag(TX(0.12), TY(0.9), TX(0.28), TY(0.9), 10);
+      let okh = false; for (let i = 0; i < 300 && !okh; i++) { await sleep(400); okh = await js(`return window.__studio.erased && !window.__studio.busyN`); }
+      const healed = await px(0.2, 0.9);
+      check('heal fills in the painted stripe', okh && Math.abs(healed[0] - pr) + Math.abs(healed[1] - pg) + Math.abs(healed[2] - pb) > 30, JSON.stringify(healed));
+      await shot('studio-touchup-healed');
+      await js(`window.__studio.doneB.click()`); for (let i = 0; i < 40; i++) { await sleep(300); if (await js(`return !document.querySelector('.studio') && !document.querySelector('.busy')`)) break; }
+      check('touch up applies to the photo', await js(`return !document.querySelector('.studio') && ${E}.active()?.type === 'image'`));
+
+      // ── colour grade ──
+      await js(`window.__ro2app.runStudio(${E}.active(), 'grade')`); await sleep(1500);
+      await shot('studio-grade');
+      check('grade shows the looks and the photo palette', await js(`return document.querySelectorAll('.studio-side [data-look]').length === 16 && document.querySelectorAll('.studio-side .swap-row').length >= 3`), await js(`return document.querySelectorAll('.studio-side .swap-row').length + ' colours'`));
+      await js(`document.querySelector('.studio-side [data-look="tealorange"]').click()`); await sleep(800);
+      await shot('studio-grade-tealorange');
+      await js(`const s = window.__studio; s.grade.hue = 40; s.grade.swaps[0].to = '#ff3366'; s.regrade(); s.buildSide();`); await sleep(800);
+      await shot('studio-grade-swap');
+      await js(`window.__studio.doneB.click()`); for (let i = 0; i < 60; i++) { await sleep(300); if (await js(`return !document.querySelector('.studio') && !document.querySelector('.busy')`)) break; }
+      const gr = await js(`const a = ${E}.active(); return { look: a.ro2Grade?.look, src: !!a.ro2GradeSrc && a.ro2GradeSrc !== a.assetId }`);
+      check('grade applies and keeps the original', gr.look === 'tealorange' && gr.src, JSON.stringify(gr));
+      await shot('editor-after-grade');
+      await js(`window.__ro2app.runStudio(${E}.active(), 'grade')`); await sleep(1500);
+      check('grade reopens with its settings', await js(`const g = window.__studio.grade; return g.look === 'tealorange' && g.hue === 40 && g.swaps.some(x => x.to === '#ff3366')`));
+      await js(`[...document.querySelectorAll('.studio-side .btn')].find(b => b.textContent.includes('Reset all')).click()`); await sleep(400);
+      await js(`window.__studio.doneB.click()`); for (let i = 0; i < 60; i++) { await sleep(300); if (await js(`return !document.querySelector('.studio') && !document.querySelector('.busy')`)) break; }
+      check('reset grade goes back to the original picture', await js(`const a = ${E}.active(); return !a.ro2Grade && !a.ro2GradeSrc`));
+
       // ── make editable: render a template flat, then take it apart ──
-      if (hasModels.includes('ocr')) {
+      if (hasModels.includes('ocrpro')) {
         const flat = await js(`const T = await import('./js/templates.js'); const tpl = T.TEMPLATES.find(t => t.w === t.h) || T.TEMPLATES[0];
           await window.__ro2app.newDesign(tpl.w, tpl.h, 'Flat source', { template: tpl }); await new Promise(r => setTimeout(r, 1200));
           const R = await import('./js/editor/render.js'); const c = await R.pageCanvas(${E}, 0, { scale: 1 }); return c.toDataURL('image/png');`);
@@ -355,6 +401,15 @@ module.exports = async function drive({ win, app }) {
         await js(`const t = ${E}.userObjects().find(o => o.type === 'textbox'); t.set({ text: 'EDITED', fill: '#ff3366' }); t.set({ left: t.left + 40 }); ${E}.canvas.requestRenderAll();`); await sleep(300);
         await js(`${E}.canvas.discardActiveObject(); ${E}.canvas.requestRenderAll()`); await sleep(200);
         await shot('editor-layers-edited');
+        // a colour grade across the whole rebuilt page: photos, shapes and text follow
+        const bgImg = await js(`const b = ${E}.userObjects().find(o => o.ro2Name === 'Background'); ${E}.select(b); return !!b`);
+        await js(`window.__ro2app.runStudio(${E}.active(), 'grade')`); await sleep(1500);
+        const fills0 = await js(`return ${E}.userObjects().filter(o => o.type === 'textbox' || o.type === 'rect').map(o => o.fill).join(',')`);
+        await js(`const s = window.__studio; s.grade.hue = 150; s.gradePage = true; s.regrade();`); await sleep(500);
+        await js(`window.__studio.doneB.click()`); for (let i = 0; i < 100; i++) { await sleep(300); if (await js(`return !document.querySelector('.studio') && !document.querySelector('.busy')`)) break; }
+        const fills1 = await js(`return ${E}.userObjects().filter(o => o.type === 'textbox' || o.type === 'rect').map(o => o.fill).join(',')`);
+        check('whole-page grade recolours shapes and text too', bgImg && fills0 !== fills1, fills1.slice(0, 80));
+        await js(`${E}.canvas.discardActiveObject(); ${E}.canvas.requestRenderAll()`); await shot('editor-layers-regraded');
         // and a photo
         await js(`const ed = ${E}; await ed.addPage(); await window.__ro2app.addImage(${JSON.stringify(fixture('person.jpg'))}, { name: 'person.jpg', fit: 'page' });`); await sleep(600);
         await js(`window.__ro2app.runStudio(${E}.active(), 'layers')`);

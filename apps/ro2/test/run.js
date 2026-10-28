@@ -40,8 +40,8 @@ t('model catalog: unique ids, sizes, files', () => {
   const Module = require('module'); const orig = Module._load;
   Module._load = function (req, ...a) { if (req === 'electron') return { net: {} }; return orig.call(this, req, ...a); };
   const { CATALOG } = require('../src/models.js'); Module._load = orig;
-  const ids = new Set(); for (const m of CATALOG) { assert(!ids.has(m.id)); ids.add(m.id); assert(m.files.length && m.files.every((f) => f.size > 1e6 && /^https:/.test(f.url))); }
-  for (const id of ['ormbg', 'lama', 'slimsam', 'ocr']) assert(ids.has(id), id);
+  const ids = new Set(); for (const m of CATALOG) { assert(!ids.has(m.id)); ids.add(m.id); assert(m.files.length && m.files.every((f) => f.size > 1e5 && /^https:/.test(f.url)) && m.files.some((f) => f.size > 1e6)); }
+  for (const id of ['ormbg', 'lama', 'slimsam', 'ocr', 'ocrpro']) assert(ids.has(id), id);
   const worker = fs.readFileSync(path.join(R, 'js/ai/ai.worker.js'), 'utf8') + fs.readFileSync(path.join(R, 'js/ai/layerize.js'), 'utf8');
   for (const m of CATALOG) for (const f of m.files) assert(worker.includes(`'${f.name}'`) || worker.includes(`"${f.name}"`), `worker uses ${m.id}/${f.name}`);
 });

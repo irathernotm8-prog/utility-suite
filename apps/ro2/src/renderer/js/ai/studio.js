@@ -3,18 +3,21 @@
 //   removebg  Background remover with Keep / Remove brushes, click-to-keep, new backgrounds and a sticker outline
 //   grab      Magic grab: lift an object out as its own layer and fill the hole behind it
 //   expand    Magic expand: grow the picture past its edges to a new shape
+//   grade     Colour grade: looks, hue shift, saturation and a palette swap (pure colour maths, no model)
+//   touchup   Touch up by hand: paint (Alt picks a colour), heal, erase to see-through, restore the original
 import { h, btn, ico, slider, seg, toggle, toast, toastErr, clamp, confirmBox } from '../ui.js';
 import { call, ensure, models, imageDataFromUrl, plain, dataUrlFrom, patchFill } from './client.js';
 import { colorPicker } from '../panels/color.js';
+import { LOOKS, DEFAULT as GRADE0, gradeData, paletteOf, brandSwaps, isIdentity } from '../grade.js';
 
-const TITLES = { erase: ['Magic eraser', 'eraser'], removebg: ['Remove background', 'scissors'], grab: ['Magic grab', 'hand-grab'], expand: ['Magic expand', 'expand'] };
+const TITLES = { erase: ['Magic eraser', 'eraser'], removebg: ['Remove background', 'scissors'], grab: ['Magic grab', 'hand-grab'], expand: ['Magic expand', 'expand'], touchup: ['Touch up', 'brush'], grade: ['Colour grade', 'palette'] };
 const MAX_SIDE = 6000;
 
-export function openStudio({ src, mode, name, pageAspect }) {
+export function openStudio({ src, mode, name, pageAspect, ...more }) {
   return new Promise(async (resolve) => {
     let orig;
     try { orig = await imageDataFromUrl(src, MAX_SIDE); } catch (e) { toastErr(e); resolve(null); return; }
-    const S = new Studio(orig, mode, resolve, { name, pageAspect });
+    const S = new Studio(orig, mode, resolve, { name, pageAspect, ...more });
     S.mount();
   });
 }
@@ -29,12 +32,34 @@ class Studio {
     this.mask = cnv(this.W, this.H);                                             // selection / paint mask (alpha)
     this.alpha = null;                                                           // removebg: cut-out matte (alpha channel)
     this.undoStack = []; this.redoStack = [];
-    this.tool = mode === 'removebg' ? 'restore' : 'brush'; this.brush = 48; this.auto = mode === 'erase';
+    this.tool = mode === 'removebg' ? 'restore' : mode === 'touchup' ? 'paint' : 'brush'; this.brush = 48; this.auto = mode === 'erase';
+    this.paintOpt = { color: opts.color || '#ffffff', hard: 0.7, opacity: 1, picked: [] }; // touch up
     this.view = { s: 1, x: 0, y: 0 }; this.busyN = 0; this.samKey = 'k' + Math.random().toString(36).slice(2);
     this.last = null; // last clicked object: {points, masks, pick}
     this.bg = { type: 'transparent', color: '#ffffff', blur: 18 }; this.outline = { on: false, width: 12, color: '#ffffff' };
     this.expand = { ratio: 'page', grow: 30, posX: 0.5, posY: 0.5 };
     this.grow = 1;
+    if (mode === 'grade') {
+      this.grade = { ...GRADE0, ...(opts.grade || {}), swaps: (opts.grade?.swaps || []).map((x) => ({ ...x })) };
+      const k = Math.min(1, 1400 / Math.max(this.W, this.H)); const pw = Math.max(1, Math.round(this.W * k)), ph = Math.max(1, Math.round(this.H * k));
+      this.pvSrc = cnv(pw, ph); this.pvSrc.x.imageSmoothingQuality = 'high'; this.pvSrc.x.drawImage(this.origC.c, 0, 0, pw, ph); this.pvOut = cnv(pw, ph);
+      this.pvData = this.pvSrc.x.getImageData(0, 0, pw, ph);
+      this.palette = paletteOf(this.pvData.data, pw, ph, 7);
+      for (const c of this.palette) if (!this.grade.swaps.some((x) => x.from === c.hex)) this.grade.swaps.push({ from: c.hex, to: null });
+      this.tool = 'pan';
+    }
+  }
+  // colour grade: re-render the preview (coalesced to one per frame)
+  regrade() {
+    if (this._rg) return; this._rg = requestAnimationFrame(async () => {
+      this._rg = null; const d = new ImageData(new Uint8ClampedArray(this.pvData.data), this.pvData.width, this.pvData.height);
+      await gradeData(d.data, this.grade); this.pvOut.x.putImageData(d, 0, 0); this.graded = true; this.draw();
+    });
+  }
+  lookThumb(id) {
+    const TW = 128, TH = 92; const c = cnv(TW, TH); const sw = this.pvSrc.c.width, sh = this.pvSrc.c.height; const k = Math.max(TW / sw, TH / sh); // cover-crop, same shape for every look
+    c.x.imageSmoothingQuality = 'high'; c.x.drawImage(this.pvSrc.c, (TW - sw * k) / 2, (TH - sh * k) / 2, sw * k, sh * k); const d = c.x.getImageData(0, 0, TW, TH);
+    gradeData(d.data, { ...this.grade, look: id, amount: 100 }).then(() => c.x.putImageData(d, 0, 0)); return c.c;
   }
   mount() {
     const [title, icon] = TITLES[this.mode];
@@ -74,6 +99,8 @@ class Studio {
     else if (e.key === '[') { this.setBrush(this.brush - 6); } else if (e.key === ']') { this.setBrush(this.brush + 6); }
     else if (e.code === 'Space') { this.space = true; e.preventDefault(); }
     else if (e.key === 'Enter' && this.mode === 'erase' && !this.auto) this.eraseNow();
+    else if (this.mode === 'touchup' && !mod && { b: 'paint', j: 'heal', e: 'erasepx', r: 'restorepx', h: 'pan' }[e.key.toLowerCase()]) { this.tool = { b: 'paint', j: 'heal', e: 'erasepx', r: 'restorepx', h: 'pan' }[e.key.toLowerCase()]; this.buildSide(); }
+    else if (e.key === 'Alt' && this.mode === 'touchup') { this.alt = true; e.preventDefault(); this.moveCursor(this.lastMove || e); }
     e.stopPropagation();
   }
 
@@ -96,9 +123,11 @@ class Studio {
     x.imageSmoothingQuality = 'high';
     if (this.mode === 'expand') return this.drawExpand(x);
     if (this.comparing) { x.drawImage(this.origC.c, 0, 0); return; }
+    if (this.mode === 'grade') { x.drawImage(this.graded ? this.pvOut.c : this.pvSrc.c, 0, 0, this.W, this.H); return; }
     if (this.mode === 'removebg' && this.alpha) {
       this.drawBgPreview(x);
     } else x.drawImage(this.work.c, 0, 0);
+    if (this.mode === 'touchup' && this.stroke && this.stroke.layer) this.drawStroke(x);
     // selection overlay
     if (this.mode !== 'removebg' && this.hasMask) {
       const t = this.tint || (this.tint = cnv(this.W, this.H));
@@ -140,7 +169,8 @@ class Studio {
       else { this.view.x -= e.deltaX; this.view.y -= e.deltaY; }
       this.draw(); this.moveCursor(e);
     }, { passive: false });
-    addEventListener('keyup', (e) => { if (e.code === 'Space') this.space = false; });
+    addEventListener('keyup', (e) => { if (e.code === 'Space') this.space = false; if (e.key === 'Alt' && this.alt) { this.alt = false; if (this.lastMove) this.moveCursor(this.lastMove); } });
+    addEventListener('blur', () => { this.alt = false; });
     v.addEventListener('pointerdown', (e) => {
       if (this.busyN) return;
       v.setPointerCapture(e.pointerId);
@@ -148,6 +178,8 @@ class Studio {
       if (e.button !== 0) return;
       if (this.mode === 'expand') { this.dragExpand = { x: e.clientX, y: e.clientY, px: this.expand.posX, py: this.expand.posY }; return; }
       const p = this.toImg(e);
+      if (this.mode === 'touchup' && (e.altKey || this.tool === 'pick')) { this.pickColor(p); this.picking = true; return; }
+      if (this.mode === 'touchup' && this.tool !== 'heal') { this.pushUndo(); this.stroke = { pts: [p], layer: this.strokeLayer() }; this.stamp(p, p); return; }
       if (this.tool === 'click' || this.tool === 'keep' || this.tool === 'remove') { this.clickSelect(p, e); return; }
       if (this.tool === 'rect') { this.rect = { a: p, b: p }; return; }
       this.stroke = { pts: [p] }; this.pushUndo(); this.paint(p, p);
@@ -157,23 +189,29 @@ class Studio {
       if (this.pan) { this.view.x += e.clientX - this.pan.x; this.view.y += e.clientY - this.pan.y; this.pan = { x: e.clientX, y: e.clientY }; this.draw(); return; }
       if (this.dragExpand) { const g = this.expandGeom(); const dx = (e.clientX - this.dragExpand.x) / this.view.s, dy = (e.clientY - this.dragExpand.y) / this.view.s; this.expand.posX = clamp(this.dragExpand.px + (g.W > this.W ? dx / (g.W - this.W) : 0), 0, 1); this.expand.posY = clamp(this.dragExpand.py + (g.H > this.H ? dy / (g.H - this.H) : 0), 0, 1); this.draw(); return; }
       const p = this.toImg(e);
+      if (this.picking) { this.pickColor(p); return; }
       if (this.rect) { this.rect.b = p; this.drawRect(); return; }
+      if (this.stroke && this.stroke.layer) { const q = this.stroke.pts[this.stroke.pts.length - 1]; this.stroke.pts.push(p); this.stamp(q, p); return; }
       if (this.stroke) { const q = this.stroke.pts[this.stroke.pts.length - 1]; this.stroke.pts.push(p); this.paint(q, p); }
     });
     const up = () => {
       if (this.pan) { this.pan = null; return; }
+      if (this.picking) { this.picking = false; this.buildSide(); return; }
       if (this.dragExpand) { this.dragExpand = null; return; }
+      if (this.stroke && this.stroke.layer) { this.commitStroke(); this.stroke = null; return; }
       if (this.rect) { const { a, b } = this.rect; this.rect = null; if (Math.abs(a.x - b.x) > 3 && Math.abs(a.y - b.y) > 3) { this.pushUndo(); this.mask.x.fillStyle = '#fff'; this.mask.x.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(a.x - b.x), Math.abs(a.y - b.y)); this.maskChanged(); if (this.auto) this.eraseNow(); } this.draw(); return; }
-      if (this.stroke) { this.stroke = null; if (this.mode === 'removebg') { this.cutDirty = true; this.draw(); } else { this.maskChanged(); if (this.auto && this.mode === 'erase') this.eraseNow(); } }
+      if (this.stroke) { this.stroke = null; if (this.mode === 'removebg') { this.cutDirty = true; this.draw(); } else { this.maskChanged(); if ((this.auto && this.mode === 'erase') || (this.mode === 'touchup' && this.tool === 'heal')) this.eraseNow(); } }
     };
     v.addEventListener('pointerup', up); v.addEventListener('pointercancel', up);
     v.addEventListener('pointerleave', () => { this.cursor.style.display = 'none'; });
   }
   moveCursor(e) {
-    const brushy = ['brush', 'restore', 'erasebg'].includes(this.tool) && this.mode !== 'expand';
+    this.lastMove = { clientX: e.clientX, clientY: e.clientY };
+    if (this.mode === 'touchup' && (this.alt || this.tool === 'pick')) { this.cursor.style.display = 'none'; this.viewEl.style.cursor = PICK_CURSOR; return; }
+    const brushy = ['brush', 'restore', 'erasebg', 'paint', 'heal', 'erasepx', 'restorepx'].includes(this.tool) && this.mode !== 'expand';
     if (!brushy || this.space) { this.cursor.style.display = 'none'; this.viewEl.style.cursor = this.space || this.tool === 'pan' ? 'grab' : this.mode === 'expand' ? 'move' : 'crosshair'; return; }
     const r = this.viewEl.getBoundingClientRect();
-    Object.assign(this.cursor.style, { display: 'block', left: e.clientX - r.left + 'px', top: e.clientY - r.top + 'px', width: this.brush + 'px', height: this.brush + 'px' });
+    Object.assign(this.cursor.style, { display: 'block', left: e.clientX - r.left + 'px', top: e.clientY - r.top + 'px', width: this.brush + 'px', height: this.brush + 'px', background: this.mode === 'touchup' && this.tool === 'paint' ? hexA(this.paintOpt.color, 0.25) : '' });
     this.viewEl.style.cursor = 'none';
   }
   setBrush(v) { this.brush = clamp(v, 4, 400); if (this.brushRow) this.brushRow.set(this.brush); }
@@ -196,6 +234,46 @@ class Studio {
   maskArea() { const d = this.mask.x.getImageData(0, 0, this.W, this.H).data; let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 0) n++; return n; }
   maskBytes() { const d = this.mask.x.getImageData(0, 0, this.W, this.H).data; const m = new Uint8Array(this.W * this.H); for (let i = 0; i < m.length; i++) m[i] = d[i * 4 + 3] > 40 ? 1 : 0; return m; }
   clearMask() { this.mask.x.clearRect(0, 0, this.W, this.H); this.hasMask = false; this.tintDirty = true; this.last = null; this.refreshSide(); this.draw(); }
+
+  // ───── touch up: a stroke is painted at full strength into its own layer, shown live, and merged on release
+  // (so opacity doesn't build up where a stroke crosses itself)
+  strokeLayer() { const l = this.strokeC || (this.strokeC = cnv(this.W, this.H)); l.x.clearRect(0, 0, this.W, this.H); return l; }
+  stamp(a, b) {
+    const L = this.stroke.layer.x; const r = Math.max(0.5, this.brush / this.view.s / 2); const hard = this.paintOpt.hard;
+    const dist = Math.hypot(b.x - a.x, b.y - a.y); const step = Math.max(0.5, r * 0.12); const n = Math.max(1, Math.ceil(dist / step));
+    for (let i = (dist ? 1 : 0); i <= n; i++) {
+      const t = i / n, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+      const g = L.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(Math.min(0.99, hard), 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      L.fillStyle = g; L.beginPath(); L.arc(x, y, r, 0, Math.PI * 2); L.fill();
+    }
+    this.draw();
+  }
+  // what a stroke does, drawn onto ctx (for the live view and for committing)
+  applyStroke(ctx, layer) {
+    const o = this.paintOpt, t = this.tool; const tmp = this.tmpC || (this.tmpC = cnv(this.W, this.H));
+    ctx.save(); ctx.globalAlpha = o.opacity;
+    if (t === 'paint') { tmp.x.globalCompositeOperation = 'copy'; tmp.x.drawImage(layer.c, 0, 0); tmp.x.globalCompositeOperation = 'source-in'; tmp.x.fillStyle = o.color; tmp.x.fillRect(0, 0, this.W, this.H); tmp.x.globalCompositeOperation = 'source-over'; ctx.drawImage(tmp.c, 0, 0); }
+    else if (t === 'erasepx') { ctx.globalCompositeOperation = 'destination-out'; ctx.drawImage(layer.c, 0, 0); }
+    else if (t === 'restorepx') { tmp.x.globalCompositeOperation = 'copy'; tmp.x.drawImage(layer.c, 0, 0); tmp.x.globalCompositeOperation = 'source-in'; tmp.x.drawImage(this.origC.c, 0, 0); tmp.x.globalCompositeOperation = 'source-over';
+      ctx.globalCompositeOperation = 'destination-out'; ctx.drawImage(layer.c, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(tmp.c, 0, 0); }
+    ctx.restore();
+  }
+  drawStroke(x) {
+    // preview: show the picture with the stroke applied (a copy, so the real pixels only change on release)
+    const pv = this.pvC || (this.pvC = cnv(this.W, this.H)); pv.x.globalCompositeOperation = 'copy'; pv.x.drawImage(this.work.c, 0, 0); pv.x.globalCompositeOperation = 'source-over';
+    this.applyStroke(pv.x, this.stroke.layer);
+    x.clearRect(0, 0, this.W, this.H); x.drawImage(pv.c, 0, 0);
+  }
+  commitStroke() { this.applyStroke(this.work.x, this.stroke.layer); this.touched = true; this.draw(); }
+  pickColor(p) {
+    const X = Math.round(clamp(p.x, 0, this.W - 1)), Y = Math.round(clamp(p.y, 0, this.H - 1)); const r = Math.max(1, Math.round(1 / this.view.s));
+    const d = this.work.x.getImageData(Math.max(0, X - r), Math.max(0, Y - r), Math.min(this.W - Math.max(0, X - r), 2 * r + 1), Math.min(this.H - Math.max(0, Y - r), 2 * r + 1)).data;
+    let R = 0, G = 0, B = 0, n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 10) { R += d[i]; G += d[i + 1]; B += d[i + 2]; n++; }
+    if (!n) return; const hex = '#' + [R, G, B].map((v) => Math.round(v / n).toString(16).padStart(2, '0')).join('');
+    this.paintOpt.color = hex; if (this.swatchEl) this.swatchEl.style.background = hex;
+    if (!this.paintOpt.picked.includes(hex)) { this.paintOpt.picked.unshift(hex); this.paintOpt.picked.length = Math.min(10, this.paintOpt.picked.length); }
+    if (this.tool !== 'paint' && this.tool !== 'pick') { this.tool = 'paint'; }
+  }
 
   // ───── undo (snapshots of the pixels / matte / mask) ─────
   snap() { return { work: this.work.x.getImageData(0, 0, this.W, this.H), mask: this.mask.x.getImageData(0, 0, this.W, this.H), alpha: this.alpha ? this.alpha.x.getImageData(0, 0, this.W, this.H) : null }; }
@@ -257,6 +335,7 @@ class Studio {
   async start() {
     this.syncUndo();
     if (this.mode === 'removebg') await this.runRemoveBg();
+    if (this.mode === 'grade') this.regrade();
     this.refreshSide();
   }
   async runRemoveBg(model) {
@@ -282,7 +361,7 @@ class Studio {
     if (!out) return;
     if (!this.undoStack.length) this.pushUndo();
     this.work.x.putImageData(new ImageData(new Uint8ClampedArray(out), this.W, this.H), 0, 0);
-    this.mask.x.clearRect(0, 0, this.W, this.H); this.hasMask = false; this.last = null; this.tintDirty = true; this.erased = true;
+    this.mask.x.clearRect(0, 0, this.W, this.H); this.hasMask = false; this.last = null; this.tintDirty = true; this.erased = true; this.touched = true;
     this.draw(); this.refreshSide();
   }
   async lamaReady() {
@@ -318,16 +397,21 @@ class Studio {
     let x0 = W, y0 = H, x1 = -1, y1 = -1; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (hole[y * W + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     const pw = x1 - x0 + 1, ph = y1 - y0 + 1;
     // the piece: original pixels, soft edged by the mask
-    const piece = cnv(pw, ph); piece.x.drawImage(this.work.c, -x0, -y0);
-    const m = cnv(pw, ph); m.x.filter = `blur(${Math.max(0.6, Math.max(W, H) / 2500)}px)`; m.x.drawImage(this.mask.c, -x0, -y0);
-    piece.x.globalCompositeOperation = 'destination-in'; piece.x.drawImage(m.c, 0, 0);
+    // the edge follows the picture (guided filter on a crop with a little room around it), not the blocky selection
+    const pad = Math.max(4, Math.round(Math.max(pw, ph) * 0.03)); const cx0 = Math.max(0, x0 - pad), cy0 = Math.max(0, y0 - pad), cw = Math.min(W, x1 + 1 + pad) - cx0, ch = Math.min(H, y1 + 1 + pad) - cy0;
+    const m = cnv(cw, ch); m.x.filter = `blur(${Math.max(0.8, Math.max(W, H) / 1500)}px)`; m.x.drawImage(this.mask.c, -cx0, -cy0);
+    const md = m.x.getImageData(0, 0, cw, ch).data; const soft = new Uint8Array(cw * ch); for (let i = 0; i < soft.length; i++) soft[i] = md[i * 4 + 3];
+    const crop = this.work.x.getImageData(cx0, cy0, cw, ch);
+    let alpha = soft; try { alpha = (await call('refineMask', { img: { data: new Uint8ClampedArray(crop.data), w: cw, h: ch }, mask: soft, aw: cw, ah: ch, soft: true, radius: Math.max(2, Math.round(Math.max(W, H) / 500)) })).alpha; } catch {}
+    for (let i = 0; i < alpha.length; i++) crop.data[i * 4 + 3] = Math.min(crop.data[i * 4 + 3], alpha[i] < 8 ? 0 : alpha[i] > 247 ? 255 : alpha[i]);
+    const piece = cnv(cw, ch); piece.x.putImageData(crop, 0, 0); // a little bigger than the selection, so soft edges aren't clipped
     const useAI = await this.lamaReady();
     const img = this.work.x.getImageData(0, 0, W, H);
     const out = await this.busy('Lifting it out and filling in behind…', async (onP) => useAI ? (await call('inpaint', { img: plain(img), hole, grow: 1.5 }, { onProgress: onP })).data : await this.quickFill(img, hole));
     if (!out) return;
     const baseUrl = await dataUrlFrom(out, W, H, 'image/png');
     const pieceUrl = await new Promise((r) => piece.c.toBlob((b) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }, 'image/png'));
-    this.close({ base: baseUrl, piece: { dataUrl: pieceUrl, x: x0, y: y0, w: pw, h: ph }, scale: this.orig.width / this.W });
+    this.close({ base: baseUrl, piece: { dataUrl: pieceUrl, x: cx0, y: cy0, w: cw, h: ch }, scale: this.orig.width / this.W });
   }
   expandGeom() {
     const e = this.expand; let W = this.W, H = this.H;
@@ -359,6 +443,24 @@ class Studio {
   async finish() {
     if (this.busyN) return;
     if (this.mode === 'grab') return this.grabNow();
+    if (this.mode === 'grade') {
+      const g = this.grade; const clean = { ...g, swaps: g.swaps.filter((x) => x.to && x.to !== x.from) };
+      if (isIdentity(clean) && !this.opts.graded) return this.close(null);
+      const out = await this.busy('Applying the colours…', async (onP) => {
+        const d = this.origC.x.getImageData(0, 0, this.W, this.H); await gradeData(d.data, clean, (f) => onP({ text: `Applying the colours… ${Math.round(f * 100)}%` }));
+        let opaque = true; for (let i = 3; i < d.data.length; i += 4) if (d.data[i] < 255) { opaque = false; break; }
+        const c = cnv(this.W, this.H); c.x.putImageData(d, 0, 0);
+        return await new Promise((r) => c.c.toBlob((b) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }, opaque ? 'image/jpeg' : 'image/png', 0.95));
+      });
+      if (!out) return;
+      return this.close({ dataUrl: out, grade: clean, identity: isIdentity(clean), page: !!this.gradePage });
+    }
+    if (this.mode === 'touchup') {
+      if (this.hasMask) { await this.eraseNow(); if (this.hasMask) return; }
+      if (!this.touched) return this.close(null);
+      const url = await new Promise((r) => this.work.c.toBlob((b) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }, 'image/png'));
+      return this.close({ dataUrl: url });
+    }
     if (this.mode === 'erase') {
       if (this.hasMask) { await this.eraseNow(); if (this.hasMask) return; }
       if (!this.erased) return this.close(null);
@@ -412,6 +514,65 @@ class Studio {
         hint(this.hasMask ? 'Shift-click to add more, then press Grab it' : this.tool === 'click' ? 'Click on the object to grab' : 'Paint over the object to grab');
       }
     }
+    if (this.mode === 'grade') {
+      const g = this.grade; const re = () => this.regrade();
+      s.append(h('div.p-title', 'Looks'));
+      const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '6px' } });
+      this.thumbs = this.thumbs || {};
+      for (const L of LOOKS) {
+        const th = this.thumbs[L.id] || (this.thumbs[L.id] = this.lookThumb(L.id)); Object.assign(th.style, { width: '100%', height: 'auto', aspectRatio: '128 / 92', borderRadius: '7px', display: 'block' });
+        grid.append(h('button', { 'data-look': L.id, title: L.name, style: { padding: '3px', border: 'none', borderRadius: '9px', cursor: 'pointer', background: g.look === L.id ? 'var(--accent)' : 'transparent', color: 'var(--text)' }, on: { click: () => { g.look = L.id; if (L.id !== 'none' && !g.amount) g.amount = 100; re(); this.buildSide(); } } }, th, h('div.tiny', { style: { marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: g.look === L.id ? '#06110b' : '' } }, L.name)));
+      }
+      s.append(grid);
+      if (g.look !== 'none') s.append(slider('Strength', { min: 0, max: 100, value: g.amount, fmt: (v) => v + '%', onInput: (v) => { g.amount = v; re(); } }));
+      if (g.look === 'duotone') {
+        const row = h('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } });
+        g.duo.forEach((c, i) => { const b = h('button.btn', { style: { flex: 1, background: c, color: i ? '#000' : '#fff' } }, i ? 'Highlights' : 'Shadows'); b.onclick = (e) => colorPicker(e.currentTarget, g.duo[i], (v) => { if (typeof v === 'string') { g.duo[i] = v; b.style.background = v; re(); } }, { noGradient: true }); row.append(b); });
+        s.append(row);
+      }
+      s.append(h('div.sec', h('h4', 'Colour scheme')));
+      s.append(slider('Shift all colours', { min: -180, max: 180, value: g.hue, fmt: (v) => (v > 0 ? '+' : '') + v + '°', onInput: (v) => { g.hue = v; re(); } }));
+      s.append(slider('Saturation', { min: -100, max: 100, value: g.sat, fmt: (v) => (v > 0 ? '+' : '') + v, onInput: (v) => { g.sat = v; re(); } }));
+      s.append(h('div.sec', h('h4', 'Swap colours')));
+      s.append(h('p.tiny.dim', { style: { margin: '-4px 0 8px' } }, 'The main colours in this picture. Click the arrow side to change one; everything that colour follows.'));
+      for (const sw of g.swaps) {
+        const pc = this.palette.find((p) => p.hex === sw.from);
+        const to = h('button', { title: 'Change this colour', style: { flex: 1, height: '30px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: sw.to || 'transparent', boxShadow: 'inset 0 0 0 1px rgba(127,127,127,.4)', color: 'var(--text)', opacity: sw.to ? 1 : 0.6, fontSize: '11px' } }, sw.to ? '' : 'Keep');
+        to.onclick = (e) => colorPicker(e.currentTarget, sw.to || sw.from, (v) => { if (typeof v === 'string') { sw.to = v; to.style.background = v; to.style.opacity = 1; to.textContent = ''; re(); } }, { noGradient: true });
+        s.append(h('div.swap-row', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' } },
+          h('i', { title: sw.from, style: { width: '30px', height: '30px', borderRadius: '8px', background: sw.from, flex: 'none', boxShadow: 'inset 0 0 0 1px rgba(127,127,127,.4)' } }),
+          h('span.tiny.dim', { style: { width: '30px' } }, pc ? Math.round(pc.share * 100) + '%' : ''), h('span', { html: ico('arrow-right') , style: { opacity: 0.6, display: 'flex' } }), to,
+          sw.to ? h('button.btn.ghost.icon.sm', { title: 'Keep the original colour', html: ico('x'), on: { click: () => { sw.to = null; re(); this.buildSide(); } } }) : null));
+      }
+      const brand = (this.opts.brandColors || []).filter(Boolean);
+      s.append(h('div', { style: { display: 'flex', gap: '6px', marginTop: '4px' } },
+        brand.length ? btn('Use brand colours', () => { const m = brandSwaps(this.palette, brand); for (const x of g.swaps) { const hit = m.find((q) => q.from === x.from); if (hit) x.to = hit.to; } re(); this.buildSide(); }, { icon: 'badge-check', cls: 'sm' }) : null,
+        btn('Reset all', () => { Object.assign(g, { look: 'none', amount: 100, hue: 0, sat: 0 }); g.swaps.forEach((x) => (x.to = null)); re(); this.buildSide(); }, { cls: 'ghost sm', icon: 'rotate-ccw' })));
+      if (this.opts.others > 0) { s.append(h('div.sec', h('h4', 'Where'))); s.append(toggle('Apply to everything on this page (other photos, shapes and text too)', !!this.gradePage, (v) => { this.gradePage = v; })); }
+      s.append(h('p.tiny.dim', { style: { marginTop: '12px', lineHeight: 1.5 } }, 'You can come back and change the grade any time: RO2 keeps the original picture.'));
+      hint('');
+    }
+    if (this.mode === 'touchup') {
+      s.append(h('div.p-title', 'Touch up'));
+      s.append(h('div.tool-grid', toolBtn('paint', 'Paint', 'paintbrush', 'Paint a colour (B). Hold Alt to pick a colour'), toolBtn('heal', 'Heal', 'bandage', 'Paint over a flaw and it is filled in from around it (J)'), toolBtn('pick', 'Pick', 'pipette', 'Pick a colour from the picture (or hold Alt)')));
+      s.append(h('div.tool-grid', { style: { marginTop: '6px' } }, toolBtn('erasepx', 'Erase', 'eraser', 'Erase to see-through (E)'), toolBtn('restorepx', 'Restore', 'history', 'Paint the original back (R)'), toolBtn('pan', 'Move view', 'hand', 'Move around (H, or hold Space)')));
+      if (this.tool !== 'pan' && this.tool !== 'pick') s.append(this.brushRow);
+      if (['paint', 'erasepx', 'restorepx'].includes(this.tool)) {
+        s.append(slider('Softness', { min: 0, max: 100, value: Math.round((1 - this.paintOpt.hard) * 100), fmt: (v) => v + '%', onInput: (v) => { this.paintOpt.hard = 1 - v / 100; } }));
+        s.append(slider('Opacity', { min: 5, max: 100, value: Math.round(this.paintOpt.opacity * 100), fmt: (v) => v + '%', onInput: (v) => { this.paintOpt.opacity = v / 100; } }));
+      }
+      if (this.tool === 'paint' || this.tool === 'pick') {
+        s.append(h('div.sec', h('h4', 'Colour')));
+        this.swatchEl = h('button.btn.block', { style: { background: this.paintOpt.color, height: '38px', boxShadow: 'inset 0 0 0 1px rgba(127,127,127,.35)' }, title: 'Choose a colour', on: { click: (e) => colorPicker(e.currentTarget, this.paintOpt.color, (c) => { if (typeof c === 'string') { this.paintOpt.color = c; this.swatchEl.style.background = c; } }, { noGradient: true }) } });
+        s.append(this.swatchEl);
+        if (this.paintOpt.picked.length) { const row = h('div.chips', { style: { marginTop: '8px' } }); for (const c of this.paintOpt.picked) row.append(h('button', { title: c, style: { width: '26px', height: '26px', borderRadius: '7px', background: c, border: 'none', boxShadow: 'inset 0 0 0 1px rgba(127,127,127,.35)', cursor: 'pointer' }, on: { click: () => { this.paintOpt.color = c; this.swatchEl.style.background = c; } } })); s.append(h('div.tiny.dim', { style: { marginTop: '8px' } }, 'Picked'), row); }
+        s.append(h('div.note', { style: { marginTop: '12px' } }, h('b', 'Hold Alt'), ' (Option on a Mac) and click to pick up a colour from the picture, then let go and paint with it.'));
+      }
+      if (this.tool === 'heal') s.append(h('div.note', { style: { marginTop: '12px' } }, 'Paint over a smudge, a leftover edge or a stray mark. When you let go it is filled in from what is around it', has('lama') ? '.' : ' (quick fill; download the AI eraser in AI tools for better results).'));
+      if (this.tool === 'erasepx') s.append(h('p.small.muted', { style: { marginTop: '10px' } }, 'Makes parts of this layer see-through: good for trimming the edges of a cut-out.'));
+      if (this.tool === 'restorepx') s.append(h('p.small.muted', { style: { marginTop: '10px' } }, 'Brings back this picture as it was when you opened Touch up.'));
+      hint({ paint: 'Paint · hold Alt to pick a colour', heal: 'Paint over a flaw to heal it', pick: 'Click to pick a colour', erasepx: 'Paint to make it see-through', restorepx: 'Paint to bring the original back', pan: 'Drag to move around' }[this.tool]);
+    }
     if (this.mode === 'removebg') {
       s.append(h('div.p-title', 'Fine-tune'));
       s.append(h('div.tool-grid', toolBtn('restore', 'Keep', 'paintbrush', 'Paint to bring parts back'), toolBtn('erasebg', 'Remove', 'eraser', 'Paint to remove more'), toolBtn('keep', 'Click keep', 'mouse-pointer-click', 'Click an object to keep all of it')));
@@ -452,5 +613,7 @@ class Studio {
     this.syncUndo();
   }
 }
+const PICK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><g stroke="black" stroke-width="4"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></g><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>')}") 2 22, crosshair`;
+function hexA(hex, a) { const v = parseInt(hex.slice(1), 16); return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`; }
 function cnv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return { c, x: c.getContext('2d', { willReadFrequently: true }) }; }
 function toCanvasMask(m, w, h) { const k = cnv(w, h); const id = k.x.createImageData(w, h); for (let i = 0; i < m.length; i++) if (m[i]) { id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = 255; id.data[i * 4 + 3] = 255; } k.x.putImageData(id, 0, 0); return k; }

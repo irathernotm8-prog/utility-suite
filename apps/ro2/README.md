@@ -20,8 +20,10 @@ The quick, easy design and photo editor in the Utility Package. RO3 is the heavy
 - **AI tools** (on this computer, nothing uploaded; WebGPU on the graphics card, else every CPU core):
   - **Remove background** (ORMBG; IS-Net "whole scene" as an option) with guided-filter edge refinement, Keep/Remove brushes, click-to-keep/remove objects, new colour or blurred background, sticker outline.
   - **Magic eraser** (LaMa): brush, box or click-to-select an object (SlimSAM), shift-click to add, alt-click to subtract, choose Part / Object / Whole, grow edges & shadows, erase on release. Works without the model too (RO3's PatchMatch quick fill).
-  - **Magic grab**: lift the selected object into its own layer and fill the hole behind it.
-  - **Make editable**: takes a flat picture (a poster, a thumbnail, an AI image, a photo) apart. Text is read (Tesseract) and becomes real text boxes with a matched font, size, colour and alignment; objects (SlimSAM, auto-segmented) become their own photo layers with refined edges; flat shapes become recolourable vectors; the background behind everything is rebuilt (LaMa). Fix the words, switch pieces on or off and click to add anything missed before building. The original is kept as a hidden layer.
+  - **Magic grab**: lift the selected object into its own layer (edges refined to follow the picture) and fill the hole behind it.
+  - **Touch up**: paint (hold Alt / Option to pick a colour from the picture), heal (paint over a flaw and it's filled in from around it), erase to see-through, restore the original; size, softness and opacity. Made for tidying up Make editable and Magic grab results.
+  - **Colour grade** (no model needed): 16 one-click looks with live thumbnails and a strength slider, shift all colours, saturation, and a palette swap that recolours each of the picture's main colours (or maps them to the brand kit). Optionally applies to everything on the page (other photos, shapes, text, background). The original is kept, so the grade can be changed or removed later.
+  - **Make editable**: takes a flat picture (a poster, a thumbnail, an AI image, a photo) apart. Text is read (PP-OCRv6, which also handles small, stylised, letter-spaced and tilted text; Tesseract as a fallback) and becomes real text boxes with a matched font, size, colour and alignment; objects (SlimSAM, auto-segmented) become their own photo layers with refined edges; flat shapes become recolourable vectors; the background behind everything is rebuilt (LaMa). Fix the words, switch pieces on or off and click to add anything missed before building. The original is kept as a hidden layer.
   - **Magic expand**: outpaint a photo to fill the page or 1:1, 4:5, 9:16, 16:9, 3:2 or bigger, band by band; Try again gives a different result.
 
 ## Where things are kept
@@ -29,7 +31,7 @@ The quick, easy design and photo editor in the Utility Package. RO3 is the heavy
 | What | Where |
 |---|---|
 | Designs | `~/Documents/RO2/*.ro2` (one JSON file per design with its pictures inside; change in Settings) |
-| AI models | app-data folder › `Models/<id>/` (ormbg 176 MB, lama 93 MB, slimsam 40 MB, ocr 3 MB, isnet 179 MB optional), downloaded on first use from Hugging Face / GitHub |
+| AI models | app-data folder › `Models/<id>/` (ormbg 176 MB, lama 93 MB, slimsam 40 MB, ocrpro 31 MB, isnet 179 MB and the classic ocr 3 MB optional), downloaded on first use from Hugging Face / GitHub |
 | Brand kits | app-data folder › `brand.json`, logos in `Brand/<kit id>/` |
 | Settings, recent colours, Home index | app-data folder › `settings.json`, `index.json`; errors go to `ro2.log` |
 
@@ -70,7 +72,8 @@ src/renderer/
   js/modals/           new, resize, export, settings
   js/ai/               ai.worker.js (onnxruntime-web: removebg, SAM, LaMa inpaint/expand), client.js
                        (worker RPC, model download prompt), studio.js (the AI focus mode), patch.worker.js,
-                       layerize.js (Make editable: OCR + auto-segment + build), layers-studio.js (its screen)
+                       layerize.js (Make editable: OCR + auto-segment + build), layers-studio.js (its screen); studio.js also has Touch up and Colour grade
+  js/grade.js          colour grade looks, hue shift, palette swap (Lab), LUT-based apply
   js/templates.js, js/sizes.js, js/fonts.js, js/ui.js
   vendor/              fabric 7.4.0, onnxruntime-web 1.30.0, lucide-static 1.49.0, 40 fonts,
                        tesseract.js 7.0.0, qrcode-generator 2.0.4 (refresh: node tools/vendor.mjs)

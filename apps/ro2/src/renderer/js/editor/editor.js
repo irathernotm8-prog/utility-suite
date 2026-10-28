@@ -101,7 +101,7 @@ export class Editor extends EventTarget {
   // The whole design as one JSON string (with the assets it uses)
   toFile() {
     this.syncPage();
-    const used = new Set(); const walk = (o) => { if (o.assetId) used.add(o.assetId); (o.objects || []).forEach(walk); if (o.clipPath) walk(o.clipPath); };
+    const used = new Set(); const walk = (o) => { if (o.assetId) used.add(o.assetId); if (o.ro2GradeSrc) used.add(o.ro2GradeSrc); (o.objects || []).forEach(walk); if (o.clipPath) walk(o.clipPath); };
     this.doc.pages.forEach((p) => p.objects.forEach(walk));
     const assets = {}; for (const id of used) if (this.assets.has(id)) assets[id] = this.assets.get(id);
     return { ...this.doc, assets, updated: Date.now() };
@@ -273,7 +273,7 @@ export class Editor extends EventTarget {
   copy() {
     const sel = this.selected(); if (!sel.length) return null;
     const objs = this.serializeObjects(sel);
-    const assets = {}; const walk = (o) => { if (o.assetId) assets[o.assetId] = this.assets.get(o.assetId); (o.objects || []).forEach(walk); };
+    const assets = {}; const walk = (o) => { if (o.assetId) assets[o.assetId] = this.assets.get(o.assetId); if (o.ro2GradeSrc) assets[o.ro2GradeSrc] = this.assets.get(o.ro2GradeSrc); (o.objects || []).forEach(walk); };
     objs.forEach(walk);
     this._clip = { objs, assets, n: 0 }; return this._clip;
   }
