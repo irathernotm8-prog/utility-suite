@@ -2,6 +2,13 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-28 14:15 — **Atoll 0.2.0** — Add-ons: Docket, Scene, Beam, Vitals and Relay on the island, each in its own tab and off until you turn it on in Settings › Add-ons. Docket shows your recording and asks to take notes when a call starts; Scene switches scenes; Beam sends files, copied text or the shelf to nearby devices; Vitals shows live machine stats; Relay shows new email and unread counts. Each needs that app's latest version.
+- 2026-10-28 14:15 — **Relay 2.0.1** — Works with Atoll: new email and unread counts on the island with the Relay add-on.
+- 2026-10-28 14:15 — **Vitals 0.2.1** — Works with Atoll: processor, memory, graphics and temperature on the island with the Vitals add-on.
+- 2026-10-28 14:15 — **Beam 0.1.3** — Works with Atoll: send files, what you copied or Atoll's shelf to nearby devices from the island, and see transfers there.
+- 2026-10-28 14:15 — **Scene 0.1.2** — Works with Atoll: switch scenes from the island with the Scene add-on.
+- 2026-10-28 14:15 — **Docket 0.1.3** — Works with Atoll: when the Docket add-on is on, Atoll shows your recording on the island and can start, pause and stop notes, and asks to take notes when a call starts.
+- 2026-10-28 08:50 — **Bench 0.1.1** — Works with the Microsoft Store version of the Claude app on Windows: Add Bench now writes the settings copy that version reads (it never looks at the usual AppData folder), and the Claude page has a Copy button for pasting the settings in by hand.
 - 2026-10-27 20:20 — **Bench 0.1.0** — First release: a desktop workspace for Claude to test apps. Sandbox desks run apps on this computer with their own data, out of sight, many at once. Mac and Linux VMs (Tart, Apple Silicon), Windows Sandbox and any VNC computer give clean desktops. A live view lets you watch Claude work (and take over). Smoke-test the whole suite in parallel, run every app's tests side by side, and keep findings with screenshots and logs. The Claude/Codex plugin can launch apps (installed or from source), see their windows, click, type, use menus, answer file dialogs, read console errors and crashes, run commands and file bugs.
 - 2026-10-27 20:20 — **Bench 0.1.0** (58 new) — Added to the Utility Package
 - 2026-10-27 16:48 — **Scene 0.1.1** — New icon in the same style as the rest of the suite: a glowing gold-to-rose screen with Scene's layout inside. The menu bar icon and the logo in the sidebar match.

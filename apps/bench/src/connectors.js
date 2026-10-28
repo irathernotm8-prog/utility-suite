@@ -72,21 +72,35 @@ function entry() {
   const launch = app.isPackaged ? [process.execPath, '--hidden'] : [process.execPath, app.getAppPath(), '--hidden'];
   return { command: process.execPath, args: [path.join(mcpDir(), 'bench-mcp.js')], env: { ELECTRON_RUN_AS_NODE: '1', BENCH_BRIDGE: bridgeFile(), BENCH_LAUNCH: JSON.stringify(launch) } };
 }
-const claudeDesktopConfig = () => (IS_MAC ? path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') : path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json'));
+// Every config file the Claude app might read. The Microsoft Store (MSIX) install of Claude doesn't read
+// %APPDATA%\Claude: Windows gives it a private copy under %LOCALAPPDATA%\Packages\Claude_<id>\LocalCache\Roaming\Claude.
+// Bench writes to each one that exists, so it works with either install (and both, if a PC has both).
+function claudeDesktopConfigs() {
+  if (IS_MAC) return [path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')];
+  const roaming = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+  const pkgs = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Packages');
+  let store = [];
+  try { store = fs.readdirSync(pkgs).filter((d) => /^(Claude|Anthropic)[^\\/]*_[a-z0-9]+$/i.test(d)).map((d) => path.join(pkgs, d, 'LocalCache', 'Roaming', 'Claude', 'claude_desktop_config.json')); } catch {}
+  const list = [...store];
+  if (!store.length || fs.existsSync(path.dirname(roaming))) list.push(roaming); // the regular install (or nothing installed yet)
+  return list;
+}
+const claudeDesktopConfig = () => claudeDesktopConfigs()[0];
 const claudeCodeConfig = () => path.join(os.homedir(), '.claude.json');
 const codexConfig = () => path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml');
 const q = (s) => `"${String(s).replace(/"/g, '\\"')}"`;
 
 function connectorStatus() {
   const e = entry();
-  const readJsonEntry = (p) => { try { const c = JSON.parse(fs.readFileSync(p, 'utf8')); const x = c.mcpServers && c.mcpServers.bench; return { added: !!x, current: !!x && x.args && x.args[0] === e.args[0] }; } catch { return { added: false, current: false }; } };
-  const desk = readJsonEntry(claudeDesktopConfig());
+  const readJsonEntry = (p) => { try { const c = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); const x = c.mcpServers && c.mcpServers.bench; return { added: !!x, current: !!x && x.args && x.args[0] === e.args[0] }; } catch { return { added: false, current: false }; } };
+  const deskAll = claudeDesktopConfigs().map((p) => ({ p, ...readJsonEntry(p) }));
+  const desk = { added: deskAll.every((x) => x.added), current: deskAll.every((x) => x.current) };
   const code = readJsonEntry(claudeCodeConfig());
   const codex = (() => { try { const t = fs.readFileSync(codexConfig(), 'utf8'); const added = /^\s*\[mcp_servers\.("bench"|bench)\]/m.test(t); return { added, current: added && t.includes(JSON.stringify(e.args[0])) }; } catch { return { added: false, current: false }; } })();
   const claudeCli = which('claude'); const codexCli = which('codex');
   return {
     bridge: status(),
-    desktop: { ...desk, installed: fs.existsSync(path.dirname(claudeDesktopConfig())), path: claudeDesktopConfig() },
+    desktop: { ...desk, installed: deskAll.some((x) => fs.existsSync(path.dirname(x.p))), path: claudeDesktopConfig(), paths: deskAll.map((x) => x.p), store: deskAll.some((x) => /[\\/]Packages[\\/]/.test(x.p)), json: JSON.stringify({ mcpServers: { bench: e } }, null, 2) },
     code: { ...code, installed: !!claudeCli, cmd: `claude mcp add bench --scope user ${Object.entries(e.env).map(([k, v]) => `-e ${k}=${q(v)}`).join(' ')} -- ${q(e.command)} ${q(e.args[0])}` },
     codex: { ...codex, installed: !!codexCli || fs.existsSync(path.dirname(codexConfig())), path: codexConfig(), cmd: `codex mcp add bench ${Object.entries(e.env).map(([k, v]) => `--env ${k}=${q(v)}`).join(' ')} -- ${q(e.command)} ${q(e.args[0])}` },
     entry: e,
@@ -96,10 +110,12 @@ function connectorStatus() {
 function backup(p) { if (fs.existsSync(p)) fs.copyFileSync(p, p + '.bench-backup'); }
 function connectDesktop() {
   installScript();
-  const p = claudeDesktopConfig(); let cfg = {};
-  if (fs.existsSync(p)) { const raw = fs.readFileSync(p, 'utf8'); try { cfg = raw.trim() ? JSON.parse(raw) : {}; } catch { throw new Error('Claude’s settings file has a formatting problem, so Bench left it alone: ' + p); } backup(p); } else fs.mkdirSync(path.dirname(p), { recursive: true });
-  cfg.mcpServers = { ...(cfg.mcpServers || {}), bench: entry() };
-  fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+  for (const p of claudeDesktopConfigs()) {
+    let cfg = {};
+    if (fs.existsSync(p)) { const raw = fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, ''); try { cfg = raw.trim() ? JSON.parse(raw) : {}; } catch { throw new Error('Claude’s settings file has a formatting problem, so Bench left it alone: ' + p + '. In Claude, open Settings › Developer › Edit Config to fix it, then try again.'); } backup(p); } else fs.mkdirSync(path.dirname(p), { recursive: true });
+    cfg.mcpServers = { ...(cfg.mcpServers || {}), bench: entry() };
+    fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+  }
   return connectorStatus();
 }
 // Claude Code keeps user-scope MCP servers in ~/.claude.json. Use its own CLI when installed, else edit the file.
@@ -132,8 +148,9 @@ function connectCodex() {
 }
 function disconnect(which) {
   if (which === 'desktop' || which === 'code') {
-    const p = which === 'desktop' ? claudeDesktopConfig() : claudeCodeConfig();
-    try { const cfg = JSON.parse(fs.readFileSync(p, 'utf8')); if (cfg.mcpServers && cfg.mcpServers.bench) { backup(p); delete cfg.mcpServers.bench; fs.writeFileSync(p, JSON.stringify(cfg, null, 2)); } } catch {}
+    for (const p of which === 'desktop' ? claudeDesktopConfigs() : [claudeCodeConfig()]) {
+      try { const cfg = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '')); if (cfg.mcpServers && cfg.mcpServers.bench) { backup(p); delete cfg.mcpServers.bench; fs.writeFileSync(p, JSON.stringify(cfg, null, 2)); } } catch {}
+    }
   } else if (which === 'codex') {
     const p = codexConfig(); try { const raw = fs.readFileSync(p, 'utf8'); backup(p); const out = []; let skip = false; for (const line of raw.split(/\r?\n/)) { const h = /^\s*\[\[?\s*([^\]]+?)\s*\]\]?\s*(#.*)?$/.exec(line); if (h) skip = /^mcp_servers\.("bench"|bench)(\.|$)/.test(h[1].replace(/\s+/g, '')); if (!skip && !/^# Bench — test workspace/.test(line)) out.push(line); } fs.writeFileSync(p, out.join('\n')); } catch {}
   }

@@ -41,3 +41,11 @@ Pull before starting work. Stay inside `apps/scene`; `tools/`, `suite.json` and 
 - **Quitting is always the polite kind** (apps can still ask to save). System apps (`PROTECTED` in plan.js) and the user's keep-open list are never hidden or quit.
 - **Triggers wait 20 s after any switch** and never re-fire for the active scene, so automations can't loop.
 - Scenes, settings, state (active scene, the "previous" layout) and history are JSON in `app.getPath('userData')`.
+
+## Utility Suite link (0.1.2)
+
+Scene now offers a few things to other suite apps (Atoll's add-ons) over the **Utility Suite link**: `src/suitelink.js`, a copy of `tools/suitelink.js` in the Utility Package. Keep it identical to that file; the Utility Package chat owns it. It's a Unix socket in `~/Library/Application Support/Utility Suite/link` (mode 0600) on a Mac and a per-user named pipe on Windows, so only this user's apps can reach it. Everything is in `src/main.js` under "Utility Suite link".
+
+- Offers: `list`, `activate(id)`, `previous`, `open`; event `switched`.
+- Nothing changes when no other app is connected: events are only sent while something is listening.
+- If you rename or remove one of these, tell the Utility Package chat so Atoll keeps working.

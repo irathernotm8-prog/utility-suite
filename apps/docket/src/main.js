@@ -7,6 +7,7 @@ const path = require('path');
 const { Store, toMarkdown } = require('./store');
 const ai = require('./ai');
 const detect = require('./detect');
+const suitelink = require('./suitelink');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'docket', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } }
@@ -145,11 +146,13 @@ function startWatcher() {
     onStart: (m) => {
       if (rec.recording) return;
       send('detected', m);
+      if (link) link.emit('detected', m);
       if (settings().watch === 'auto') { command('start', { app: m.app, title: m.title, auto: true }); notify('Docket is taking notes', `${m.app} call detected. Stop any time from the floating bar.`, showWin); }
       else notify(`${m.app} call started`, 'Click to have Docket take notes.', () => { showWin(); command('start', { app: m.app, title: m.title }); });
     },
     onEnd: (m) => {
       send('detected', null);
+      if (link) link.emit('detected', null);
       if (!rec.recording) return;
       if (settings().watch === 'auto' && rec.auto) command('stop', { reason: 'ended' });
       else notify('Did the call end?', 'Click to stop and summarize your notes.', () => { showWin(); command('stop'); });
@@ -158,6 +161,24 @@ function startWatcher() {
   watcher.start();
 }
 const send = (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send('docket:' + ch, data); };
+
+// ---------------------------------------------------------------- Utility Suite link (Atoll shows recording and asks to start)
+let link = null, linkAt = 0;
+const linkState = () => ({ recording: !!rec.recording, paused: !!rec.paused, elapsed: rec.elapsed || 0, at: Date.now(), title: rec.title || '', line: rec.line || '', detected: (watcher && watcher.current) || null });
+function startLink() {
+  try {
+    link = suitelink.serve('docket', { version: app.getVersion(), calls: {
+      status: () => linkState(),
+      start: (o) => { command('start', { app: (o && o.app) || null, title: (o && o.title) || '' }); return true; },
+      stop: () => { command('stop'); return true; },
+      pause: () => { command('pause'); return true; },
+      resume: () => { command('resume'); return true; },
+      mark: () => { command('mark'); return true; },
+      open: () => { showWin(); return true; }
+    } });
+  } catch (_) { link = null; }
+}
+function linkPush(force) { if (!link || !link.clients()) return; const now = Date.now(); if (!force && now - linkAt < 1000) return; linkAt = now; link.emit('status', linkState()); }
 
 // ---------------------------------------------------------------- tray + floating bar
 function trayImage(recording) {
@@ -337,8 +358,9 @@ function registerIpc() {
   h('watch:restart', () => { startWatcher(); return !!watcher; });
 
   ipcMain.on('docket:rec', (_e, state) => {
-    const was = rec.recording;
+    const was = rec.recording, wasPaused = rec.paused;
     rec = { ...rec, ...state };
+    linkPush(was !== rec.recording || wasPaused !== rec.paused);
     if (was !== rec.recording) { updateTray(); if (!rec.recording) { closeBar(); toldHidden = false; } }
     syncBar();
     if (tray && rec.recording) tray.setToolTip(`Docket — taking notes (${fmt(rec.elapsed)})`);
@@ -417,9 +439,11 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   startWatcher();
+  startLink();
   app.on('activate', () => showWin());
 });
 app.on('second-instance', () => showWin());
+app.on('will-quit', () => { try { if (link) link.close(); } catch (_) {} });
 app.on('before-quit', (e) => {
   wantQuit = true;
   if (rec.recording && win && !win.isDestroyed() && !quitting) { // finish the recording properly before quitting

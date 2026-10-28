@@ -49,3 +49,17 @@ Pull before starting work. Stay inside `apps/atoll`; `tools/`, `suite.json` and 
 - **Electron 44's clipboard is asynchronous in the main process** (`clipboard.readText()` returns a Promise). Always `await` it; 0.1.0 didn't, which crashed with "text.trim is not a function" every second. Uncaught errors are now logged to `atoll.log` in the app-data folder instead of showing a dialog.
 - **Linux is only for tests.** It uses the pretend player (`media/demo.js`) and a pretend clipboard; `ATOLL_DEMO=1` does the same on a Mac or PC.
 - No native modules and no runtime npm dependencies, so nothing special for Windows cross-builds.
+
+## Add-ons and the Utility Suite link (0.2.0)
+
+- Add-ons (Docket, Scene, Beam, Vitals, Relay) are **off by default** (`settings.addons`), so Atoll behaves exactly as before until one is turned on in Settings › Add-ons. `src/addons.js` connects only to enabled ones.
+- They talk through **`src/suitelink.js`**, a copy of `tools/suitelink.js` in the Utility Package (each of the five apps has the same copy). Keep every copy identical; change `tools/suitelink.js` first and copy it out.
+- What each app offers on the link (all added in their own `src/main.js`, marked "Utility Suite link"):
+  - **docket**: `status`, `start({title})`, `stop`, `pause`, `resume`, `mark`, `open`; events `status` (≤ 1/s and on every start/stop/pause) and `detected` (a call started/ended).
+  - **scene**: `list`, `activate(id)`, `previous`, `open`; event `switched`.
+  - **beam**: `peers`, `transfers`, `send(peerId, paths)`, `sendText(peerId, text)`, `open`; events `peers`, `transfers` (≤ 2/s).
+  - **vitals**: `stats`, `history`, `open`; event `tick` (every sample, only while someone's connected).
+  - **relay**: `unread`, `recent`, `open(accountId)`; events `unread`, `mail` (from Relay's window: when an inbox's unread count goes up, it reads the newest unread email with the briefing scraper).
+- Atoll finds installed apps where Utility Hub puts them (`/Applications/<App>.app` or `~/Applications`, `%LOCALAPPDATA%\Programs\Utility Suite\<App>\<App>.exe`) and opens them with `--hidden` (Beam, Vitals and Scene start to the tray; Docket and Relay show their window).
+- Tested here: `npm test` runs the link (calls, errors, events, reconnect, stale socket) and the add-on hub against pretend apps; the e2e run drives every add-on view and moment against pretend apps on real sockets. The real Docket, Scene, Beam, Vitals and Relay were each started under Xvfb and answered on the link, and Docket started and stopped a recording from it. **Not yet run on a real Mac or Windows PC**: check the Windows named pipe (`\\.\pipe\utility-suite-<user>-<app>`) first.
+

@@ -1,7 +1,7 @@
 {
   "name": "atoll",
   "productName": "Atoll",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "A Dynamic Island for your desktop: timers and focus, music controls, one live football match from Touchline, a file and clipboard shelf, weather and system glance, tucked into the top of your screen on Mac and Windows.",
   "main": "src/main.js",
   "author": "Bilal",

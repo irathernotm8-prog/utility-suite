@@ -50,3 +50,11 @@ Tell Bilal. One command pulls those late edits in:
 ```bash
 cd ~/Downloads/Utility\ Package && ./utility port relay --from-old
 ```
+
+## Utility Suite link (2.0.1)
+
+Relay now offers a few things to other suite apps (Atoll's add-ons) over the **Utility Suite link**: `src/suitelink.js`, a copy of `tools/suitelink.js` in the Utility Package. Keep it identical to that file; the Utility Package chat owns it. It's a Unix socket in `~/Library/Application Support/Utility Suite/link` (mode 0600) on a Mac and a per-user named pipe on Windows, so only this user's apps can reach it. Everything is in `src/main.js` under "Utility Suite link".
+
+- Offers: `unread`, `recent`, `open(accountId)`; events `unread` and `mail`. The renderer pushes them through `relay.suitePush` (preload): `suiteUnread()` in `renderer/app.js` sends the counts, and when a mail inbox's count goes up it reads the newest unread email with `Briefing.latest()` (the briefing scraper) at most every 20 s per inbox.
+- Nothing changes when no other app is connected: events are only sent while something is listening.
+- If you rename or remove one of these, tell the Utility Package chat so Atoll keeps working.

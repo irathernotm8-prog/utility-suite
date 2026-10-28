@@ -307,7 +307,9 @@ Give me an inbox briefing: for each account, what needs a reply (and roughly by 
     return `<section class="card acct-card" style="--c:${esc(a.color)}">${head}${body}</section>`;
   }
 
-  window.Briefing = { render, run, contextText: () => {
+  // Utility Suite link: the newest unread email in one inbox (for Atoll's new-mail moment)
+  async function latest(a) { const r = await scrape(a); return (r.items || []).find(i => i.unread) || (r.items || [])[0] || null; }
+  window.Briefing = { latest, render, run, contextText: () => {
     const br = R().state.briefing;
     if (!br) return '';
     const lines = [];

@@ -57,3 +57,11 @@ Pull before starting work. Stay inside `apps/vitals`; `tools/`, `suite.json` and
 - **Don't use `systeminformation` for anything PowerShell-based on Windows**; use `ps()`/`psJson()` from `run.js`.
 - **Destructive actions always confirm**, and Mac uninstalls go to the Trash, never straight to deletion.
 - Native module: `macos-temperature-sensor` is an `optionalDependency` with `os: darwin, cpu: arm64`, so Windows cross-builds (`npm ci --os=win32`) skip it. Everything else is plain JS (`systeminformation`).
+
+## Utility Suite link (0.2.1)
+
+Vitals now offers a few things to other suite apps (Atoll's add-ons) over the **Utility Suite link**: `src/suitelink.js`, a copy of `tools/suitelink.js` in the Utility Package. Keep it identical to that file; the Utility Package chat owns it. It's a Unix socket in `~/Library/Application Support/Utility Suite/link` (mode 0600) on a Mac and a per-user named pipe on Windows, so only this user's apps can reach it. Everything is in `src/main.js` under "Utility Suite link".
+
+- Offers: `stats`, `history`, `open`; event `tick` (each sample, only while something is connected).
+- Nothing changes when no other app is connected: events are only sent while something is listening.
+- If you rename or remove one of these, tell the Utility Package chat so Atoll keeps working.

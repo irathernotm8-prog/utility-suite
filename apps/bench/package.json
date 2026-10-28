@@ -1,7 +1,7 @@
 {
   "name": "bench",
   "productName": "Bench",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A desktop workspace for Claude to test apps: sandbox desks that run apps on this computer with their own data, clean Mac, Linux and Windows desktops in virtual machines, live views, and a Claude plugin to launch, click, type, read logs, smoke-test the whole suite in parallel and file bugs.",
   "main": "src/main.js",
   "author": "Bilal",
@@ -27,15 +27,38 @@
     "productName": "Bench",
     "copyright": "Personal use",
     "npmRebuild": false,
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["src/**/*", "mcp/**/*", "build/icon.png", "build/tray*.png", "package.json", "node_modules/**/*", "!node_modules/cpu-features/**", "!node_modules/nan/**"],
-    "asarUnpack": ["mcp/**/*", "src/assets/**/*"],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "mcp/**/*",
+      "build/icon.png",
+      "build/tray*.png",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/cpu-features/**",
+      "!node_modules/nan/**"
+    ],
+    "asarUnpack": [
+      "mcp/**/*",
+      "src/assets/**/*"
+    ],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.developer-tools",
       "darkModeSupport": true
     },
-    "win": { "target": ["zip"], "icon": "build/icon.png" }
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    }
   }
 }

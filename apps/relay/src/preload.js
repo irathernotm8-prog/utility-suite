@@ -145,6 +145,8 @@ contextBridge.exposeInMainWorld('relay', {
   aiCancel: (id) => ipcRenderer.invoke('ai:cancel', id),
   onAIStream: (cb) => ipcRenderer.on('ai:stream', (_e, d) => cb(d)),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, d) => cb(d)),
+  suitePush: (kind, data) => ipcRenderer.send('suite:push', kind, data),
+  onSuiteOpen: (cb) => ipcRenderer.on('suite:open', (_e, id) => cb(id)),
   onAskSelection: (cb) => ipcRenderer.on('ai:ask-selection', (_e, d) => cb(d)),
   platform: process.platform
 });

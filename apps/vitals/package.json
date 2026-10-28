@@ -1,7 +1,7 @@
 {
   "name": "vitals",
   "productName": "Vitals",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A better task manager and system dashboard: live CPU, memory, GPU and temperatures, every app and what it uses, uninstalling, startup items, privacy permissions, time and focus tracking, and a one-click checkup.",
   "main": "src/main.js",
   "author": "Bilal",

@@ -16,6 +16,10 @@ const DEFAULTS = {
   openAtLogin: false,
   theme: 'system',          // settings window only; the island is always black
   modules: { media: true, timers: true, match: true, shelf: true, weather: true, system: true },
+  // add-ons: other suite apps on the island, all off until turned on in Settings › Add-ons
+  addons: { docket: false, scene: false, beam: false, vitals: false, relay: false },
+  meetingPrompt: true,      // Docket: ask to take notes when a call starts
+  mailBurst: true,          // Relay: show new email on the island
   priority: ['timers', 'match', 'media'],   // which live activity takes the island first
   // timers
   sound: 'chime',           // chime | bell | pulse | none
@@ -53,9 +57,10 @@ class Store {
     const s = { ...DEFAULTS, ...this.read('settings.json', {}) };
     s.modules = { ...DEFAULTS.modules, ...(s.modules || {}) };
     s.focus = { ...DEFAULTS.focus, ...(s.focus || {}) };
+    s.addons = { ...DEFAULTS.addons, ...(s.addons || {}) };
     return s;
   }
-  setSettings(p) { const cur = this.settings(); return this.write('settings.json', { ...cur, ...p, modules: { ...cur.modules, ...(p.modules || {}) }, focus: { ...cur.focus, ...(p.focus || {}) } }); }
+  setSettings(p) { const cur = this.settings(); return this.write('settings.json', { ...cur, ...p, modules: { ...cur.modules, ...(p.modules || {}) }, focus: { ...cur.focus, ...(p.focus || {}) }, addons: { ...cur.addons, ...(p.addons || {}) } }); }
   state() { return this.read('state.json', {}); }
   setState(p) { return this.write('state.json', { ...this.state(), ...p }); }
 }

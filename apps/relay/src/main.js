@@ -773,7 +773,27 @@ function buildMenu() {
 }
 
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png');
+// ───────── Utility Suite link (Atoll shows new email and unread counts)
+const suitelink = require('./suitelink');
+let link = null;
+const linkData = { accounts: [], recent: [] };
+function startLink() {
+  try {
+    link = suitelink.serve('relay', { version: app.getVersion(), calls: {
+      unread: () => linkData.accounts,
+      recent: () => linkData.recent,
+      open: (accountId) => { if (!win || win.isDestroyed()) createWindow(); else { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } if (accountId) win.webContents.send('suite:open', String(accountId)); return true; }
+    } });
+  } catch (_) { link = null; }
+}
+ipcMain.on('suite:push', (_e, kind, data) => {
+  if (kind === 'unread' && Array.isArray(data)) { linkData.accounts = data.slice(0, 40); if (link) link.emit('unread', linkData.accounts); }
+  if (kind === 'mail' && data && typeof data === 'object') { linkData.recent = [{ ...data, at: Date.now() }, ...linkData.recent].slice(0, 20); if (link) link.emit('mail', linkData.recent[0]); }
+});
+app.on('will-quit', () => { try { if (link) link.close(); } catch (_) {} });
+
 app.whenReady().then(() => {
+  startLink();
   // same icon everywhere: Dock while running from source, About window, notifications
   if (IS_MAC && !app.isPackaged) try { app.dock.setIcon(APP_ICON); } catch {}
   app.setAboutPanelOptions({ applicationName: 'Relay', applicationVersion: app.getVersion(), iconPath: APP_ICON, copyright: '© 2026 Bilal' });

@@ -13,6 +13,18 @@ A Dynamic Island for your desktop, part of the Utility Suite. It sits at the top
 | **Weather** | Temperature in the header | Now, high / low and the next hours, from Open-Meteo for the city you choose |
 | **System** | | Battery, processor and memory on Home |
 
+### Add-ons (off until you turn them on in Settings › Add-ons)
+
+| Add-on | On the island |
+|---|---|
+| **Docket** | Recording takes the island first (red dot, meeting title, running time). The Docket tab shows the live line and Pause / Mark / Stop and summarize. When Docket spots a Zoom, Teams or Meet call, the island asks *Take notes?* |
+| **Scene** | Every scene as a tile; one click switches everything, *Back to before* undoes it |
+| **Beam** | Nearby devices; drop files on one to send, or send what you copied or everything on the shelf. Transfers show progress, and a running one becomes a live activity |
+| **Vitals** | Processor, memory, graphics and temperature with live graphs, from Vitals' own sampler |
+| **Relay** | Unread counts per inbox, the latest emails, and a moment on the island when new email arrives (from and subject); click to open that inbox in Relay |
+
+Each add-on works while its app is running and talks to it through the **Utility Suite link** (`src/suitelink.js`): a Unix socket in the user's own folder on a Mac (`~/Library/Application Support/Utility Suite/link`, mode 0600) or a per-user named pipe on Windows. If the app is installed but closed, the tab offers to open it in the background.
+
 When two things are live at once the first takes the island and the second gets the little bubble beside it (the order is in Settings › Island). The menu bar / tray item starts timers and focus sessions and can hide the island.
 
 ## Where everything comes from
@@ -34,6 +46,8 @@ macOS 15.4 closed the system-wide Now Playing API to other apps, so browser audi
 src/main.js              app, tray, shortcut, settings window, every call from the pages (API)
 src/island.js            the island window: notch detection, top-centre placement, sizing
 src/store.js             settings.json and state.json (timers, shelf, followed match)
+src/addons.js            add-ons: links to Docket, Scene, Beam, Vitals and Relay, install detection, launching
+src/suitelink.js         the Utility Suite link (copy of tools/suitelink.js; keep identical)
 src/modules/timers.js    timers, stopwatch, focus; pure apart from setTimeout
 src/modules/media/       index.js (polling, artwork, choosing a player), mac.js, win.js, demo.js
 src/modules/match.js     the Touchline plugin: follow a team or a match, goal/kick-off/full-time moments

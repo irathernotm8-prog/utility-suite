@@ -47,6 +47,10 @@ The one home for every app Bilal has built: the source code, the tool that build
 
 `./utility status` shows each app's version against the last suite and what's ready to ship. Not a terminal person? Double-click **`Utility Package.command`**.
 
+## Apps talking to each other (Utility Suite link)
+
+`tools/suitelink.js` lets suite apps on the same computer talk to each other, for the signed-in user only: a Unix socket in `~/Library/Application Support/Utility Suite/link` on a Mac, a per-user named pipe on Windows. Each app that takes part carries an identical copy in `src/suitelink.js`. Today Docket, Scene, Beam, Vitals and Relay offer a few calls and events on it, and Atoll's add-ons use them (each add-on is off until turned on in Atoll). What each app offers is in its handoff.
+
 ## Personal data that stays outside
 
 Some apps keep data in fixed places. It is never part of the package or the repo:

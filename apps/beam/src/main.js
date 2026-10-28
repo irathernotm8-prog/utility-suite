@@ -217,6 +217,29 @@ function syncAwake() {
 }
 
 // ───────── engine
+// ───────── Utility Suite link (Atoll's quick send)
+const suitelink = require('./suitelink');
+let link = null, linkAt = 0;
+const linkPeers = () => (engine ? engine.peerList().map(p => ({ id: p.id, name: p.name, os: p.os, dev: p.dev, trusted: p.trusted })) : []);
+const linkTransfers = () => (engine ? [...engine.transfers.values()].filter(t => ['active', 'waiting', 'asking', 'preparing'].includes(t.status)).map(t => { const s = engine.snap(t); return { tid: s.tid, dir: s.dir, status: s.status, peer: s.peer && s.peer.name, bytes: s.bytes, total: s.total, speed: s.speed, kind: s.kind, count: s.count || 0, label: s.kind === 'text' ? 'Text' : (s.names && s.names[0]) ? s.names[0] + (s.count > 1 ? ` +${s.count - 1}` : '') : null }; }) : []);
+function startLink() {
+  try {
+    link = suitelink.serve('beam', { version: app.getVersion(), calls: {
+      peers: () => linkPeers(),
+      transfers: () => linkTransfers(),
+      send: async (peerId, paths) => { const list = (paths || []).filter(p => { try { return fs.existsSync(p); } catch { return false; } }); if (!list.length) throw new Error('Nothing to send'); await engine.send(peerId, list); return true; },
+      sendText: async (peerId, text) => { await engine.sendText(peerId, String(text || '')); return true; },
+      open: () => { showWindow(); return true; }
+    } });
+  } catch (_) { link = null; }
+}
+function linkPush(kind) {
+  if (!link || !link.clients()) return;
+  if (kind === 'peers') return link.emit('peers', linkPeers());
+  const now = Date.now(); if (now - linkAt < 500) return; linkAt = now; link.emit('transfers', linkTransfers());
+}
+app.on('will-quit', () => { try { if (link) link.close(); } catch (_) {} });
+
 async function boot() {
   const identity = loadIdentity(USER);
   const dev = await Promise.race([detectDev(), new Promise(r => setTimeout(() => r('laptop'), 3000))]);
@@ -229,8 +252,8 @@ async function boot() {
     discovery: DEMO ? false : {},
     port: Number(process.env.BEAM_PORT) || undefined,
   });
-  engine.on('peers', (p) => { send('peers', p); if (!IS_MAC) updateTray(); });
-  engine.on('transfer', (t) => { send('transfer', t); updateTray(); syncAwake(); });
+  engine.on('peers', (p) => { send('peers', p); if (!IS_MAC) updateTray(); linkPush('peers'); });
+  engine.on('transfer', (t) => { send('transfer', t); updateTray(); syncAwake(); linkPush('transfers'); });
   engine.on('transfers', (l) => send('transfers', l));
   engine.on('history', (h) => send('history', h));
   engine.on('phone', (p) => send('phone', p));
@@ -260,6 +283,7 @@ async function boot() {
     if (settings.openFolderWhenDone && first) shell.showItemInFolder(first);
   });
   await engine.start();
+  startLink();
   if (DEMO) require('./demo').install(engine);
 }
 

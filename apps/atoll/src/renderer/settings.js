@@ -10,7 +10,7 @@
 
   const SECTIONS = [
     ['general', 'gear', 'General'], ['island', 'display', 'Island'], ['timers', 'timer', 'Timers'], ['media', 'music', 'Music'],
-    ['match', 'ball', 'Live match'], ['weather', 'sun', 'Weather'], ['shelf', 'tray', 'Shelf'], ['about', 'info', 'About']
+    ['match', 'ball', 'Live match'], ['weather', 'sun', 'Weather'], ['shelf', 'tray', 'Shelf'], ['addons', 'sparkle', 'Add-ons'], ['about', 'info', 'About']
   ];
   const set = async (p) => { try { S.settings = await A.call('setSettings', p); msg = null; } catch (e) { msg = errText(e); } render(); };
   const sw = (key, on, extra = '') => `<button class="switch ${on ? 'on' : ''}" data-sw="${key}" ${extra}></button>`;
@@ -106,6 +106,25 @@
         ${row('Keep', '', seg('clipboardSize', S.settings.clipboardSize, [[6, '6'], [12, '12'], [24, '24']]))}
       </div>`,
 
+    addons: () => {
+      const A2 = S.addons || {};
+      const list = [['docket', 'mic', '#ff453a'], ['scene', 'layers', '#ff9f0a'], ['beam', 'send', '#0a84ff'], ['vitals', 'gauge', '#30d158'], ['relay', 'mail', '#64d2ff']];
+      const status = (a, on) => {
+        if (!on) return '';
+        if (a.up) return `<span class="pill ok">Connected${a.version ? ` · ${esc(a.version)}` : ''}</span>`;
+        if (a.launching) return '<span class="pill">Opening…</span>';
+        if (a.installed === false) return '<span class="pill warn">Not installed</span>';
+        return `<span class="pill">Not running</span> <button class="btn sm" data-launch="${a.id}">Open</button>`;
+      };
+      return `<h1>Add-ons</h1><p class="lede">Other Utility Suite apps on the island, each in its own tab. They’re off until you turn them on, so Atoll stays as it is. An add-on works while its app is running; Atoll connects to it on its own.</p>
+      <div class="group">${list.map(([id, ic, color]) => { const a = A2[id] || { id }; const on = !!S.settings.addons?.[id]; return row(esc(a.name || id), `${esc(a.what || '')}${on ? `<span style="display:flex;gap:6px;align-items:center;margin-top:6px">${status({ ...a, id }, on)}</span>` : ''}`, sw('a:' + id, on), ic, color); }).join('')}</div>
+      ${S.settings.addons?.docket || S.settings.addons?.relay ? `<h2>Moments</h2><div class="group">
+        ${S.settings.addons?.docket ? row('When a call starts', 'Docket spots Zoom, Teams and Meet calls; the island asks if it should take notes.', sw('meetingPrompt', S.settings.meetingPrompt), 'mic', '#ff453a') : ''}
+        ${S.settings.addons?.relay ? row('New email', 'The island shows who it’s from and the subject.', sw('mailBurst', S.settings.mailBurst), 'mail', '#64d2ff') : ''}
+      </div>` : ''}
+      <div class="note">Add-ons talk to the other apps on this computer only, for your account only. Each app needs its latest version from Utility Hub.</div>`;
+    },
+
     about: () => `<h1>About Atoll</h1><p class="lede">A Dynamic Island for your desktop, part of the Utility Suite.</p>
       <div class="group">
         ${row('Version', '', `<span class="muted tnum" id="vinfo"></span>`)}
@@ -116,7 +135,7 @@
   };
 
   function render() {
-    applyTheme(); nav();
+    applyTheme(); nav(); lastAddonSig = addonSig();
     $('#page').innerHTML = (pages[section] || pages.general)();
     $('#hide-island').innerHTML = `${icon('eyeOff', 15)} Hide the island`;
     if (section === 'about') A.call('info').then((i) => { const el = $('#vinfo'); if (el) el.textContent = `${i.version} · Electron ${i.electron}`; });
@@ -130,6 +149,7 @@
     if (s) {
       const k = s.dataset.sw;
       if (k.startsWith('m:')) return set({ modules: { [k.slice(2)]: !S.settings.modules[k.slice(2)] } });
+      if (k.startsWith('a:')) return set({ addons: { [k.slice(2)]: !S.settings.addons?.[k.slice(2)] } });
       if (k.startsWith('p:')) { const p = k.slice(2); const cur = S.settings.macPlayers; return set({ macPlayers: cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p] }); }
       return set({ [k]: !S.settings[k] });
     }
@@ -139,6 +159,7 @@
       const el = t.closest('[data-up]') || t.closest('[data-down]'); const i = Number(el.dataset.up ?? el.dataset.down); const j = el.dataset.up != null ? i - 1 : i + 1;
       const p = S.settings.priority.slice(); [p[i], p[j]] = [p[j], p[i]]; return set({ priority: p });
     }
+    if (t.closest('[data-launch]')) { try { await A.call('addonLaunch', t.closest('[data-launch]').dataset.launch); } catch (err) { msg = errText(err); } return; }
     if (t.closest('#rec')) { recording = true; render(); return; }
     if (t.closest('[data-place]')) { const p = places[Number(t.closest('[data-place]').dataset.place)]; places = null; return set({ weather: p }); }
     if (t.closest('#clear-city')) return set({ weather: null });
@@ -176,7 +197,9 @@
     recording = false; set({ shortcut: [...parts, k].join('+') });
   });
 
-  A.on('patch', (p) => { Object.assign(S, p); if (p.settings || p.geo || (section === 'match' && p.match)) { if (!document.activeElement || document.activeElement.tagName !== 'INPUT' || document.activeElement.type === 'range') render(); } });
+  let lastAddonSig = '';
+  const addonSig = () => JSON.stringify(Object.values(S.addons || {}).map((a) => [a.up, a.installed, a.launching, a.version]));
+  A.on('patch', (p) => { Object.assign(S, p); if (p.settings || p.geo || (section === 'match' && p.match) || (section === 'addons' && p.addons && addonSig() !== lastAddonSig)) { if (!document.activeElement || document.activeElement.tagName !== 'INPUT' || document.activeElement.type === 'range') render(); } });
   A.on('theme', (t) => applyTheme());
   A.on('section', (s) => { section = s; render(); });
   function applyTheme() { const t = S.settings.theme; const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches); document.documentElement.dataset.theme = dark ? 'dark' : 'light'; }

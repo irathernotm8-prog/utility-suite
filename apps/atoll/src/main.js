@@ -16,6 +16,7 @@ const { Media } = require('./modules/media');
 const { MatchWatch } = require('./modules/match');
 const { Shelf } = require('./modules/shelf');
 const { Glance } = require('./modules/glance');
+const { Addons } = require('./addons');
 const touchline = require('./touchline');
 const crests = require('./touchline/images');
 const { getJson, getBuffer } = require('./touchline/vendor/http');
@@ -30,7 +31,7 @@ crests.registerScheme();
 process.on('uncaughtException', (e) => { console.error('[atoll] uncaught', (e && e.stack) || e); try { fs.appendFileSync(path.join(app.getPath('userData'), 'atoll.log'), `${new Date().toISOString()} ${(e && e.stack) || e}\n`); } catch (_) {} });
 process.on('unhandledRejection', (e) => { console.error('[atoll] unhandled', (e && e.stack) || e); if (process.env.ATOLL_E2E) require('fs').appendFileSync('/tmp/atoll-dbg.log', String((e && e.stack) || e) + '\n'); });
 
-let store, island, settingsWin = null, tray = null, timers, media, match, shelf, glance, quitting = false, persistTimer = null;
+let store, island, settingsWin = null, tray = null, timers, media, match, shelf, glance, addons, quitting = false, persistTimer = null;
 const settings = () => store.settings();
 
 // ---------------------------------------------------------------- push to windows
@@ -39,7 +40,7 @@ function patch(p) { for (const w of windows()) w.webContents.send('atoll:patch',
 function snapshot() {
   return {
     settings: settings(), geo: island?.geo || null, version: app.getVersion(), platform: process.platform, demo: DEMO,
-    timers: timers.snapshot(), media: media.snapshot(), match: match.snapshot(), shelf: shelf.snapshot(), glance: glance.snapshot(),
+    timers: timers.snapshot(), media: media.snapshot(), match: match.snapshot(), shelf: shelf.snapshot(), glance: glance.snapshot(), addons: addons.snapshot(),
     displays: screen.getAllDisplays().map((d, i) => ({ id: d.id, label: d.label || (d.internal ? 'Built-in display' : `Display ${i + 1}`), primary: d.id === screen.getPrimaryDisplay().id, size: `${d.size.width}×${d.size.height}` }))
   };
 }
@@ -101,7 +102,17 @@ function setupModules() {
   glance.on('sys', () => patch({ glance: glance.snapshot() }));
 
   if (DEMO && process.env.ATOLL_DEMO_SEED) seedDemo();
-  media.start(); match.start(); shelf.watch(); shelf.prune(); glance.start();
+  // add-ons: Docket, Scene, Beam, Vitals and Relay through the Utility Suite link (all off until turned on)
+  addons = new Addons({ enabled: () => settings().addons, demo: !!process.env.ATOLL_ADDON_DEMO });
+  let addonT = null;
+  addons.on('change', () => { if (addonT) return; addonT = setTimeout(() => { addonT = null; patch({ addons: addons.snapshot() }); }, 120); });
+  addons.on('moment', (m) => {
+    const s = settings();
+    if (m.kind === 'meeting' && s.meetingPrompt) burst({ kind: 'meeting', meeting: m.meeting });
+    if (m.kind === 'mail' && s.mailBurst) burst({ kind: 'mail', mail: m.mail });
+  });
+
+  media.start(); match.start(); shelf.watch(); shelf.prune(); glance.start(); addons.sync();
 }
 
 function persistSoon() { clearTimeout(persistTimer); persistTimer = setTimeout(() => store.setState({ timers: timers.serialize() }), 400); }
@@ -212,6 +223,7 @@ const API = {
     if ('display' in p) { island.watchCursor(); }
     if ('style' in p || 'display' in p || 'notchWidth' in p) island.relayout();
     if ('theme' in p) { nativeTheme.themeSource = next.theme; settingsChrome(); }
+    if ('addons' in p) addons.sync();
     if ('macPlayers' in p) media.poll();
     patch({ settings: settings(), geo: island.geo });
     return settings();
@@ -241,6 +253,12 @@ const API = {
   },
   clipCopy: (id) => shelf.copy(id), clipForget: (id) => shelf.forgetClip(id), clipClear: () => shelf.clearClips(),
 
+  // add-ons
+  addonCall: (id, name, ...args) => addons.call(id, name, ...args),
+  addonLaunch: (id) => addons.launch(id),
+  beamClipboard: async (peerId) => { const t = await shelf.read(); if (!t) throw new Error('Nothing copied to send'); return addons.call('beam', 'sendText', peerId, t); },
+  beamShelf: async (peerId) => { const paths = shelf.items.map((i) => i.path); if (!paths.length) throw new Error('The shelf is empty'); await addons.call('beam', 'send', peerId, paths); return paths.length; },
+
   // glance
   places: (q) => glance.searchPlaces(q), weatherRefresh: () => glance.loadWeather(),
   openExternal: (u) => { if (/^https:\/\//.test(String(u))) shell.openExternal(u); },
@@ -264,7 +282,7 @@ ipcMain.on('atoll:drag', (e, id) => {
 app.on('second-instance', () => openSettings());
 app.on('window-all-closed', () => { /* the island is the app; closing settings keeps Atoll running */ });
 app.on('before-quit', () => { quitting = true; try { store.setState({ timers: timers.serialize() }); } catch (_) {} });
-app.on('will-quit', () => { globalShortcut.unregisterAll(); stopShells(); media?.stop(); match?.stop(); shelf?.stop(); glance?.stop(); timers?.dispose(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); stopShells(); media?.stop(); match?.stop(); shelf?.stop(); glance?.stop(); addons?.stop(); timers?.dispose(); });
 
 app.whenReady().then(() => {
   if (IS_MAC) app.dock?.hide();

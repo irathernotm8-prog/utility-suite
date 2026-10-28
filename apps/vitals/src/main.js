@@ -49,8 +49,30 @@ const kv = { data: null, load() { this.data = this.data || readJson('state.json'
 const send = (ch, d) => { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.send('vitals:' + ch, d); };
 
 // ---------------------------------------------------------------- live data
+// ---------------------------------------------------------------- Utility Suite link (Atoll's quick stats)
+const suitelink = require('./suitelink');
+let link = null;
+function linkStats(s) {
+  if (!s) return null;
+  const b = s.battery || null, th = s.thermal || {};
+  return { t: s.t, cpu: s.cpu ? Math.round(s.cpu.total) : null, mem: s.mem ? { pct: Math.round(s.mem.pct), used: s.mem.used, total: s.mem.total, pressure: s.mem.pressure || null } : null,
+    gpu: s.gpu && s.gpu.util != null ? { util: Math.round(s.gpu.util), name: s.gpu.name || null, temp: s.gpu.temp ?? null } : null,
+    temp: th.cpu ?? null, thermal: th.state || null, net: s.net ? { rx: s.net.rx, tx: s.net.tx } : null, disk: s.disk ? { read: s.disk.read, write: s.disk.write } : null,
+    battery: b ? { pct: b.pct ?? b.percent ?? null, charging: !!b.charging } : null, uptime: s.uptime };
+}
+function startLink() {
+  try {
+    link = suitelink.serve('vitals', { version: app.getVersion(), calls: {
+      stats: () => linkStats(sampler.last),
+      history: () => ({ cpu: sampler.history.cpu.slice(-60), mem: sampler.history.mem.slice(-60), gpu: sampler.history.gpu.slice(-60), temp: sampler.history.temp.slice(-60) }),
+      open: () => { showWindow(); return true; }
+    } });
+  } catch (_) { link = null; }
+}
+app.on('will-quit', () => { try { if (link) link.close(); } catch (_) {} });
+
 const sampler = new Sampler({
-  onTick: (s) => { send('tick', s); updateTray(s); hotWatch(s); if (wantProcs()) pushProcs(); },
+  onTick: (s) => { send('tick', s); updateTray(s); hotWatch(s); if (wantProcs()) pushProcs(); if (link && link.clients()) link.emit('tick', linkStats(s)); },
   getThermalState: () => { try { return isMac && powerMonitor.getCurrentThermalState ? powerMonitor.getCurrentThermalState() : null; } catch { return null; } }
 });
 let procSubs = 0, lastProcs = null, procBusy = false;
@@ -309,6 +331,7 @@ function menu() {
 }
 
 app.on('second-instance', showWindow);
+app.whenReady().then(() => startLink());
 app.whenReady().then(() => {
   nativeTheme.themeSource = settings().theme;
   registerIpc(); menu();

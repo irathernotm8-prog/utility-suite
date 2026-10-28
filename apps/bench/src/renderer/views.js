@@ -124,7 +124,7 @@ const Views = {
         </div>
       </div>
       <div class="conn-grid">
-        ${card('desktop', 'Claude app', 'The Claude desktop app, including tasks that run in the cloud while this computer is linked. Restart Claude after adding.', c.desktop)}
+        ${card('desktop', 'Claude app', `The Claude desktop app, including tasks that run in the cloud while this computer is linked.${c.desktop.store ? ' Found the Microsoft Store version; Bench writes the settings copy it reads.' : ''} Quit Claude fully (from the ${window.bench.platform === 'darwin' ? 'menu bar' : 'system tray'}) and reopen it after adding.`, c.desktop, c.desktop.json ? `<button class="link-btn" data-act="copy" data-text="${esc(c.desktop.json)}">${icon('copy', 13)}Copy the settings to paste yourself (Claude › Settings › Developer › Edit Config)</button>` : '')}
         ${card('code', 'Claude Code', c.code.installed ? 'Adds Bench to Claude Code for every project (user scope).' : 'Claude Code isn’t installed here; Bench adds itself to ~/.claude.json so it’s there when you install it.', c.code)}
         ${card('codex', 'Codex', 'Adds Bench to ~/.codex/config.toml (Codex CLI, IDE extension and app).', c.codex)}
       </div>

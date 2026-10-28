@@ -412,12 +412,31 @@ async function saveFromContextMenu({ wcId }) {
   toast(`Saved ${found.username || 'password'} for ${host} to your Vault`);
 }
 
+// Utility Suite link: tell Atoll the unread counts, and who the newest email is from when a count goes up.
+const suiteSeen = {};
+function suiteUnread(id, before, n) {
+  if (!relay.suitePush) return;
+  relay.suitePush('unread', state.accounts.filter(a => isMailAccount(a) || a.platform === 'chats').map(a => ({ id: a.id, name: a.name || a.email || a.service || '', email: a.email || '', platform: a.platform, service: a.service || null, color: a.color || null, unread: state.unread[a.id] || 0 })));
+  const a = accountById(id);
+  if (!isMailAccount(a) || before === undefined || n <= before) return;   // undefined: the count Relay found on loading
+  if (Date.now() - (suiteSeen[id] || 0) < 20000) return;
+  suiteSeen[id] = Date.now();
+  setTimeout(async () => {
+    try {
+      const it = await window.Briefing?.latest?.(a);
+      relay.suitePush('mail', { accountId: a.id, account: a.name || a.email || '', color: a.color || null, platform: a.platform, unread: n, from: it?.from || '', subject: it?.subject || (it?.raw ? String(it.raw).slice(0, 140) : ''), snippet: it?.snippet || '' });
+    } catch { relay.suitePush('mail', { accountId: a.id, account: a.name || a.email || '', color: a.color || null, platform: a.platform, unread: n, from: '', subject: '', snippet: '' }); }
+  }, 1500);
+}
+
 function updateUnread(id, title) {
   const m = String(title).match(/\((\d[\d,]*)\+?(?:\s+unread)?\)/i);
   let n = m ? parseInt(m[1].replace(/,/g, ''), 10) : 0;
   if (!n && accountById(id)?.service === 'slack' && /^[*!]\s/.test(String(title))) n = 1; // Slack: "* " unread, "! " mention
   if (state.unread[id] === n) return;
+  const before = state.unread[id];
   state.unread[id] = n;
+  suiteUnread(id, before, n);
   renderTabs();
   if (PLATFORMS[state.ui.platform]) renderSidebar();
   else if (state.ui.platform === 'home') window.Home?.onUnread?.();
@@ -1335,6 +1354,7 @@ async function boot() {
   // Warm up every account in the background so unread counts and notifications work.
   state.accounts.forEach((a, i) => setTimeout(() => ensureWebview(a).then(() => renderMain()), 600 + i * 900));
 
+  relay.onSuiteOpen?.((id) => { const a = accountById(id); if (a) { setPlatform(a.platform); selectAccount(id); } });
   relay.onMenu((cmd) => {
     if (cmd === 'settings') openSettings();
     else if (cmd === 'add-account') state.ui.platform === 'chats' ? openChatModal({}) : openAccountModal({ platform: PLATFORMS[state.ui.platform] ? state.ui.platform : 'gmail' });

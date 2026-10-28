@@ -45,3 +45,11 @@ Pull before starting work. Stay inside `apps/docket`; `tools/`, `suite.json` and
 - `npm test`: quick Node checks.
 - `DOCKET_USER_DATA=/tmp/d-ud DOCKET_HOME=/tmp/d-home npm start` gives a clean app and notes folder.
 - `DOCKET_FAKE_AUDIO=/path/to/speech.wav` makes Chromium use that file as the microphone (and on Linux as the call audio too, which exercises the echo check).
+
+## Utility Suite link (0.1.3)
+
+Docket now offers a few things to other suite apps (Atoll's add-ons) over the **Utility Suite link**: `src/suitelink.js`, a copy of `tools/suitelink.js` in the Utility Package. Keep it identical to that file; the Utility Package chat owns it. It's a Unix socket in `~/Library/Application Support/Utility Suite/link` (mode 0600) on a Mac and a per-user named pipe on Windows, so only this user's apps can reach it. Everything is in `src/main.js` under "Utility Suite link".
+
+- Offers: `status`, `start({title})`, `stop`, `pause`, `resume`, `mark`, `open`; events `status` (at most once a second, and on every start/stop/pause) and `detected` (a call started or ended).
+- Nothing changes when no other app is connected: events are only sent while something is listening.
+- If you rename or remove one of these, tell the Utility Package chat so Atoll keeps working.

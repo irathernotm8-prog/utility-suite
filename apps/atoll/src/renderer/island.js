@@ -57,11 +57,13 @@
   /** Which live activities exist right now, in the user's priority order. */
   function activities() {
     const out = [];
+    const r = rec(); if (r) out.push({ k: 'docket', r });
     for (const k of S.settings.priority.concat(['timers', 'match', 'media']).filter((v, i, a) => a.indexOf(v) === i)) {
       if (k === 'timers') { const l = leadTimer(); if (l) out.push({ k: 'timers', l }); }
       if (k === 'match') { const m = liveMatch(); if (m && (m.state === 'live' || (m.state === 'post' && Date.now() - Date.parse(m.kickoff) < 3.2 * 3600e3) || (m.state === 'pre' && Date.parse(m.kickoff) - Date.now() < 30 * 60e3))) out.push({ k: 'match', m }); }
       if (k === 'media') { const n = np(); if (n && n.state === 'playing') out.push({ k: 'media', n }); }
     }
+    const bl = beamLive(); if (bl.length) out.push({ k: 'beam', list: bl });
     if (dragging && !out.length) out.push({ k: 'drop' });
     return out;
   }
@@ -70,6 +72,8 @@
   function wings(a) {
     if (!a) return null;
     if (a.k === 'drop') return { l: `<span class="c-shelf">${icon('tray', 17)}</span>`, r: '<span class="sub">Drop</span>' };
+    if (a.k === 'docket') return { l: `<span class="recdot ${a.r.paused ? 'paused' : ''}"></span>`, mid: `<span class="sub ell">${esc(a.r.title || 'Taking notes')}</span>`, r: `<span class="val tnum" style="color:var(--red)">${a.r.paused ? 'Paused' : fmt(recElapsed(a.r) * 1000, false)}</span>` };
+    if (a.k === 'beam') { const p = beamPct(a.list); return { l: ring(p, 20, 'var(--shelf)', 2.6), mid: `<span class="sub ell">${a.list[0].dir === 'out' ? 'To' : 'From'} ${esc(a.list[0].peer || '')}</span>`, r: `<span class="val tnum" style="color:var(--shelf)">${Math.round(p * 100)}%</span>` }; }
     if (a.k === 'media') {
       const n = a.n;
       return { l: n.art ? `<img class="art-sm" src="${n.art}" alt="">` : `<span class="art-sm" style="display:grid;place-items:center;color:var(--media)">${icon('music', 13)}</span>`, mid: `<span class="sub ell">${esc(n.title)}</span>`, r: `<span class="eq ${n.state === 'playing' ? '' : 'paused'}"><i></i><i></i><i></i><i></i></span>` };
@@ -91,6 +95,8 @@
   }
   function bubbleHTML(a) {
     if (!a) return '';
+    if (a.k === 'docket') return '<span class="recdot"></span>';
+    if (a.k === 'beam') return ring(beamPct(a.list), 20, 'var(--shelf)', 2.6);
     if (a.k === 'media') return a.n.art ? `<img src="${a.n.art}" style="width:62%;height:62%;border-radius:5px;object-fit:cover">` : `<span class="c-media">${icon('music', 14)}</span>`;
     if (a.k === 'timers') { const l = a.l; if (l.kind === 'timer') return ring(l.t.state === 'done' ? 1 : timerLeft(l.t) / l.t.duration, 20, 'var(--timer)', 2.6); if (l.kind === 'focus') return ring(1 - focusLeft(l.f) / l.f.duration, 20, 'var(--focus)', 2.6); return `<span class="c-sky">${icon('stopwatch', 15)}</span>`; }
     if (a.k === 'match') return a.m.state === 'live' ? `<span class="val tnum" style="font-size:11px;font-weight:700">${a.m.home.score ?? 0}-${a.m.away.score ?? 0}</span>` : crest(a.m.home.logo);
@@ -144,13 +150,16 @@
       const m = b.match;
       return { ...base, w: 420, html: `<span style="color:var(--match)">${icon('whistle', 26)}</span><div class="grow"><div class="pk-t">${b.kind === 'kickoff' ? 'Kick-off' : 'Full-time'}</div><div class="pk-s ell">${esc(m.league?.name || '')}</div></div>${crest(m.home.logo, 'md')}<div class="score tnum">${b.kind === 'kickoff' ? 'v' : `${m.home.score ?? 0}–${m.away.score ?? 0}`}</div>${crest(m.away.logo, 'md')}`, ms: 6000 };
     }
+    if (b.kind === 'meeting') return { ...base, w: 440, html: `<div class="rec-ring idle sm">${icon('mic', 20)}</div><div class="grow"><div class="pk-t ell">${esc(b.meeting.app || 'A')} call started</div><div class="pk-s ell">${esc(b.meeting.title || 'Want Docket to take notes?')}</div></div><div class="pk-actions"><button class="btn sm" data-act="peekDismiss">Not now</button><button class="btn sm acc" style="--c:var(--red)" data-act="docket" data-cmd="start">Take notes</button></div>`, ms: 20000 };
+    if (b.kind === 'mail') { const m = b.mail; return { ...base, w: 420, html: `<div class="pk-art" style="display:grid;place-items:center;background:#1c1c1f;color:${esc(m.color || 'var(--sky)')};width:46px;height:46px">${icon('mail', 22)}</div><div class="grow"><div class="pk-t ell">${esc(m.from || 'New email')}</div><div class="pk-s ell">${esc(m.subject || m.account || '')}</div></div><span class="np-a" style="font-size:11px">${esc(m.account || '')}</span>`, ms: 6000 }; }
     return { ...base, w: 300, html: esc(b.label || ''), ms: 3000 };
   }
   function onBurst(b) {
     if (b.kind === 'timer' || b.kind === 'focus') sound(b.kind === 'timer' ? 'ring' : 'soft');
     if (b.kind === 'goal') sound('goal');
     if (b.kind === 'timer') ringing = b.id;
-    if (mode === 'open') { if (b.kind !== 'track') toast(b.kind === 'goal' ? `Goal! ${b.match.home.short} ${b.match.home.score}–${b.match.away.score} ${b.match.away.short}` : b.kind === 'timer' ? `${b.label} — done` : b.label || ''); if (b.kind === 'timer') renderView(); return; }
+    if (b.kind === 'meeting') sound('soft');
+    if (mode === 'open') { if (b.kind === 'meeting' || b.kind === 'mail') { toast(b.kind === 'meeting' ? `${b.meeting.app || 'A'} call started` : `Email from ${b.mail.from || b.mail.account || 'Relay'}`); return; } if (b.kind !== 'track') toast(b.kind === 'goal' ? `Goal! ${b.match.home.short} ${b.match.home.score}–${b.match.away.score} ${b.match.away.short}` : b.kind === 'timer' ? `${b.label} — done` : b.label || ''); if (b.kind === 'timer') renderView(); return; }
     burstQ.push(b); if (!burstNow) nextBurst();
   }
   function nextBurst() {
@@ -169,7 +178,7 @@
     const g = geo();
     if (mode === 'open') {
       const hh = notch() ? Math.max(g.notchHeight, 36) : 44;
-      const body = { home: 184, media: 196, timers: 214, match: 232, shelf: 214 }[view] || 184;
+      const body = { home: 184, media: 196, timers: 214, match: 232, shelf: 214, docket: 196, scene: 196, beam: 214, vitals: 206, relay: 214 }[view] || 184;
       return { w: notch() ? 660 : 640, h: hh + body, r: notch() ? 30 : 30, hh };
     }
     if (mode === 'peek' && burstNow) { const m = burstModel(burstNow); return { w: m.w, h: m.h, r: notch() ? 26 : 28 }; }
@@ -254,7 +263,7 @@
 
   // ---------------------------------------------------------------- panel header
   const VIEWS = [['home', 'home', 'Home'], ['media', 'music', 'Music'], ['timers', 'timer', 'Timers'], ['match', 'ball', 'Match'], ['shelf', 'tray', 'Shelf']];
-  const enabledViews = () => VIEWS.filter(([k]) => k === 'home' || mods()[k]).map(([k]) => k);
+  const enabledViews = () => VIEWS.filter(([k]) => k === 'home' || mods()[k]).map(([k]) => k).concat(ADDON_VIEWS.filter(([k]) => addonOn(k)).map(([k]) => k));
   let lastViewKey = '', lastHeadKey = '';
   /** What the current view shows, minus values that move on their own (song position, countdowns). */
   function viewKey() {
@@ -262,13 +271,15 @@
     const media = n ? [n.player, n.state, n.title, n.artist, n.album, n.art ? n.art.length : 0, n.canNext, n.canPrev, n.canSeek, Math.round(n.duration || 0)] : null;
     const vol = S.media?.volume ? [S.media.volume.volume, S.media.volume.muted] : null;
     const T = S.timers; const timers = T ? [T.list.map((t) => [t.id, t.state, t.label, t.duration, t.state === 'running' ? t.endsAt : t.left]), T.focus && [T.focus.phase, T.focus.running, T.focus.cycle, T.focus.endsAt], [T.watch.running, T.watch.before, T.watch.laps.length]] : null;
-    const parts = { media: [media, vol, S.media?.running, S.media?.error], timers, match: S.match, shelf: S.shelf, settings: S.settings, weather: S.glance?.weather };
-    const use = { home: ['media', 'timers', 'match', 'shelf', 'weather', 'settings'], media: ['media', 'settings'], timers: ['timers', 'settings'], match: ['match'], shelf: ['shelf', 'settings'] }[view] || [];
+    const dk = S.addons?.docket; const dst = dk?.data?.status;
+    const addonPart = (id) => { const a = S.addons?.[id]; if (!a) return null; return [a.up, a.installed, a.launching, id === 'docket' ? dst && [dst.recording, dst.paused, dst.title, dst.line, dst.detected && dst.detected.app] : a.data]; };
+    const parts = { media: [media, vol, S.media?.running, S.media?.error], timers, match: S.match, shelf: S.shelf, settings: S.settings, weather: S.glance?.weather, docket: addonPart('docket'), scene: addonPart('scene'), beam: [addonPart('beam'), beamPick, S.shelf?.items.length], vitals: addonPart('vitals'), relay: addonPart('relay') };
+    const use = { home: ['media', 'timers', 'match', 'shelf', 'weather', 'settings'], media: ['media', 'settings'], timers: ['timers', 'settings'], match: ['match'], shelf: ['shelf', 'settings'], docket: ['docket'], scene: ['scene'], beam: ['beam'], vitals: ['vitals'], relay: ['relay'] }[view] || [];
     return view + '|' + sub.timers + sub.match + '|' + JSON.stringify(use.map((k) => parts[k]));
   }
   function headKey() {
     const w = S.glance?.weather;
-    return JSON.stringify([view, pinned, enabledViews(), !!leadTimer(), liveMatch()?.state, np()?.state, S.shelf?.items.length, w && [w.temp, w.icon], geo().style, Math.floor(Date.now() / 60e3)]);
+    return JSON.stringify([view, pinned, enabledViews(), !!leadTimer(), liveMatch()?.state, np()?.state, S.shelf?.items.length, w && [w.temp, w.icon], geo().style, Math.floor(Date.now() / 60e3), !!rec(), beamLive().length, (ad('relay').data?.accounts || []).some((a) => a.unread && a.platform !== 'chats')]);
   }
   function renderHead() {
     lastHeadKey = headKey();
@@ -278,12 +289,16 @@
       if (k === 'match' && liveMatch()?.state === 'live') return '<span class="dot" style="--c:var(--match)"></span>';
       if (k === 'media' && np()?.state === 'playing') return '<span class="dot" style="--c:rgb(var(--art))"></span>';
       if (k === 'shelf' && S.shelf.items.length) return '<span class="dot" style="--c:var(--shelf)"></span>';
+      if (k === 'docket' && rec()) return '<span class="dot" style="--c:var(--red)"></span>';
+      if (k === 'beam' && beamLive().length) return '<span class="dot" style="--c:var(--shelf)"></span>';
+      if (k === 'relay' && (ad('relay').data?.accounts || []).some((a) => a.unread && a.platform !== 'chats')) return '<span class="dot" style="--c:var(--sky)"></span>';
       return '';
     };
+    const addonTabs = ADDON_VIEWS.filter(([k]) => addonOn(k)).map(([k, ic, label]) => `<button class="tab ${view === k ? 'on' : ''}" data-view="${k}" title="${label}">${icon(ic, 17)}${dot(k)}</button>`).join('');
     const tabs = `<div class="tabs">${vs.map(([k, ic, label]) => `<button class="tab ${view === k ? 'on' : ''}" data-view="${k}" title="${label}">${icon(ic, 17)}${dot(k)}</button>`).join('')}</div>`;
     const w = S.glance.weather;
     const wx = mods().weather && w ? `<span class="wx-ic ${w.icon}">${icon(w.icon, 15)}</span><span class="tnum">${w.temp}°</span>` : '';
-    const right = `<div class="head-r">${hw() ? `<span class="head-mid" style="flex:none;margin-right:6px">${wx}</span>` : ''}<button class="ib ${pinned ? 'on' : ''}" data-act="pin" title="${pinned ? 'Stays open · click to let it close' : 'Keep open'}">${icon(pinned ? 'pin' : 'pinOff', 16)}</button><button class="ib" data-act="settings" title="Settings">${icon('gear', 16)}</button></div>`;
+    const right = `<div class="head-r">${addonTabs ? `<div class="tabs addon-tabs">${addonTabs}</div>` : ''}${hw() && !addonTabs ? `<span class="head-mid" style="flex:none;margin-right:6px">${wx}</span>` : ''}<button class="ib ${pinned ? 'on' : ''}" data-act="pin" title="${pinned ? 'Stays open · click to let it close' : 'Keep open'}">${icon(pinned ? 'pin' : 'pinOff', 16)}</button><button class="ib" data-act="settings" title="Settings">${icon('gear', 16)}</button></div>`;
     const mid = hw() ? `<div class="grow"></div><div class="notchgap" style="--gapw:${geo().notchWidth}px"></div><div class="grow"></div>` : `<div class="head-mid tnum">${esc(clock())} ${esc(ampm())} · ${esc(dateStr())}${wx ? ` · ${wx}` : ''}</div>`;
     head.innerHTML = tabs + mid + right;
   }
@@ -291,7 +306,7 @@
   // ---------------------------------------------------------------- views
   function renderView(fresh = false) {
     if (mode !== 'open') return;
-    const fn = { home: vHome, media: vMedia, timers: vTimers, match: vMatch, shelf: vShelf }[view] || vHome;
+    const fn = { home: vHome, media: vMedia, timers: vTimers, match: vMatch, shelf: vShelf, docket: vDocket, scene: vScene, beam: vBeam, vitals: vVitals, relay: vRelay }[view] || vHome;
     const keepFocus = document.activeElement && viewEl.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' ? { id: document.activeElement.id, v: document.activeElement.value, s: document.activeElement.selectionStart } : null;
     lastViewKey = viewKey();
     viewEl.innerHTML = `<div class="view-in" ${fresh ? '' : 'style="animation:none"'}>${fn()}</div>`;
@@ -466,6 +481,95 @@
     if (view === 'match') renderView();
   }
 
+  // ---------------------------------------------------------------- add-ons (Docket, Scene, Beam, Vitals, Relay)
+  const ADDON_VIEWS = [['docket', 'mic', 'Docket'], ['scene', 'layers', 'Scene'], ['beam', 'send', 'Beam'], ['vitals', 'gauge', 'Vitals'], ['relay', 'mail', 'Relay']];
+  const addonOn = (id) => !!S.settings.addons?.[id];
+  const ad = (id) => (S.addons && S.addons[id]) || { up: false, installed: null, data: {} };
+  const rec = () => { const s = addonOn('docket') ? ad('docket').data?.status : null; return s && s.recording ? s : null; };
+  const recElapsed = (s) => (s.elapsed || 0) + (s.paused ? 0 : Math.max(0, (Date.now() - (s.at || Date.now())) / 1000));
+  const beamLive = () => (addonOn('beam') ? (ad('beam').data?.transfers || []).filter((t) => t.status === 'active') : []);
+  const beamPct = (list) => { const b = list.reduce((x, t) => x + (t.bytes || 0), 0), tot = list.reduce((x, t) => x + (t.total || 0), 0); return tot ? b / tot : 0; };
+
+  /** Shown in an add-on's view when its app isn't running. */
+  function notUp(id, ic, color) {
+    const s = ad(id), name = ADDON_VIEWS.find((v) => v[0] === id)[2];
+    const body = s.launching ? `Opening ${name}…` : s.installed === false ? `${name} isn’t installed on this computer. Add it from Utility Hub, then it shows up here.` : `${name} isn’t running. Atoll connects as soon as it opens.`;
+    return `<div class="nextup"><span style="color:${color}">${icon(ic, 30)}</span><div class="np-t">${esc(name)}</div><div class="np-a" style="max-width:380px">${esc(body)}</div>${s.installed !== false && !s.launching ? `<button class="btn acc" style="--c:${color}" data-act="addonLaunch" data-id="${id}">Open ${esc(name)}</button>` : ''}</div>`;
+  }
+
+  // ---- Docket
+  function vDocket() {
+    const s = ad('docket');
+    if (!s.up) return notUp('docket', 'mic', 'var(--red)');
+    const st = s.data.status || {};
+    if (st.recording) {
+      return `<div class="docket"><div class="rec-ring ${st.paused ? 'paused' : ''}">${icon('mic', 30)}</div>
+        <div class="grow"><div class="src" style="color:var(--red)"><span class="recdot ${st.paused ? 'paused' : ''}"></span>${st.paused ? 'Paused' : 'Taking notes'}</div>
+          <div class="t ell">${esc(st.title || 'Meeting')}</div><div class="big-time tnum disp" data-live="rec">${fmt(recElapsed(st) * 1000, false)}</div>
+          ${st.line ? `<div class="np-a ell" style="margin-top:4px">“${esc(st.line)}”</div>` : ''}
+          <div style="display:flex;gap:8px;margin-top:12px">${st.paused ? `<button class="btn" data-act="docket" data-cmd="resume">${icon('play', 12)} Resume</button>` : `<button class="btn" data-act="docket" data-cmd="pause">${icon('pause', 12)} Pause</button>`}<button class="btn" data-act="docket" data-cmd="mark">${icon('flag', 13)} Mark</button><button class="btn acc" style="--c:var(--red)" data-act="docket" data-cmd="stop">${icon('stop', 12)} Stop and summarize</button><button class="btn ghost" data-act="docket" data-cmd="open">Open Docket</button></div></div></div>`;
+    }
+    const det = st.detected;
+    return `<div class="docket"><div class="rec-ring idle">${icon('mic', 30)}</div><div class="grow">
+      ${det ? `<div class="src" style="color:var(--red)">${icon('video', 12)} ${esc(det.app || 'Call')} call detected</div><div class="t ell">${esc(det.title || 'Meeting in progress')}</div>` : `<div class="src">${icon('mic', 12)} Docket</div><div class="t">Not taking notes</div><div class="np-a">Docket transcribes on this computer and keeps one to-do list from every meeting.</div>`}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn acc" style="--c:var(--red)" data-act="docket" data-cmd="start">${icon('mic', 13)} ${det ? 'Take notes' : 'Start notes'}</button><button class="btn ghost" data-act="docket" data-cmd="open">Open Docket</button></div></div></div>`;
+  }
+
+  // ---- Scene
+  const SCENE_C = { amber: ['#ffb648', '#ff8a5c'], rose: ['#ff6f91', '#c86bff'], violet: ['#9d86ff', '#5b8cff'], blue: ['#4fa3ff', '#38d4e0'], teal: ['#2fd3c0', '#4fa3ff'], green: ['#56d67a', '#2fd3c0'], red: ['#ff5f5f', '#ffb648'], slate: ['#9aa3b5', '#6d7790'] };
+  function vScene() {
+    const s = ad('scene');
+    if (!s.up) return notUp('scene', 'layers', 'var(--timer)');
+    const l = s.data.list || { scenes: [] };
+    if (!l.scenes.length) return `<div class="nextup"><span style="color:var(--timer)">${icon('layers', 30)}</span><div class="np-t">No scenes yet</div><div class="np-a">Make one in Scene and it shows up here.</div><button class="btn" data-act="sceneOpen">Open Scene</button></div>`;
+    return `<div style="display:flex;flex-direction:column;height:100%;gap:8px"><div style="display:flex;align-items:center;gap:8px"><span class="np-a grow">${l.busy ? 'Switching…' : l.activeId ? `Now: <b style="color:var(--fg)">${esc((l.scenes.find((x) => x.id === l.activeId) || {}).name || '')}</b>` : 'Pick a scene to switch everything at once'}</span>${l.hasPrevious ? `<button class="btn sm" data-act="scenePrev">${icon('restart', 13)} Back to before</button>` : ''}<button class="btn sm ghost" data-act="sceneOpen">Open Scene</button></div>
+      <div class="scenes">${l.scenes.map((x) => { const c = SCENE_C[x.color] || SCENE_C.violet; return `<button class="scn ${x.id === l.activeId ? 'on' : ''}" data-act="sceneGo" data-id="${esc(x.id)}" style="--c:${c[0]};--c2:${c[1]}"><span class="sw">${esc((x.name || '?').slice(0, 1).toUpperCase())}</span><span class="ell">${esc(x.name)}</span>${x.id === l.activeId ? icon('check', 14) : ''}</button>`; }).join('')}</div></div>`;
+  }
+
+  // ---- Beam
+  let beamPick = null;
+  function vBeam() {
+    const s = ad('beam');
+    if (!s.up) return notUp('beam', 'send', 'var(--shelf)');
+    const peers = s.data.peers || [], tr = s.data.transfers || [];
+    const devIc = (p) => (p.dev === 'phone' ? 'phone' : p.dev === 'tablet' ? 'tablet' : p.dev === 'desktop' ? 'desktop' : 'laptop');
+    const files = S.shelf.items.length;
+    const pick = peers.find((p) => p.id === beamPick);
+    const devs = peers.length ? `<div class="peers">${peers.map((p) => `<div class="peer ${p.id === beamPick ? 'on' : ''}" data-act="beamPick" data-peer="${esc(p.id)}" title="Drop files here to send them to ${esc(p.name)}"><div class="pav">${icon(devIc(p), 24)}</div><div class="nm ell">${esc(p.name)}</div></div>`).join('')}</div>` : `<div class="dropzone" style="border-style:solid;border-color:transparent;background:rgba(255,255,255,.04)">${icon('send', 24)}<span>No devices nearby yet. Open Beam on your other computers, or scan its code with your phone.</span></div>`;
+    const bar = pick ? `<div class="beam-bar"><span class="np-a grow">Send to <b style="color:var(--fg)">${esc(pick.name)}</b>: drop files on it, or</span><button class="btn sm" data-act="beamClip">${icon('clipboard', 13)} What I copied</button><button class="btn sm" data-act="beamShelf" ${files ? '' : 'disabled'}>${icon('tray', 13)} Shelf files${files ? ` (${files})` : ''}</button></div>` : `<div class="beam-bar"><span class="np-a grow">${peers.length ? 'Drop files on a device to send them, or pick one for more.' : ''}</span><button class="btn sm ghost" data-act="beamOpen">Open Beam</button></div>`;
+    const list = tr.length ? `<div class="xfers">${tr.slice(0, 3).map((t) => { const pct = t.total ? Math.round((100 * t.bytes) / t.total) : 0; return `<div class="xfer"><span style="color:var(--shelf)">${icon(t.dir === 'out' ? 'send' : 'reveal', 14)}</span><span class="ell grow">${t.dir === 'out' ? 'To' : 'From'} ${esc(t.peer || '')}${t.label ? ` · ${esc(t.label)}` : ''}</span><span class="np-a tnum">${t.status === 'asking' ? 'Waiting for you in Beam' : t.status === 'waiting' ? 'Waiting for them' : `${pct}%`}</span><span class="meter" style="--c:var(--shelf);width:60px"><i style="width:${pct}%"></i></span></div>`; }).join('')}</div>` : '';
+    return `<div style="display:flex;flex-direction:column;height:100%;gap:8px">${devs}${bar}${list}</div>`;
+  }
+
+  // ---- Vitals
+  function spark(vals, color, max = 100) {
+    const v = (vals || []).slice(-40); if (v.length < 2) return '<svg class="spk"></svg>';
+    const w = 120, h = 30, step = w / (v.length - 1);
+    const pts = v.map((x, i) => `${(i * step).toFixed(1)},${(h - (Math.max(0, Math.min(max, x ?? 0)) / max) * (h - 2) - 1).toFixed(1)}`).join(' ');
+    return `<svg class="spk" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="0,${h} ${pts} ${w},${h}" fill="${color}" fill-opacity=".14" stroke="none"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  const bytes = (n) => { if (n == null) return '—'; const u = ['B', 'KB', 'MB', 'GB']; let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return `${n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1)} ${u[i]}`; };
+  function vVitals() {
+    const s = ad('vitals');
+    if (!s.up) return notUp('vitals', 'gauge', 'var(--match)');
+    const t = s.data.stats || {}, h = s.data.history || {};
+    const tile = (label, ic, val, unit, hist, color, sub = '') => `<div class="vt"><div class="card-h" style="margin:0 0 4px">${icon(ic, 13)} ${label}</div><div class="vv tnum"><b>${val == null ? '—' : val}</b>${val == null ? '' : `<small>${unit}</small>`}</div>${spark(hist, color)}<div class="np-a ell" style="font-size:11px">${sub}</div></div>`;
+    const temp = t.temp != null ? Math.round(t.temp) : t.gpu?.temp != null ? Math.round(t.gpu.temp) : null;
+    return `<div class="vitals">${tile('Processor', 'cpu', t.cpu, '%', h.cpu, '#64d2ff', t.thermal ? `Thermal: ${esc(t.thermal)}` : '')}${tile('Memory', 'memory', t.mem?.pct, '%', h.mem, '#bf5af2', t.mem ? `${bytes(t.mem.used)} of ${bytes(t.mem.total)}${t.mem.pressure && t.mem.pressure !== 'normal' ? ` · ${esc(t.mem.pressure)}` : ''}` : '')}${tile('Graphics', 'display', t.gpu?.util, '%', h.gpu, '#30d158', esc(t.gpu?.name || ''))}${tile('Temperature', 'gauge', temp, '°C', h.temp, '#ff9f0a', t.net ? `↓ ${bytes(t.net.rx)}/s · ↑ ${bytes(t.net.tx)}/s` : '')}
+      <div class="strip" style="grid-column:1/-1"><span class="st">${icon('gauge', 14)} Live from Vitals${t.uptime ? ` · up ${Math.floor(t.uptime / 3600)} h` : ''}</span><span class="grow"></span><button class="btn sm ghost" data-act="vitalsOpen">Open Vitals</button></div></div>`;
+  }
+
+  // ---- Relay
+  function vRelay() {
+    const s = ad('relay');
+    if (!s.up) return notUp('relay', 'mail', 'var(--sky)');
+    const acc = (s.data.accounts || []).filter((a) => a.platform !== 'chats' || a.unread);
+    const recent = s.data.recent || [];
+    const chips = acc.length ? `<div class="accts">${acc.map((a) => `<button class="acct" data-act="relayOpen" data-id="${esc(a.id)}"><span class="cdot" style="background:${esc(a.color || '#64d2ff')}"></span><span class="ell">${esc(a.name || a.email || a.platform)}</span>${a.unread ? `<b class="tnum">${a.unread > 999 ? '999+' : a.unread}</b>` : ''}</button>`).join('')}</div>` : '<div class="np-a">No inboxes in Relay yet.</div>';
+    const list = recent.length ? `<div class="mails">${recent.slice(0, 8).map((m) => `<div class="mail" data-act="relayOpen" data-id="${esc(m.accountId)}"><span class="cdot" style="background:${esc(m.color || '#64d2ff')}"></span><div class="grow"><div class="ell"><b>${esc(m.from || m.account || 'New email')}</b> <span class="np-a">· ${esc(m.account || '')}</span></div><div class="np-a ell">${esc(m.subject || 'New message')}</div></div><span class="ago">${ago(m.at || Date.now())}</span></div>`).join('')}</div>` : '<div class="empty" style="padding:8px">New email shows here as it arrives while Relay is open.</div>';
+    return `<div style="display:flex;flex-direction:column;height:100%;gap:8px"><div style="display:flex;align-items:flex-start;gap:8px">${chips}<span class="grow"></span><button class="btn sm ghost" data-act="relayOpen">Open Relay</button></div>${list}</div>`;
+  }
+
   // ---- shelf
   function vShelf() {
     const items = S.shelf.items, clips = S.shelf.clips;
@@ -486,13 +590,14 @@
 
   // ---------------------------------------------------------------- ticking
   function tick() {
-    if (mode === 'compact') { const a = activities()[0]; if (a && (a.k === 'timers' || a.k === 'match') || (!a && !notch())) layout(); }
+    if (mode === 'compact') { const a = activities()[0]; if (a && (a.k === 'timers' || a.k === 'match' || a.k === 'docket' || a.k === 'beam') || (!a && !notch())) layout(); }
     if (mode !== 'open') return;
     for (const el of viewEl.querySelectorAll('[data-live]')) {
       const k = el.dataset.live;
       if (k === 'timer') { const t = S.timers.list.find((x) => x.id === el.dataset.id); if (t) { el.textContent = t.state === 'done' ? 'Done' : fmt(timerLeft(t)); const r = el.closest('.trow, .card')?.querySelector('.ring .bar'); if (r && t.state !== 'done') setRing(r, timerLeft(t) / t.duration); } }
       else if (k === 'focus' && S.timers.focus) { el.textContent = fmt(focusLeft(S.timers.focus)); const r = el.closest('.ring, .card')?.querySelector('.bar'); if (r) setRing(r, 1 - focusLeft(S.timers.focus) / S.timers.focus.duration); }
       else if (k === 'watch') el.innerHTML = fmtWatch(watchMs());
+      else if (k === 'rec') { const r = rec(); if (r) el.textContent = fmt(recElapsed(r) * 1000, false); }
       else if (S.media.now) {
         const n = S.media.now, p = mediaPos(), pct = n.duration ? (p / n.duration) * 100 : 0;
         if (k === 'mbar' || k === 'mfill') { if (!seeking) el.style.width = `${pct}%`; }
@@ -563,7 +668,7 @@
   });
   cmp.addEventListener('click', () => open(defaultView()));
   bubble.addEventListener('click', () => { const k = bubble.dataset.k; open(k === 'timers' ? 'timers' : k === 'match' ? 'match' : k === 'media' ? 'media' : 'home'); });
-  peekEl.addEventListener('click', (e) => { if (e.target.closest('[data-act]')) return; const b = burstNow; if (!b) return; open(b.kind === 'goal' || b.kind === 'kickoff' || b.kind === 'fulltime' ? 'match' : b.kind === 'track' ? 'media' : 'timers'); });
+  peekEl.addEventListener('click', (e) => { if (e.target.closest('[data-act]')) return; const b = burstNow; if (!b) return; open(b.kind === 'goal' || b.kind === 'kickoff' || b.kind === 'fulltime' ? 'match' : b.kind === 'track' ? 'media' : b.kind === 'meeting' ? 'docket' : b.kind === 'mail' ? 'relay' : 'timers'); });
   function defaultView() { const a = activities()[0]; if (!a) return 'home'; return a.k === 'timers' ? 'timers' : a.k; }
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (mode === 'peek') stopBurst(); else close(); } });
 
@@ -600,9 +705,22 @@
       case 'clipClear': return A.call('clipClear');
       case 'clipOn': return A.call('setSettings', { clipboard: true });
       case 'settings': A.call('openSettings', el.dataset.section || null); return close();
+      case 'addonLaunch': try { await A.call('addonLaunch', el.dataset.id); } catch (err) { toast(errMsg(err)); } return;
+      case 'peekDismiss': return nextBurst();
+      case 'docket': { if (mode === 'peek') nextBurst(); try { await A.call('addonCall', 'docket', el.dataset.cmd); if (el.dataset.cmd === 'start') toast('Docket is taking notes'); } catch (err) { toast(errMsg(err)); } return; }
+      case 'sceneGo': try { toast('Switching…'); const r = await A.call('addonCall', 'scene', 'activate', id); if (r && r.ok === false) toast(r.error || 'Scene couldn’t finish switching'); } catch (err) { toast(errMsg(err)); } return;
+      case 'scenePrev': try { await A.call('addonCall', 'scene', 'previous'); } catch (err) { toast(errMsg(err)); } return;
+      case 'sceneOpen': return A.call('addonCall', 'scene', 'open').catch((err) => toast(errMsg(err)));
+      case 'beamPick': beamPick = beamPick === el.dataset.peer ? null : el.dataset.peer; return renderView();
+      case 'beamClip': try { await A.call('beamClipboard', beamPick); toast('Sent what you copied'); } catch (err) { toast(errMsg(err)); } return;
+      case 'beamShelf': try { const n = await A.call('beamShelf', beamPick); toast(`Sending ${n} file${n === 1 ? '' : 's'}`); } catch (err) { toast(errMsg(err)); } return;
+      case 'beamOpen': return A.call('addonCall', 'beam', 'open').catch((err) => toast(errMsg(err)));
+      case 'vitalsOpen': return A.call('addonCall', 'vitals', 'open').catch((err) => toast(errMsg(err)));
+      case 'relayOpen': A.call('addonCall', 'relay', 'open', el.dataset.id || null).catch((err) => toast(errMsg(err))); return close();
       default: return null;
     }
   }
+  const errMsg = (e) => String((e && e.message) || e).replace(/^Error invoking remote method 'atoll': (Error: )?/, '');
   async function addTimer() {
     const t = $('#t-time'), l = $('#t-label');
     const text = (t?.value || '').trim(); if (!text) { t?.focus(); return; }
@@ -657,12 +775,14 @@
 
   // files dragged onto the island
   const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
-  window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragging++; px = e.clientX; py = e.clientY; rehit(); isl.classList.add('dragging'); if (dragging === 1 && mods().shelf) { clearTimeout(leaveT); if (mode !== 'open') { view = 'shelf'; open('shelf'); } else if (view !== 'shelf') { view = 'shelf'; renderHead(); renderView(); layout(); } } });
-  window.addEventListener('dragover', (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+  window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragging++; px = e.clientX; py = e.clientY; rehit(); if (!(mode === 'open' && view === 'beam')) isl.classList.add('dragging'); if (dragging === 1 && mods().shelf && !(mode === 'open' && view === 'beam')) { clearTimeout(leaveT); if (mode !== 'open') { view = 'shelf'; open('shelf'); } else if (view !== 'shelf') { view = 'shelf'; renderHead(); renderView(); layout(); } } else clearTimeout(leaveT); });
+  window.addEventListener('dragover', (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; const p = e.target.closest && e.target.closest('[data-peer]'); viewEl.querySelectorAll('.peer.drop').forEach((x) => { if (x !== p) x.classList.remove('drop'); }); if (p) p.classList.add('drop'); } });
   window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; dragging = Math.max(0, dragging - 1); if (!dragging) isl.classList.remove('dragging'); });
   window.addEventListener('drop', async (e) => {
     e.preventDefault(); dragging = 0; isl.classList.remove('dragging');
     const paths = Array.from(e.dataTransfer?.files || []).map((f) => A.pathFor(f)).filter(Boolean);
+    const peer = e.target.closest && e.target.closest('[data-peer]');
+    if (peer && paths.length) { try { await A.call('addonCall', 'beam', 'send', peer.dataset.peer, paths); toast(`Sending ${paths.length} file${paths.length === 1 ? '' : 's'}`); } catch (err) { toast(errMsg(err)); } return; }
     if (paths.length) { const n = await A.call('shelfAdd', paths); toast(n ? `${n} on the shelf` : 'Already on the shelf'); }
   });
 
@@ -674,7 +794,7 @@
     if (p.media?.now?.art) artColor(p.media.now.art);
     if (mode === 'open') {
       const activeInput = document.activeElement && document.activeElement.tagName === 'INPUT' && viewEl.contains(document.activeElement);
-      const rel = { timers: ['timers'], media: ['media'], match: ['match'], shelf: ['shelf', 'settings'], home: ['timers', 'media', 'match', 'glance', 'shelf'] }[view] || [];
+      const rel = { timers: ['timers'], media: ['media'], match: ['match'], shelf: ['shelf', 'settings'], home: ['timers', 'media', 'match', 'glance', 'shelf'], docket: ['addons'], scene: ['addons'], beam: ['addons', 'shelf'], vitals: ['addons'], relay: ['addons'] }[view] || [];
       // Only redraw when something you can see changed. Song position, the clock and live numbers are moved in place
       // by tick(); redrawing the whole view for them made the island flicker (worst on Windows, where the media
       // timeline reports often).

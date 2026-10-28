@@ -12,6 +12,7 @@ if (!process.env.SCENE_E2E && !app.requestSingleInstanceLock()) { app.exit(0); }
 const P = require('./core/plan');
 const { Engine } = require('./core/engine');
 const templates = require('./core/templates');
+const suitelink = require('./suitelink');
 const { Store } = require('./store');
 const { run: runCmd, stopShells } = require('./platform/run');
 
@@ -108,6 +109,7 @@ async function activate(id, { trigger = 'manual' } = {}) {
   store.addHistory(h);
   send('switched', { result: { ok: res.ok, ms: res.ms, warn: res.warn, missed: res.missed, error: res.error }, state: store.state(), scenes: store.scenes(), history: store.history().slice(0, 30) });
   updateTray();
+  if (link) link.emit('switched', linkScenes());
   if (showHud && switcher && !switcher.isDestroyed()) setTimeout(() => { if (switcher && !switcher.isDestroyed() && switcherMode === 'hud') switcher.hide(); }, res.ok ? 1400 : 4000);
   if (res.warn && res.warn.includes('accessibility')) send('need-access', true);
   return res;
@@ -389,8 +391,27 @@ function menu() {
 }
 
 app.on('second-instance', showWindow);
+
+// ---------------------------------------------------------------- Utility Suite link (Atoll switches scenes from the island)
+let link = null;
+function linkScenes() {
+  const st = store.state();
+  return { scenes: store.scenes().map((s) => ({ id: s.id, name: s.name, color: s.color || null, glyph: s.glyph || null, lastUsed: s.lastUsed || null })), activeId: st.activeId || null, hasPrevious: !!st.previous, busy: !!(engine && engine.busy) };
+}
+function startLink() {
+  try {
+    link = suitelink.serve('scene', { version: app.getVersion(), calls: {
+      list: () => linkScenes(),
+      activate: async (id) => { const r = await activate(String(id), { trigger: 'atoll' }); return { ok: r.ok, ms: r.ms, error: r.error || null }; },
+      previous: async () => { const r = await activate('previous', { trigger: 'atoll' }); return { ok: r.ok }; },
+      open: () => { showWindow(); return true; }
+    } });
+  } catch (_) { link = null; }
+}
+app.on('will-quit', () => { try { if (link) link.close(); } catch (_) {} });
 app.whenReady().then(() => {
   store = new Store(app.getPath('userData'));
+  startLink();
   nativeTheme.themeSource = store.settings().theme;
   if (isWin && !DEMO) platform.setConverters({ toDip: (r) => screen.screenToDipRect(null, r), toScreen: (r) => screen.dipToScreenRect(null, r) });
   engine = new Engine({ platform, displays, openDefault, keepAwake, appIndex, settings: () => store.settings() });

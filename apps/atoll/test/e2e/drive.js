@@ -123,6 +123,63 @@ module.exports = async function drive({ app, island, openSettings, settingsWin, 
     sw.close();
 
     // a notched MacBook
+
+    // ---------------------------------------------------------------- add-ons, against pretend copies of the apps
+    {
+      const L = require('../../src/suitelink');
+      const calls = [];
+      let recState = { recording: false, paused: false, elapsed: 0, at: Date.now(), title: '', line: '', detected: null };
+      const docket = L.serve('docket', { version: '0.1.3', calls: { status: () => recState, start: (o) => { calls.push('docket.start'); recState = { ...recState, recording: true, elapsed: 0, at: Date.now(), title: 'Weekly sync with Infinity', line: 'so the Q4 budget moves to paid social', detected: null }; setTimeout(() => docket.emit('status', recState), 50); return true; }, stop: () => { calls.push('docket.stop'); recState = { ...recState, recording: false }; docket.emit('status', recState); return true; }, pause: () => true, resume: () => true, mark: () => true, open: () => true } });
+      const scenes = { scenes: [{ id: 'work', name: 'Work', color: 'blue' }, { id: 'match', name: 'Match day', color: 'green' }, { id: 'edit', name: 'Editing', color: 'rose' }, { id: 'game', name: 'Gaming', color: 'violet' }, { id: 'focus', name: 'Deep focus', color: 'amber' }], activeId: 'work', hasPrevious: true, busy: false };
+      const scene = L.serve('scene', { version: '0.1.2', calls: { list: () => scenes, activate: (id) => { calls.push('scene.activate:' + id); scenes.activeId = id; scene.emit('switched', scenes); return { ok: true, ms: 840 }; }, previous: () => ({ ok: true }), open: () => true } });
+      const peers = [{ id: 'pc', name: 'Studio PC', os: 'windows', dev: 'desktop' }, { id: 'air', name: 'MacBook Air', os: 'mac', dev: 'laptop' }, { id: 'phone', name: 'Pixel 9', os: 'android', dev: 'phone' }, { id: 'ipad', name: 'iPad', os: 'ios', dev: 'tablet' }];
+      let transfers = [];
+      const beam = L.serve('beam', { version: '0.1.3', calls: { peers: () => peers, transfers: () => transfers, send: (id, paths) => { calls.push(`beam.send:${id}:${paths.length}`); transfers = [{ tid: 't1', dir: 'out', status: 'active', peer: peers.find((p) => p.id === id).name, bytes: 3.1e9, total: 5.2e9, kind: 'files', label: 'match-highlights.mov +2' }]; beam.emit('transfers', transfers); return true; }, sendText: (id, t) => { calls.push('beam.text:' + id); return true; }, open: () => true } });
+      let n = 0; const hist = { cpu: [], mem: [], gpu: [], temp: [] };
+      const stat = () => { n++; const cpu = Math.round(28 + 18 * Math.sin(n / 3) + 6 * Math.random()); return { t: Date.now(), cpu, mem: { pct: 61, used: 19.6e9, total: 32e9, pressure: 'normal' }, gpu: { util: Math.round(40 + 25 * Math.sin(n / 4)), name: 'NVIDIA GeForce RTX 4070', temp: 58 }, temp: 64, thermal: 'nominal', net: { rx: 2.4e6, tx: 3.1e5 }, disk: { read: 1.2e6, write: 4e5 }, uptime: 3 * 86400 }; };
+      for (let i = 0; i < 40; i++) { const s0 = stat(); hist.cpu.push(s0.cpu); hist.mem.push(60 + (i % 5)); hist.gpu.push(s0.gpu.util); hist.temp.push(60 + (i % 7)); }
+      const vitals = L.serve('vitals', { version: '0.2.1', calls: { stats: () => stat(), history: () => hist, open: () => true } });
+      const vt = setInterval(() => vitals.emit('tick', stat()), 2000);
+      const relay = L.serve('relay', { version: '2.0.1', calls: { unread: () => [{ id: 'g', name: 'Lyte Fiber', platform: 'gmail', color: '#ea4335', unread: 12 }, { id: 'o', name: 'Personal', platform: 'outlook', color: '#0a84ff', unread: 3 }, { id: 'y', name: 'Side projects', platform: 'gmail', color: '#30d158', unread: 0 }], recent: () => [{ accountId: 'g', account: 'Lyte Fiber', color: '#ea4335', from: 'Infinity Marketing', subject: 'Search audit: week 3 findings', at: Date.now() - 6 * 60e3 }, { accountId: 'o', account: 'Personal', color: '#0a84ff', from: 'Kiana', subject: 'Dinner Friday?', at: Date.now() - 50 * 60e3 }, { accountId: 'g', account: 'Lyte Fiber', color: '#ea4335', from: 'GA4', subject: 'Your weekly property summary', at: Date.now() - 3 * 3600e3 }], open: (id) => { calls.push('relay.open:' + id); return true; } } });
+
+      await js('window.__atoll.close()'); timers.list.slice().forEach((t) => timers.remove(t.id)); match.clear();
+      API.setSettings({ style: 'float', addons: { docket: true, scene: true, beam: true, vitals: true, relay: true } });
+      await sleep(1500);
+      const snap = API.state().addons;
+      check('add-ons connect to every running app', ['docket', 'scene', 'beam', 'vitals', 'relay'].every((id) => snap[id].up), ['docket', 'scene', 'beam', 'vitals', 'relay'].map((id) => `${id}:${snap[id].up}`).join(' '));
+      for (const v of ['docket', 'scene', 'beam', 'vitals', 'relay']) { await js(`window.__atoll.open('${v}')`); await sleep(650); await shot(`addon-${v}`); check(`add-on view: ${v}`, await js(`window.__atoll.view === '${v}' && !document.querySelector('#view .nextup .btn.acc')`)); }
+      await js("window.__atoll.open('scene')"); await sleep(500);
+      await js("document.querySelector('[data-act=sceneGo][data-id=match]').click()"); await sleep(500);
+      check('picking a scene switches it in Scene', calls.includes('scene.activate:match'));
+      await js("window.__atoll.open('scene')"); await sleep(400); await shot('addon-scene-switched');
+      await js("window.__atoll.open('beam')"); await sleep(300); await js("document.querySelector('[data-peer=pc]').click()"); await sleep(300); await shot('addon-beam-picked');
+      await js("document.querySelector('[data-act=beamShelf]').click()"); await sleep(600);
+      check('shelf files go to the picked device through Beam', calls.some((c) => c.startsWith('beam.send:pc:')));
+      await js("window.__atoll.open('beam')"); await sleep(400); await shot('addon-beam-sending');
+      await js("window.__atoll.open('relay')"); await sleep(300); await js("document.querySelector('.mail[data-act=relayOpen]').click()"); await sleep(400);
+      check('clicking an email opens that inbox in Relay', calls.includes('relay.open:g'));
+      // moments: a call starts, take notes from the island, new email
+      await js('window.__atoll.close()'); await sleep(700);
+      docket.emit('detected', { app: 'Zoom', title: 'Weekly sync with Infinity' }); await sleep(900);
+      await shot('addon-peek-meeting');
+      check('a call starting asks to take notes', await js("window.__atoll.mode === 'peek' && !!document.querySelector('#peek [data-cmd=start]')"));
+      await js("document.querySelector('#peek [data-cmd=start]').click()"); await sleep(1200);
+      check('Take notes starts Docket', calls.includes('docket.start') && API.state().addons.docket.data.status.recording);
+      await sleep(1800); await shot('addon-compact-recording');
+      check('recording takes the island first', await js("!!document.querySelector('#compact .recdot')"));
+      await js("window.__atoll.open('docket')"); await sleep(700); await shot('addon-docket-recording'); await js('window.__atoll.close()'); await sleep(700);
+      relay.emit('mail', { accountId: 'o', account: 'Personal', color: '#0a84ff', from: 'Kiana', subject: 'Running 10 late, save me a seat' }); await sleep(900);
+      await shot('addon-peek-mail');
+      check('new email shows on the island', await js("window.__atoll.mode === 'peek' && document.querySelector('#peek').textContent.includes('Kiana')"));
+      await sleep(6500);
+      // turning them off puts Atoll back as it was
+      API.setSettings({ addons: { docket: false, scene: false, beam: false, vitals: false, relay: false } }); await sleep(600);
+      const noRec = await js("!document.querySelector('#compact .recdot')");
+      await js("window.__atoll.open('docket')"); await sleep(600);
+      check('with add-ons off, their tabs and activities are gone', noRec && await js("!document.querySelector('#head .addon-tabs') && window.__atoll.view === 'home'"));
+      await js('window.__atoll.close()'); await sleep(600);
+      clearInterval(vt); for (const x of [docket, scene, beam, vitals, relay]) x.close();
+    }
     // notch style: a real MacBook notch with ATOLL_FAKE_NOTCH=1, otherwise the notch-style tab Windows gets
     {
       const tag = process.env.ATOLL_FAKE_NOTCH ? 'notch' : 'tab';

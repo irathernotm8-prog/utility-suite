@@ -40,3 +40,11 @@ Pull before starting work. Stay inside `apps/beam`; `tools/`, `suite.json` and `
 - **Trust is id + key.** A trusted device whose key changes is treated as untrusted and flagged (`keyChanged`).
 - The window never touches Node; everything goes through `window.beam.call(...)` → the `api` table in `src/main.js`.
 - Settings, identity and history are JSON in `app.getPath('userData')`; received files go to the receive folder (default `~/Downloads/Beam`).
+
+## Utility Suite link (0.1.3)
+
+Beam now offers a few things to other suite apps (Atoll's add-ons) over the **Utility Suite link**: `src/suitelink.js`, a copy of `tools/suitelink.js` in the Utility Package. Keep it identical to that file; the Utility Package chat owns it. It's a Unix socket in `~/Library/Application Support/Utility Suite/link` (mode 0600) on a Mac and a per-user named pipe on Windows, so only this user's apps can reach it. Everything is in `src/main.js` under "Utility Suite link".
+
+- Offers: `peers`, `transfers`, `send(peerId, paths)`, `sendText(peerId, text)`, `open`; events `peers` and `transfers` (at most twice a second).
+- Nothing changes when no other app is connected: events are only sent while something is listening.
+- If you rename or remove one of these, tell the Utility Package chat so Atoll keeps working.

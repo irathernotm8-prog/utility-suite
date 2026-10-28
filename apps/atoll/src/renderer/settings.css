@@ -83,3 +83,7 @@ html[data-theme="light"] .hero { background: radial-gradient(120% 140% at 50% -2
 .err { color: var(--bad); font-size: 12.5px; }
 a { color: var(--acc); text-decoration: none; } a:hover { text-decoration: underline; }
 .crest { width: 22px; height: 22px; object-fit: contain; }
+
+.pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: var(--panel-2); color: var(--fg-2); border: 1px solid var(--line); }
+.pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); border-color: transparent; }
+.pill.warn { color: #ff9f0a; background: color-mix(in srgb, #ff9f0a 13%, transparent); border-color: transparent; }

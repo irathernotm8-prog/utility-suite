@@ -180,6 +180,60 @@ test('weather: codes, night icons, shaping an Open-Meteo answer', () => {
   assert.doesNotMatch(weatherUrl({ lat: 1, lon: 1 }, 'c'), /fahrenheit/);
 });
 
+test('suite link: calls, errors, events, reconnect after the app restarts, stale socket', async () => {
+  process.env.SUITELINK_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'atoll-link-'));
+  delete require.cache[require.resolve('../src/suitelink')];
+  const L = require('../src/suitelink');
+  let srv = L.serve('scene', { version: '9.9', calls: { list: () => ({ scenes: [{ id: 'w', name: 'Work' }] }), activate: (id) => { if (id === 'x') throw new Error('no such scene'); return { ok: true, id }; } } });
+  const c = L.connect('scene', { retryMs: 100 });
+  await new Promise((r) => c.once('up', r));
+  assert.equal(c.info.version, '9.9'); assert.deepEqual(c.info.calls, ['list', 'activate']);
+  assert.equal((await c.call('list')).scenes[0].name, 'Work');
+  await assert.rejects(c.call('activate', 'x'), /no such scene/);
+  await assert.rejects(c.call('nope'), /has no "nope"/);
+  const got = []; c.on('switched', (d) => got.push(d)); srv.emit('switched', { id: 'w' }); await sleep(50);
+  assert.deepEqual(got, [{ id: 'w' }]);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(srv.address).mode & 0o777, 0o600);
+  srv.close(); await new Promise((r) => c.once('down', r));
+  await assert.rejects(c.call('list'), /isn't running/);
+  fs.writeFileSync(L.address('scene'), '');   // a leftover from a crash
+  srv = L.serve('scene', { calls: { ping: () => 'pong' } });
+  await new Promise((r) => c.once('up', r));
+  assert.equal(await c.call('ping'), 'pong');
+  c.stop(); srv.close();
+});
+
+test('add-ons: off by default, connect when on, moments for meetings and mail, launch needs the app installed', async () => {
+  process.env.SUITELINK_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'atoll-addons-'));
+  delete require.cache[require.resolve('../src/suitelink')]; delete require.cache[require.resolve('../src/addons')];
+  const L = require('../src/suitelink');
+  const { Addons, installPaths } = require('../src/addons');
+  let on = {};
+  const H = new Addons({ enabled: () => on, exists: () => false, linkOptions: { retryMs: 100 } });
+  H.sync();
+  assert.equal(Object.keys(H.links).length, 0, 'nothing connects while every add-on is off');
+  const docket = L.serve('docket', { version: '0.1.3', calls: { status: () => ({ recording: false, detected: null }), start: () => true } });
+  const relay = L.serve('relay', { calls: { unread: () => [{ id: 'g', name: 'Work', unread: 3, platform: 'gmail' }], recent: () => [] } });
+  on = { docket: true, relay: true }; H.sync();
+  await sleep(400);
+  const snap = H.snapshot();
+  assert.equal(snap.docket.up, true); assert.equal(snap.docket.version, '0.1.3'); assert.equal(snap.relay.data.accounts[0].unread, 3); assert.equal(snap.scene.enabled, false);
+  const moments = []; H.on('moment', (m) => moments.push(m.kind));
+  docket.emit('detected', { app: 'Zoom', title: 'Standup' });
+  docket.emit('status', { recording: true, paused: false, elapsed: 12, at: Date.now() });
+  relay.emit('mail', { accountId: 'g', from: 'Kim', subject: 'Q4 numbers' });
+  await sleep(100);
+  assert.deepEqual(moments, ['meeting', 'docket-start', 'mail']);
+  assert.equal(H.snapshot().relay.data.recent[0].from, 'Kim');
+  assert.equal(await H.call('docket', 'start'), true);
+  await assert.rejects(H.call('scene', 'list'), /isn’t running/);
+  assert.throws(() => { on.scene = true; H.sync(); H.launch('scene'); }, /isn’t installed/);
+  on = {}; H.sync(); assert.equal(Object.keys(H.links).length, 0);
+  docket.close(); relay.close();
+  assert.match(installPaths('beam', { platform: 'darwin', home: '/Users/b' })[0], /\/Applications\/Beam\.app$/);
+  assert.match(installPaths('beam', { platform: 'win32', env: { LOCALAPPDATA: 'C:\\L' }, home: 'C:\\U' })[0], /Programs.Utility Suite.Beam.Beam\.exe$/);
+});
+
 test('settings: defaults merge, nested modules and focus keep the rest', () => {
   const s = new Store(tmp());
   assert.equal(s.settings().style, DEFAULTS.style);

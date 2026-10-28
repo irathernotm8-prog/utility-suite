@@ -18,6 +18,7 @@
 - User data lives outside the app, in `app.getPath('userData')` or the app's data folder (Relay Files, Onward Files, Slate's Statements).
 - Keep `productName`, `build.appId` and `build/icon.png` stable, `electron-builder` in `devDependencies`, and `package-lock.json` current.
 - Native modules are fine; tell the Utility Package chat when you add a new one so Windows cross-builds get checked.
+- `src/suitelink.js` (Atoll, Docket, Scene, Beam, Vitals, Relay) is a copy of `tools/suitelink.js`, the Utility Suite link that lets apps talk to each other. Don't edit the copy; ask the Utility Package chat, which changes `tools/suitelink.js` and copies it to every app. Each app's handoff lists what it offers on the link.
 
 ## Apps and their handoffs
 
