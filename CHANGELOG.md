@@ -2,6 +2,8 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-27 20:20 — **Bench 0.1.0** — First release: a desktop workspace for Claude to test apps. Sandbox desks run apps on this computer with their own data, out of sight, many at once. Mac and Linux VMs (Tart, Apple Silicon), Windows Sandbox and any VNC computer give clean desktops. A live view lets you watch Claude work (and take over). Smoke-test the whole suite in parallel, run every app's tests side by side, and keep findings with screenshots and logs. The Claude/Codex plugin can launch apps (installed or from source), see their windows, click, type, use menus, answer file dialogs, read console errors and crashes, run commands and file bugs.
+- 2026-10-27 20:20 — **Bench 0.1.0** (58 new) — Added to the Utility Package
 - 2026-10-27 16:48 — **Scene 0.1.1** — New icon in the same style as the rest of the suite: a glowing gold-to-rose screen with Scene's layout inside. The menu bar icon and the logo in the sidebar match.
 - 2026-10-27 16:45 — **Crate 0.1.3** — New retro visualizer, in the spirit of the old Windows Media Player ones: Bars, Ocean Mist, Fire Storm, Scope, Spiral Tunnel, Kaleidoscope, Swirl and Album Art. Press V or the wave button in the player; ← → to switch, F for full screen
 - 2026-10-27 21:35 — **Atoll 0.1.2** — Smoother on Windows: the island no longer resizes its window as it opens, closes or counts down, so the jitter is gone, and it only redraws what changed. Notch style now works on Windows too: a black tab flush with the top of the screen that grows when something is live, with an adjustable width in Settings › Island.

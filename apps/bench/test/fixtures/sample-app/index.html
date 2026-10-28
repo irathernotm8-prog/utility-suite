@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Sample</title>
+<style>body{font:15px system-ui;margin:24px;background:#f6f7fb} button{padding:6px 12px;margin:4px} .item{padding:4px 0} #status{margin-top:12px;color:#556}</style></head>
+<body><h1>Sample to-dos</h1>
+<input id="what" placeholder="New to-do"> <button id="add">Add</button>
+<select id="pri"><option>Low</option><option>High</option></select>
+<div id="list"></div>
+<p><button id="throw">Throw</button><button id="open">Open file</button><button id="ask">Ask</button><button id="boom">Main boom</button></p>
+<div class="nav" style="cursor:pointer" id="plain">Plain clickable</div>
+<div id="status">Ready</div>
+<script>
+const $=s=>document.querySelector(s);
+$('#add').onclick=()=>{const v=$('#what').value.trim(); if(!v) return; const d=document.createElement('div'); d.className='item'; d.textContent=v+' ('+$('#pri').value+')'; $('#list').appendChild(d); $('#what').value=''; $('#status').textContent='Added '+v;};
+$('#what').addEventListener('keydown',e=>{if(e.key==='Enter') $('#add').click();});
+$('#throw').onclick=()=>{ undefinedFunction(); };
+$('#open').onclick=()=>api.open();
+$('#ask').onclick=async()=>{ $('#status').textContent='Answer '+await api.ask(); };
+$('#boom').onclick=()=>api.boom();
+$('#plain').onclick=()=>{$('#status').textContent='Plain clicked'};
+api.on('saved',()=>{$('#status').textContent='Saved!'});
+api.on('opened',p=>{$('#status').textContent='Opened '+p});
+console.warn('sample renderer warning');
+</script></body></html>

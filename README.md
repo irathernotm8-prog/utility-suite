@@ -7,6 +7,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Assist** | Private, on-device AI chat and reply assistant | `apps/assist` |
 | **Atoll** | A Dynamic Island for the desktop: timers and focus, music controls, one live match from Touchline, a file and clipboard shelf, weather and a system glance, in the notch on a MacBook or floating at the top of the screen | `apps/atoll` |
 | **Beam** | AirDrop for Macs, PCs and phones: files, folders, text and links straight to nearby devices, encrypted, as fast as the network goes | `apps/beam` |
+| **Bench** | A test workspace for Claude: sandbox desks that run apps on this computer with their own data, Mac/Linux VMs and Windows Sandbox for clean desktops, a live view, parallel smoke tests of the whole suite, findings, and a Claude/Codex plugin to launch, see, click, type and read errors | `apps/bench` |
 | **Cadence** | Automations on a schedule: pull reports from sites, file them by week, and build slides and reports, with Claude and Codex plugged in | `apps/cadence` |
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
@@ -57,6 +58,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Slate | `~/Documents/Slate/Statements` |
 | Atoll | its app-data folder: `settings.json`, `state.json` (timers, the shelf list, the followed team or match), `cache/` (Touchline match data and crests), `artwork/` (scratch). Shelf files stay where they are; clipboard history is never saved |
 | Beam | `~/Downloads/Beam` (received files; `.beam-incoming/` inside holds transfers still arriving). Its app-data folder has `identity.json` (this device's key), `settings.json` (trusted devices, saved addresses, phone link) and `history.json` |
+| Bench | its app-data folder: `desks/<id>/` (a sandbox desk's own home, app-data and temp folders; a Windows Sandbox desk's shared folder), `vms/` (Tart system images and VM disks, 20–30 GB each), `engines/` (Tart), `findings/` and `runs/` (screenshots and logs), `bridge.json` (the Claude plugin's private connection). Saved screenshots go to `~/Pictures/Bench` |
 | Cadence | its app-data folder: `flows/` (one JSON per automation), `runs.json`, `memory.json`, `secrets.json` (encrypted), browser sign-ins, `runs/` (scratch, 14 days). Output goes where each automation says, by default `~/Documents/Cadence/<automation>` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Decomp | its app-data folder: `engines/` (7-Zip, Java, JADX, Vineflower, .NET, ILSpy, Ghidra — up to ~1 GB) and `jobs.json`. Results go to `~/Documents/Decomp`, one folder per job |

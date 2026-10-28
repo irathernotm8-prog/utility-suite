@@ -1,0 +1,41 @@
+{
+  "name": "bench",
+  "productName": "Bench",
+  "version": "0.1.0",
+  "description": "A desktop workspace for Claude to test apps: sandbox desks that run apps on this computer with their own data, clean Mac, Linux and Windows desktops in virtual machines, live views, and a Claude plugin to launch, click, type, read logs, smoke-test the whole suite in parallel and file bugs.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "BENCH_DEMO=1 electron .",
+    "test": "node test/run.js",
+    "e2e": "node test/e2e/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.bench",
+    "productName": "Bench",
+    "copyright": "Personal use",
+    "npmRebuild": false,
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "mcp/**/*", "build/icon.png", "build/tray*.png", "package.json", "node_modules/**/*", "!node_modules/cpu-features/**", "!node_modules/nan/**"],
+    "asarUnpack": ["mcp/**/*", "src/assets/**/*"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "darkModeSupport": true
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'">
+  <title>Bench</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Bench</b><span>Test workspace</span></div></div>
+      <nav id="nav">
+        <button data-view="desks" class="on"><span class="nav-ic" data-icon="desks"></span>Desks<span class="nav-count" id="navDesks"></span></button>
+        <button data-view="runs"><span class="nav-ic" data-icon="runs"></span>Runs<span class="nav-count" id="navRuns"></span></button>
+        <button data-view="findings"><span class="nav-ic" data-icon="bug"></span>Findings<span class="nav-count" id="navFindings"></span></button>
+        <button data-view="claude"><span class="nav-ic" data-icon="spark"></span>Claude<span class="nav-count" id="navClaude"></span></button>
+        <button data-view="engines"><span class="nav-ic" data-icon="layers"></span>Virtual machines</button>
+        <button data-view="settings"><span class="nav-ic" data-icon="gear"></span>Settings</button>
+      </nav>
+      <div class="side-fill"></div>
+      <div id="hostCard" class="host-card"></div>
+      <button class="btn primary new-btn" data-act="new-desk"><span data-icon="plus"></span>New desk</button>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div id="sheetHost"></div>
+  <div id="toasts"></div>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="desk.js"></script>
+  <script src="views.js"></script>
+  <script src="sheets.js"></script>
+</body>
+</html>

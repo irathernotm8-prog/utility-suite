@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -236,6 +236,17 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "bench",
+      "name": "Bench",
+      "description": "A desktop workspace for Claude to test apps: sandbox desks that run apps on this computer with their own data, clean Mac, Linux and Windows desktops in virtual machines, a live view, parallel smoke tests, findings, and a Claude plugin to launch, click, type, read errors and file bugs.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [
+        "test/e2e-out",
+        "test/shots"
+      ]
     }
   ],
   "updates": {
