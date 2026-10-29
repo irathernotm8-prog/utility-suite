@@ -97,8 +97,10 @@ function createWindow({ isPrivate = false, saved = null, urls = [] } = {}) {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.once('ready-to-show', () => win.show());
   win.on('focus', () => { lastFocused = win; });
-  win.on('enter-full-screen', () => send(win, 'win:fullscreen', true));
-  win.on('leave-full-screen', () => send(win, 'win:fullscreen', false));
+  // appFull: whether *you* put the window in full screen (green button, ⌃⌘F, focus mode), as opposed to a
+  // video asking for it. Leaving a video's full screen must not take the window out of yours.
+  win.on('enter-full-screen', () => { const r = wins.get(win.id); if (r && !r.htmlFs && !r.restoringFs) r.appFull = true; send(win, 'win:fullscreen', true); });
+  win.on('leave-full-screen', () => { const r = wins.get(win.id); if (r && !r.htmlFs && !r.restoringFs) r.appFull = false; if (!r?.restoringFs) send(win, 'win:fullscreen', false); });
   win.webContents.on('will-attach-webview', (_e, wp, params) => {
     // pages never get Node, and only Vantage's own sessions can be used
     delete wp.preload; wp.nodeIntegration = false; wp.contextIsolation = true; wp.sandbox = true; wp.webSecurity = true;
@@ -305,6 +307,21 @@ app.on('web-contents-created', (_e, contents) => {
   if (type !== 'webview' && !(type === 'window' && contents.session !== session.defaultSession)) return;
   applyIdentityTracking(contents);
   vpn.applyWebRTC(contents);
+  contents.on('enter-html-full-screen', () => { const w = ownerOf(contents); const r = w && wins.get(w.id); if (r) r.htmlFs = true; });
+  contents.on('leave-html-full-screen', () => {
+    const w = ownerOf(contents); const r = w && wins.get(w.id);
+    if (!r) return;
+    r.htmlFs = false;
+    if (!r.appFull || w.isDestroyed()) return;
+    // Electron takes the whole window out of full screen with the video; put it straight back
+    r.restoringFs = true;
+    const back = () => { if (!w.isDestroyed() && !w.isFullScreen()) w.setFullScreen(true); };
+    const onLeave = () => setTimeout(back, 50);
+    const done = () => { r.restoringFs = false; if (!w.isDestroyed()) { w.removeListener('leave-full-screen', onLeave); w.removeListener('enter-full-screen', done); } };
+    w.once('leave-full-screen', onLeave);
+    w.once('enter-full-screen', done);
+    setTimeout(() => { back(); setTimeout(done, 1500); }, 1200);
+  });
   contents.setWindowOpenHandler(({ url, disposition, features }) => {
     const win = ownerOf(contents);
     const popup = disposition === 'new-window' && (/(width|height|popup)/i.test(features || '') || url === 'about:blank' || !url);

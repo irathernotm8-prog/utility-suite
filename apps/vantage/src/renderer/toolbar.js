@@ -180,7 +180,7 @@
     const folders = [...new Set(V.bookmarks.filter(b => (b.folder || '').startsWith('Bar/')).map(b => b.folder.split('/')[1]))];
     const others = V.bookmarks.filter(b => !(b.folder || 'Bar').startsWith('Bar'));
     bar.innerHTML = folders.map(f => `<button class="bm folder" data-folder="Bar/${esc(f)}">${ic('folder', 14)}<span>${esc(f)}</span></button>`).join('') +
-      items.map(b => `<button class="bm ${V.settings.bookmarkNames === false || b.hideName ? 'icon-only' : ''}" data-id="${b.id}" title="${esc(b.title)}\n${esc(b.url)}" draggable="true">${bmIconHTML(b, 15)}<span>${esc(b.title || hostOf(b.url))}</span></button>`).join('') +
+      items.map(b => `<button class="bm ${V.settings.bookmarkNames === false || b.hideName || !String(b.title || '').trim() ? 'icon-only' : ''}" data-id="${b.id}" title="${esc(b.title ? b.title + '\n' : '')}${esc(b.url)}" draggable="true">${bmIconHTML(b, 15)}<span>${esc(b.title || '')}</span></button>`).join('') +
       (others.length ? `<span class="bm-fill"></span><button class="bm folder" data-folder="__other">${ic('folder', 14)}<span>Other bookmarks</span></button>` : '') +
       (!V.bookmarks.length ? `<span class="bm-empty">Bookmark pages with ⌘D, or <a data-import>import from Chrome</a></span>` : '');
     $$('.bm[data-id]', bar).forEach(el => {
@@ -243,7 +243,7 @@
   function editBookmark(b) {
     openModal({
       title: 'Edit bookmark', icon: 'star', body: `<div class="bm-edit-ic"><span id="bIc">${bmIconHTML(b, 40)}</span><button class="btn sm" id="bIcB">${ic('palette', 14)} Change icon…</button></div>
-        <div class="field"><label>Name</label><input class="input" id="bT" value="${esc(b.title)}"></div>
+        <div class="field"><label>Name <span class="muted-sm">(leave blank for just the icon)</span></label><input class="input" id="bT" value="${esc(b.title)}"></div>
         <div class="field"><label>Address</label><input class="input" id="bU" value="${esc(b.url)}"></div>
         <div class="field"><label>Folder</label><select class="select" id="bF">${folderOptions(b.folder)}</select></div>`,
       actions: [{ label: 'Cancel' }, { label: 'Save', cls: 'brand', onClick: async (m) => {
@@ -251,7 +251,7 @@
         renderBookmarksBar(); updateToolbar();
       } }],
       onMount: (m) => { $('#bIcB', m).onclick = () => { const vals = { t: $('#bT', m).value, u: $('#bU', m).value, f: $('#bF', m).value };
-        iconPicker(b, async (patch) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, ...patch, title: vals.t.trim() || b.title, url: V.toURL(vals.u) || b.url, folder: vals.f }); renderBookmarksBar(); updateToolbar(); }); }; }
+        iconPicker(b, async (patch) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, ...patch, title: vals.t.trim(), url: V.toURL(vals.u) || b.url, folder: vals.f }); renderBookmarksBar(); updateToolbar(); }); }; }
     });
   }
 
@@ -333,11 +333,11 @@
     const b = V.bookmarks.find(x => x.url === t.url);
     popover($('#omniStar'), {
       width: 320, html: `<div class="pop-h">${ic('star', 16)}<b>${existing ? 'Edit bookmark' : 'Bookmark added'}</b></div>
-        <div class="pop-b"><div class="field"><label>Name</label><input class="input" id="pbT" value="${esc(b.title)}"></div>
+        <div class="pop-b"><div class="field"><label>Name <span class="muted-sm">(leave blank for just the icon)</span></label><input class="input" id="pbT" value="${esc(b.title)}"></div>
         <div class="field"><label>Folder</label><select class="select" id="pbF">${folderOptions(b.folder)}</select></div></div>
         <div class="pop-f"><button class="btn danger" id="pbDel">Remove</button><button class="btn ghost" id="pbIc" title="Change icon">${ic('palette', 14)}</button><span class="spacer"></span><button class="btn brand" id="pbOk">Done</button></div>`,
       onMount: (p, close) => {
-        const save = async () => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, title: $('#pbT', p).value.trim() || b.title, folder: $('#pbF', p).value }); renderBookmarksBar(); };
+        const save = async () => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, title: $('#pbT', p).value.trim(), folder: $('#pbF', p).value }); renderBookmarksBar(); };
         $('#pbOk', p).onclick = async () => { await save(); close(); };
         $('#pbT', p).onkeydown = async (e) => { if (e.key === 'Enter') { await save(); close(); } };
         $('#pbIc', p).onclick = () => { close(); const bb = V.bookmarks.find(x => x.id === b.id) || b; iconPicker(bb, async (patch) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, ...patch }); renderBookmarksBar(); }); };
