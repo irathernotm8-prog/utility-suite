@@ -1,3 +1,5 @@
+# NOTE: build/icon.png and icon.svg are now drawn in the Utility Package chat (the Utility Suite icon family).
+# Running this script overwrites them with the old design; keep only its tray-icon output if you rerun it.
 # Regenerates build/icon.png and the tray icons (run: python3 build/make-icon.py). Needs Pillow.
 # A deep graphite-plum tile with a soft coral-pink glow: a desktop window whose screen glows coral → pink → violet,
 # with a little app inside, and a white pointer (Claude at work) clicking on it with a spark.

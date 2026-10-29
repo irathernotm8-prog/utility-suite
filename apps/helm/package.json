@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "productName": "Helm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Run your whole computer from a controller: a smooth pointer on the stick, a touchpad that clicks, scrolls and swipes between desktops, an on-screen keyboard, a quick panel and a hold-R2 command layer, for PlayStation and Xbox controllers on Mac and Windows. Steps aside on its own when a game is playing.",
   "main": "src/main.js",
   "author": "Bilal",

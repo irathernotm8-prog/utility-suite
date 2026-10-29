@@ -1,3 +1,5 @@
+# NOTE: build/icon.png and icon.svg are now drawn in the Utility Package chat (the Utility Suite icon family).
+# Running this script overwrites them with the old design; keep only its tray-icon output if you rerun it.
 # Regenerates build/icon.png (run: python3 build/make-icon.py). Needs Pillow.
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 import math, os

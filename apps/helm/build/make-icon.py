@@ -1,3 +1,5 @@
+# NOTE: build/icon.png and icon.svg are now drawn in the Utility Package chat (the Utility Suite icon family).
+# Running this script overwrites them with the old design; keep only its tray-icon output if you rerun it.
 # Regenerates build/icon.png and the tray icons (run: python3 build/make-icon.py). Needs Pillow.
 # Same family as the other suite icons: a dark tile with one bold, glowing glyph in a single gradient.
 # Helm's glyph is a controller drawn as one thick outline, with a d-pad and face buttons, and a pointer arrow resting

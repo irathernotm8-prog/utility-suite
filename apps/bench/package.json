@@ -1,7 +1,7 @@
 {
   "name": "bench",
   "productName": "Bench",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A desktop workspace for Claude to test apps: sandbox desks that run apps on this computer with their own data, clean Mac, Linux and Windows desktops in virtual machines, live views, and a Claude plugin to launch, click, type, read logs, smoke-test the whole suite in parallel and file bugs.",
   "main": "src/main.js",
   "author": "Bilal",
