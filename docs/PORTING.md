@@ -34,6 +34,7 @@
 | Cadence | `apps/cadence` | `docs/handoffs/Cadence.md` (MCP plugin for Claude/Codex; no native modules) |
 | Crate | `apps/crate` | `docs/handoffs/Crate.md` |
 | Datum | `apps/datum` | `docs/handoffs/Datum.md` |
+| Dither | `apps/dither` | `docs/handoffs/Dither.md` (MCP plugin for Claude/Codex; no dependencies at all, no native modules; effect code runs in a sandboxed hidden window; the local model is Kiln's running Stable Diffusion engine) |
 | Docket | `apps/docket` | `docs/handoffs/Docket.md` |
 | Droid | `apps/droid` | `docs/handoffs/Droid.md` (downloads Google's Android Emulator at runtime; no native modules) |
 | Fresh Desk | `apps/fresh-desk` (after `./utility adopt fresh-desk`) | `docs/handoffs/Fresh Desk.md` |

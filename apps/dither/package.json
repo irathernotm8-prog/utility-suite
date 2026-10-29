@@ -1,0 +1,32 @@
+{
+  "name": "dither",
+  "productName": "Dither",
+  "version": "0.1.0",
+  "description": "Pixel art and pixel animation studio for you and your AI: effects as code, rounds of drafts you review side by side, a sprite and animation editor, a local pixel-art model, and a Claude/Codex plugin that sees what it draws.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "shots": "node test/e2e/shots.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {},
+  "build": {
+    "appId": "com.bilal.dither",
+    "productName": "Dither",
+    "copyright": "Personal use",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "mcp/**/*", "build/icon.png", "package.json"],
+    "asarUnpack": ["mcp/**/*"],
+    "mac": { "target": ["dmg", "zip"], "icon": "build/icon.png", "category": "public.app-category.graphics-design", "darkModeSupport": true },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.18.0"
+  }
+}

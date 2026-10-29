@@ -1,0 +1,62 @@
+# Dither: handoff for the Dither chat
+
+Dither is the Utility Package's pixel-art and pixel-animation studio, made for working with Claude and Codex. Effects are written as code, rounds of drafts are reviewed side by side, and there's a sprite and animation editor. The local model is the Stable Diffusion engine that Kiln runs, plus Pixel Art XL and Pixel snap. The MCP plugin returns a picture with every result. Dither lives in `apps/dither` inside `~/Downloads/Utility Package`, and `apps/dither/README.md` has the feature list, tools, code map and data folders.
+
+## Working on it
+
+```bash
+cd ~/Downloads/Utility\ Package/apps/dither
+npm install
+npm start
+npm test                                     # 12 Node checks, no network
+xvfb-run node test/e2e/shots.js /tmp/shots   # (Linux) every screen in dark + light, the editor, recording, the sandbox, the real MCP → bridge → app path
+```
+
+To ship a change, bump `version` in `package.json`, then from the Utility Package folder:
+
+```bash
+./utility note dither "what changed"
+./utility publish
+```
+
+Pull before starting work. Stay inside `apps/dither`. `tools/`, `suite.json` and `apps/hub` belong to the Utility Package chat.
+
+## State at first release (0.1.0)
+
+- `npm test` covers:
+  - the PNG round trip, and GIF LZW decoded back, including the >4096-code reset and scaling
+  - every drawing primitive, and every starter effect rendering repeatably within its palette
+  - clear errors, including the per-render time budget
+  - Pixel snap recovering a 16×16 sprite from a noisy 7.3× upscale
+  - sprite ops, layers, frames and resize
+  - contact, board and sprite sheets
+  - the exported JS module imported and played on its own
+  - projects: versions, feedback, boards and references
+  - every plugin handler end to end (drafts → feedback → update with resolved notes → view → bake → record → export → sprites → pixelize)
+  - the MCP server over stdio
+- `test/e2e/shots.js` (Linux, xvfb) seeds a project, screenshots every screen in dark and light, and checks the following:
+  - the pencil draws and undo/redo work
+  - Record writes a GIF, a sheet and a WebM
+  - an endless loop is stopped after 10 s and the sandbox can't reach the network
+  - the real stdio MCP server → bridge → app path works (`create_drafts` shows up live on the board, and `draw_sprite` returns a picture)
+- **Not yet run on a real Mac or Windows PC.** Check these first:
+  1. **The sandbox window**: `src/fxhost.js` loads `src/sandbox/fx.html` hidden, and its worker loads `../core/fxruntime.js` from inside `app.asar`. A packaged Linux build (`electron-builder --linux dir`) rendered, stopped an endless loop, recovered and installed the plugin script from `app.asar.unpacked`. If a Mac/Windows build can't start workers, `fx-page.js` falls back to rendering on the page by itself.
+  2. **Plugin install**:
+     - "Add to Claude" edits `claude_desktop_config.json`.
+     - "Add to Claude Code" runs `claude mcp add dither --scope user …` when the CLI is found, and otherwise edits `~/.claude.json`.
+     - "Add to Codex" rewrites only the `[mcp_servers.dither]` tables.
+     - All of these keep a `.dither-backup`.
+     - The script is copied to the app-data `mcp/` folder, so it survives updates.
+  3. **Ask Claude**: this runs `claude -p --output-format stream-json --mcp-config <file> --strict-mcp-config --allowedTools mcp__dither`. On a Mac the app finds the CLI through the login shell's PATH (same approach as Cadence).
+  4. **Local model**: with Kiln running Forge/A1111 (API on) or ComfyUI, Generate should find it on 7860/7861/8188. "Add it" downloads Pixel Art XL (~170 MB, Hugging Face) into each Kiln library's `Lora` folder (read from `<appData>/Kiln/kiln.json`, or `~/Downloads/Kiln/Kiln Files/Libraries/*/Lora`). It needs an SDXL checkpoint. The Windows PC's GPU is the better place to run it.
+  5. **Picture import** uses `nativeImage` (BGRA → RGBA) except for PNGs, which use Dither's own decoder.
+
+## Rules specific to Dither
+
+- **The kit is the contract.** `src/core/fxruntime.js` is shared by the sandbox, Node, the plugin and exported modules, so keep it plain ES5-ish JS with no imports. If you add a drawing call, document it in `guideText()` (`src/core/guide.js`) and in the lab's kit sheet (`kitSheet()` in `renderer/effects.js`), and add a test.
+- **Effect code only runs in the sandbox** (`fxhost.render`). Never `eval` or `new Function` effect code in the window or the main process. Tests may use `FX.render` directly.
+- **Every pixel-making tool returns a picture** (`image()` in `mcp-handlers.js`). Keep that true for new tools, because it's how the AI "trusts its eyes".
+- **Versions are files.** Every `update_effect` writes `vN.js`. Never overwrite an old version. Feedback notes carry the version they were left on.
+- **Sprite cels are RGBA.** The palette is a convenience list, not an index mode. Ops take palette slots (numbers), hex strings or `null` to erase.
+- The window never touches Node. Everything goes through `window.dither.call(...)` → `ipcMain` handlers in `src/main.js`. Changes made by the plugin reach the window as `changed` events.
+- Project data stays in the projects folder (`~/Documents/Dither/<Project>`). App data holds settings, the bridge token and the MCP copy.

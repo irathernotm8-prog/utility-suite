@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-29 21:03 — **Dither 0.1.0** (46 new) — First release: pixel art and animation studio for you and Claude — draft boards, effect lab, sprite editor, local Pixel Art XL model, Claude/Codex plugin
 - 2026-10-29 20:09 — **Utility Hub 1.2.0** — Windows: "Update and restart" now reliably installs the new Utility Hub and reopens it
 - 2026-10-29 20:09 — **Utility Hub 1.2.0** — Shows Game Hub, published from its own repo, with installs and updates like the other apps
 - 2026-10-29 16:47 — **Vantage 0.2.1** — Leaving a video's full screen keeps Vantage in full screen if you had it that way, and a bookmark with no name shows just its icon.

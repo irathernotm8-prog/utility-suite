@@ -267,6 +267,14 @@
       "exclude": [
         "test/e2e-out"
       ]
+    },
+    {
+      "id": "dither",
+      "name": "Dither",
+      "description": "Pixel art and pixel animation studio for you and your AI: effects as code, rounds of drafts you review side by side, a sprite and animation editor, a local pixel-art model, and a Claude/Codex plugin that sees what it draws.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {

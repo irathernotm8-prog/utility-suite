@@ -12,6 +12,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
 | **Decomp** | Takes any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, on every core | `apps/decomp` |
+| **Dither** | Pixel art and pixel animation for you and your AI: Claude makes rounds of effect drafts in code that play side by side for you to pick and note, an effect lab with sliders and versions, a sprite and animation editor, a local pixel-art model (Kiln's Stable Diffusion + Pixel Art XL, then Pixel snap), and exports for games and sites (sprite sheets + JSON, GIFs, standalone JS modules); a Claude/Codex plugin that sees what it draws | `apps/dither` |
 | **Docket** | Meeting notes: on-device transcription of Zoom, Teams and Meet calls, AI summaries, one to-do list | `apps/docket` |
 | **Droid** | Virtual Android phones and tablets: pick the look, Android version and hardware, run several at once, drag in apps and files | `apps/droid` |
 | **Facet** | 3D models from a prompt or a picture, generated on this computer's own GPU: concept sketches, photo and multi-view to mesh, textures painted from the picture or by an AI painter (Hunyuan3D Paint), optional Tripo cloud engine with your own key, character rigging with test animations, export for Unity, Unreal, Godot, Blender, Roblox, three.js and 3D printing | `apps/facet` |
@@ -68,6 +69,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Cadence | its app-data folder: `flows/` (one JSON per automation), `runs.json`, `memory.json`, `secrets.json` (encrypted), browser sign-ins, `runs/` (scratch, 14 days). Output goes where each automation says, by default `~/Documents/Cadence/<automation>` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Decomp | its app-data folder: `engines/` (7-Zip, Java, JADX, Vineflower, .NET, ILSpy, Ghidra — up to ~1 GB) and `jobs.json`. Results go to `~/Documents/Decomp`, one folder per job |
+| Dither | `~/Documents/Dither` (one folder per project: `dither.json`, `sprites/`, `effects/<id>/v1.js…`, `refs/`, `records/`, `exports/`; change in Settings). Its app-data folder holds `settings.json`, `bridge.json` (the plugin's private connection) and `mcp/` |
 | Docket | `~/Documents/Docket` (each meeting's notes, transcript and recording, plus `todos.json`) |
 | Droid | its app-data folder: `sdk/` (emulator and Android versions, 1–2 GB each), `avd/` (each device's disk), `apks/` (app library); movable in Android versions › Data folder. Screenshots and recordings go to `~/Pictures/Droid` |
 | Facet | `~/Documents/Facet` (one folder per model: `model.glb`, pictures, `facet.json`; change in Settings). Its app-data folder holds `Models/` (3D and image models, 2–20 GB) and `Engine/` (private Python and PyTorch, 1.5–5 GB) |
