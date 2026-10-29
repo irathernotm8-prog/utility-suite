@@ -13,7 +13,7 @@ const { Apps } = require('../lib/apps');
 const { Sources } = require('../lib/sources');
 const { archCompatible, compatibility } = require('../lib/catalog');
 const { parseCommand, nameRe } = require('../lib/legacy-win');
-const { Feed } = require('../lib/feed');
+const { Feed, externalEntry } = require('../lib/feed');
 const http = require('http');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hubtest-'));
@@ -294,6 +294,39 @@ function makeSuite(root, suiteVersion, apps, { platform = 'linux', hub } = {}) {
     assert.strictEqual(bad.error, 'offline');
     const off = new Feed({ platform: 'linux', arch: 'x64', fetch, settings: () => ({ ...settings, onlineUpdates: false }), configFile: path.join(tmp, 'feed.json') });
     assert.strictEqual(off.enabled, false);
+  });
+
+  await test('online: an app from its own repo (Game Hub) shows up next to ours', async () => {
+    const gh = { format: 1, hub: { version: '2.1.2', full: { file: 'Game-Hub-Setup-windows.zip', sha256: 'ab', size: 5 }, setupMac: 'Game-Hub-macOS.zip' }, games: [] };
+    const x = { id: 'game-hub', name: 'Game Hub', kind: 'game-hub', appId: 'com.bilal.gamehub', icon: 'game-hub.png' };
+    const w = externalEntry(x, gh, 'https://example.com/r', 'win');
+    assert.deepStrictEqual([w.version, w.file, w.folder, w.exe, w.sha256, w.external], ['2.1.2', 'https://example.com/r/Game-Hub-Setup-windows.zip', 'Game Hub', 'Game Hub.exe', 'ab', 'game-hub']);
+    const m = externalEntry(x, gh, 'https://example.com/r', 'mac');
+    assert.deepStrictEqual([m.file, m.bundle, m.sha256], ['https://example.com/r/Game-Hub-macOS.zip', 'Game Hub.app', null]);
+    assert.strictEqual(externalEntry(x, { hub: {} }, 'b', 'win'), null);
+    // through the feed: our catalog lists it, its catalog lives elsewhere
+    fs.mkdirSync(path.join(feedDir, 'gh'), { recursive: true });
+    fs.writeFileSync(path.join(feedDir, 'gh', 'catalog.json'), JSON.stringify(gh));
+    fs.writeFileSync(path.join(feedDir, 'catalog-win.json'), JSON.stringify({ format: 1, platform: 'win', apps: [], external: [{ ...x, base: `${base}/gh` }, { id: 'gone', name: 'Gone', kind: 'game-hub', base: `${base}/missing` }] }));
+    const wf = new Feed({ platform: 'win32', arch: 'x64', fetch, settings: () => settings, configFile: path.join(tmp, 'feed.json') });
+    await wf.check();
+    assert.strictEqual(wf.error, null, 'an unreachable outside catalog is not an error');
+    const e = wf.entries();
+    assert.deepStrictEqual([...e.keys()], ['game-hub']);
+    assert.strictEqual(wf.url(e.get('game-hub').file), `${base}/gh/Game-Hub-Setup-windows.zip`);
+    assert.strictEqual(e.get('game-hub').iconUrl, `${base}/game-hub.png`);
+  });
+
+  await test('Windows: Game Hub is found in its own folder, not the suite folder', async () => {
+    const wh = path.join(tmp, 'winhome');
+    const local = path.join(wh, 'AppData', 'Local');
+    const wapps = new Apps({ platform: 'win32', home: wh, userData: path.join(tmp, 'wud'), env: { LOCALAPPDATA: local, SystemDrive: path.join(tmp, 'nodrive') }, shell: {}, settings: () => settings }, library);
+    const meta = { id: 'game-hub', name: 'Game Hub', folder: 'Game Hub', exe: 'Game Hub.exe', external: 'game-hub' };
+    assert.strictEqual(wapps.detect(meta), null);
+    fs.mkdirSync(path.join(local, 'Game Hub', 'App'), { recursive: true });
+    fs.writeFileSync(path.join(local, 'Game Hub', 'App', 'Game Hub.exe'), '');
+    assert.strictEqual(wapps.detect(meta).path, path.join(local, 'Game Hub', 'App'));
+    assert.strictEqual(wapps.defaultTarget(meta), path.join(local, 'Game Hub', 'App'));
   });
   server.close();
 

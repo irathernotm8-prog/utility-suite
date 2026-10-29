@@ -826,6 +826,12 @@ async function cmdPublish(opts) {
       ok(`${e.name} ${e.version} ready ${dim(fmtSize(e.size))}`);
     }
     Object.assign(cat, { format: 1, feed: true, suiteName: m.suiteName, publisher: m.publisher, platform: tKey, updatedAt: new Date().toISOString() });
+    // apps published from their own repos (suite.json "external"): the hubs read those repos' catalogs directly
+    cat.external = (m.external || []).map((x) => {
+      const icon = x.icon && fs.existsSync(path.join(ROOT, x.icon)) ? path.join(ROOT, x.icon) : null;
+      if (icon) files.push(icon);
+      return { ...x, icon: icon ? path.basename(icon) : null };
+    });
     const catFile = path.join(out, `catalog-${tKey}.json`);
     writeJSON(catFile, cat);
     catalogs.push(catFile);

@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -272,5 +272,17 @@
   "updates": {
     "repo": "irathernotm8-prog/utility-suite",
     "release": "packages"
-  }
+  },
+  "external": [
+    {
+      "id": "game-hub",
+      "name": "Game Hub",
+      "kind": "game-hub",
+      "repo": "irathernotm8-prog/game-hub",
+      "release": "packages",
+      "appId": "com.bilal.gamehub",
+      "icon": "assets/external/game-hub.png",
+      "description": "Our games in one place: installs them, keeps them updated and starts them. Published from its own repo; it also updates itself."
+    }
+  ]
 }

@@ -141,6 +141,10 @@ The release page has two permanent links: `Utility-Hub-Setup-mac.zip` and `Utili
 
 `./utility suite` still makes offline downloads (USB, AirDrop) and works side by side with publishing.
 
+**Apps published from their own repo (Game Hub)**
+
+Game Hub is built and published from BilooPC to its own repo (`irathernotm8-prog/game-hub`, release `packages`), exactly as before. `suite.json` lists it under `"external"`, and each publish copies that list (and the icon in `assets/external/`) into the catalogs. Every Utility Hub then reads Game Hub's own `catalog.json` directly, so a new Game Hub version shows up as an update as soon as it's published there, without publishing anything here. On Windows the hub installs it where Game Hub expects to live (`C:\Game Hub\App`, or `%LOCALAPPDATA%\Game Hub\App`), so Game Hub keeps updating itself and its games; removing it from the hub removes only the app, never the games or saves.
+
 ## Platform notes
 
 - **Mac builds** must run on a Mac. Apps and the hub are ad-hoc signed so they open on Apple Silicon. Assist, Datum and the hub are universal; the rest are Apple Silicon only (`macArch` in `suite.json`).

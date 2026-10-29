@@ -28,7 +28,7 @@ class Feed {
     return null;
   }
   get enabled() { return !!this.config && this.ctx.settings().onlineUpdates !== false; }
-  url(file) { return `${this.config.base}/${encodeURIComponent(file)}`; }
+  url(file) { return /^https?:\/\//.test(file) ? file : `${this.config.base}/${encodeURIComponent(file)}`; }
 
   async check() {
     if (!this.enabled) { this.catalog = null; return null; }
@@ -41,6 +41,7 @@ class Feed {
         if (!cat || !Array.isArray(cat.apps)) throw new Error('the update catalog is unreadable');
         if (cat.format > FORMAT) throw new Error('these updates need a newer Utility Hub');
         this.catalog = cat;
+        this.external = await this.loadExternal(cat.external || []);
       }
       this.error = null;
     } catch (e) {
@@ -51,12 +52,28 @@ class Feed {
     return this.catalog;
   }
 
+  // Apps published from their own repos (listed under "external" in our catalog). Each one's own
+  // catalog is read and turned into an ordinary entry; one that can't be reached is just left out.
+  async loadExternal(list) {
+    const out = [];
+    for (const x of list) {
+      try {
+        const base = x.base || `https://github.com/${x.repo}/releases/download/${x.release || 'packages'}`;
+        const res = await this.ctx.fetch(`${base}/${x.catalog || 'catalog.json'}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) continue;
+        const e = externalEntry(x, await res.json(), base, platformKey(this.ctx.platform));
+        if (e) out.push(e);
+      } catch {}
+    }
+    return out;
+  }
+
   // apps this computer can run, by id
   entries() {
     const out = new Map();
     if (!this.catalog) return out;
     const cat = { ...this.catalog, platform: this.catalog.platform || platformKey(this.ctx.platform) };
-    for (const e of this.catalog.apps) {
+    for (const e of [...this.catalog.apps, ...(this.external || [])]) {
       if (!compatibility(cat, e, { platform: this.ctx.platform, arch: this.ctx.arch }).ok) continue;
       out.set(e.id, { ...e, iconUrl: e.icon ? this.url(e.icon) : null });
     }
@@ -99,4 +116,25 @@ class Feed {
   }
 }
 
-module.exports = { Feed };
+// kinds of outside catalog we understand
+function externalEntry(x, cat, base, os) {
+  const abs = (f) => (f ? `${base}/${encodeURIComponent(f)}` : null);
+  const common = { id: x.id, name: x.name, description: x.description || '', icon: x.icon || null, appId: x.appId || null, notes: x.notesText ? [x.notesText] : [], external: x.kind };
+  if (x.kind === 'game-hub') { // Game Hub's catalog: hub { version, full: { file, sha256, size }, setupMac }
+    const h = cat && cat.hub;
+    if (!h || !h.version) return null;
+    if (os === 'win') {
+      const f = h.full || (h.setup ? { file: h.setup } : null);
+      if (!f || !f.file) return null;
+      return { ...common, version: h.version, file: abs(f.file), sha256: f.sha256 || null, size: f.size || null, folder: 'Game Hub', exe: 'Game Hub.exe', arch: x.winArch || 'x64' };
+    }
+    if (os === 'mac') {
+      const f = h.fullMac || (h.setupMac ? { file: h.setupMac } : null);
+      if (!f || !f.file) return null;
+      return { ...common, version: h.version, file: abs(f.file), sha256: f.sha256 || null, size: f.size || null, bundle: 'Game Hub.app', arch: x.macArch || 'arm64' };
+    }
+  }
+  return null;
+}
+
+module.exports = { Feed, externalEntry };

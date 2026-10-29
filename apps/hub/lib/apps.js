@@ -8,6 +8,13 @@ const fs = require('./fsx');
 const fsp = require('./fsx').promises;
 const { run, exists, readJSON, writeJSON, extractZip, moveTree, waitFor, compareVersions, sleep } = require('./sys');
 const legacy = require('./legacy-win');
+const asarFs = require('fs'); // inside Electron this one can read files inside app.asar
+
+// The version inside an installed app's app.asar. Apps that update themselves (Game Hub swaps
+// its app.asar) change this without touching Info.plist or the hub's records.
+function asarVersion(resources) {
+  try { return JSON.parse(asarFs.readFileSync(path.join(resources, 'app.asar', 'package.json'), 'utf8')).version || null; } catch { return null; }
+}
 
 const SUITE_FOLDER = 'Utility Suite';
 
@@ -33,7 +40,16 @@ class Apps {
   get winDesktop() { return this.ctx.desktop || path.join(this.ctx.home, 'Desktop'); }
   get linuxRoot() { return path.join(this.ctx.home, '.local', 'share', SUITE_FOLDER); } // only used by tests
 
+  // Game Hub keeps itself in <root>\App next to its games (<root>\Data, \Games…), where root is
+  // C:\Game Hub or, if that can't be made, %LOCALAPPDATA%\Game Hub. Installing it anywhere else
+  // would make it ask to install itself again.
+  gameHubHomes() {
+    const local = this.ctx.env.LOCALAPPDATA || path.join(this.ctx.home, 'AppData', 'Local');
+    return [path.join(this.ctx.env.SystemDrive ? `${this.ctx.env.SystemDrive}\\` : 'C:\\', 'Game Hub', 'App'), path.join(local, 'Game Hub', 'App')];
+  }
+
   defaultTarget(meta) {
+    if (this.isWin && meta.external === 'game-hub') return this.gameHubHomes().find((p) => exists(path.dirname(p))) || this.gameHubHomes()[0];
     if (this.isMac) return path.join('/Applications', meta.bundle || `${meta.name}.app`);
     if (this.isWin) return path.join(this.winRoot, meta.folder || meta.name);
     return path.join(this.linuxRoot, meta.folder || meta.name);
@@ -62,13 +78,15 @@ class Apps {
         const info = this.macBundleInfo(p);
         if (!info) continue;
         if (meta.appId && info.bundleId && info.bundleId !== meta.appId) continue;
-        return { path: p, version: info.version || rec?.version || null, managed: !!rec && rec.path === p };
+        const version = asarVersion(path.join(p, 'Contents', 'Resources')) || info.version || rec?.version || null;
+        return { path: p, version, managed: !!rec && rec.path === p };
       }
       return null;
     }
-    const target = rec?.path || this.defaultTarget(meta);
-    if (!exists(this.exePath(meta, target))) return null;
-    let version = rec?.version || null;
+    const candidates = [rec?.path, ...(this.isWin && meta.external === 'game-hub' ? this.gameHubHomes() : []), this.defaultTarget(meta)].filter(Boolean);
+    const target = candidates.find((p) => exists(this.exePath(meta, p)));
+    if (!target) return null;
+    let version = (this.isWin && asarVersion(path.join(target, 'resources'))) || rec?.version || null;
     if (!version && this.isWin) version = this.legacySuiteVersions()[meta.id] || null; // installed by the old Install.cmd
     return { path: target, version, managed: !!rec };
   }
@@ -121,7 +139,7 @@ class Apps {
 
     if (await this.isRunning(meta, where)) { onStep({ step: `Closing ${meta.name}` }); await this.quit(meta, where); }
 
-    if (this.isWin && this.ctx.settings().removeSeparateInstalls !== false) {
+    if (this.isWin && !meta.external && this.ctx.settings().removeSeparateInstalls !== false) {
       const separate = (await this.separateInstalls()).filter((s) => s.id === id);
       for (const s of separate) {
         onStep({ step: `Removing the separately installed ${s.displayName}` });
@@ -141,6 +159,7 @@ class Apps {
       if (!exists(inner)) throw new Error(`The ${meta.name} package doesn't contain ${path.basename(inner)}.`);
 
       onStep({ step: where ? 'Replacing the old version' : 'Copying into place' });
+      if (this.isWin && meta.external === 'game-hub' && !where) target = await this.prepareGameHubHome();
       try {
         target = await this.swapInto(inner, target);
       } catch (e) {
@@ -159,12 +178,19 @@ class Apps {
     if (this.isMac) await run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', target], { allowFail: true });
     if (this.isWin) {
       await legacy.unblock(target);
-      this.writeShortcuts(meta, target);
+      if (!meta.external) this.writeShortcuts(meta, target); // Game Hub makes its own on first launch
       this.refreshIcons();
     }
     this.state.apps[id] = { version: meta.version, path: target, installedAt: new Date().toISOString(), name: meta.name };
     this.saveState();
     return { id, version: meta.version, path: target, updatedFrom: where?.version || null };
+  }
+
+  async prepareGameHubHome() {
+    for (const app of this.gameHubHomes()) {
+      try { await fsp.mkdir(path.join(path.dirname(app), 'Data'), { recursive: true }); return app; } catch {}
+    }
+    throw new Error("Couldn't create a Game Hub folder on this PC.");
   }
 
   async swapInto(src, target) {
@@ -219,6 +245,12 @@ class Apps {
       else await fsp.rm(where.path, { recursive: true, force: true });
     }
     if (this.isWin) this.removeShortcuts(meta);
+    if (this.isWin && meta.external === 'game-hub') {
+      const appData = this.ctx.env.APPDATA || path.join(this.ctx.home, 'AppData', 'Roaming');
+      for (const f of [path.join(this.winDesktop, 'Game Hub.lnk'), path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Game Hub', 'Game Hub.lnk')]) {
+        try { fs.rmSync(f, { force: true }); } catch {}
+      }
+    }
     delete this.state.apps[id];
     this.saveState();
     return { id, removed: !!where };

@@ -361,6 +361,7 @@ app.whenReady().then(async () => {
   // a hub update copied over in an earlier session is still waiting; older ones are done with
   for (const v of await fsp.readdir(path.join(userData, 'hub-update')).catch(() => [])) {
     const dir = path.join(userData, 'hub-update', v);
+    if (v.endsWith('.log')) continue;
     if (v.endsWith('.zip') || v.endsWith('.partial')) { await fsp.rm(dir, { force: true }).catch(() => {}); continue; }
     const inner = (await fsp.readdir(dir).catch(() => [])).map((n) => path.join(dir, n))[0];
     if (inner && compareVersions(v, app.getVersion()) > 0) {

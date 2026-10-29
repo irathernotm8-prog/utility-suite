@@ -89,7 +89,7 @@ class Library {
     if (old?.package && old.package !== dst) await fsp.rm(old.package, { force: true });
     this.index.apps[entry.id] = {
       id: entry.id, name: entry.name, version: entry.version, arch: entry.arch, description: entry.description || '',
-      appId: entry.appId || null, bundle: entry.bundle || null, folder: entry.folder || null, exe: entry.exe || null,
+      appId: entry.appId || null, bundle: entry.bundle || null, folder: entry.folder || null, exe: entry.exe || null, external: entry.external || null,
       notes: entry.notes || [], sha256: hash, size: entry.size || fs.statSync(dst).size,
       package: dst, icon: icon || old?.icon || null,
       suiteVersion: suiteVersion || null, importedAt: new Date().toISOString(),

@@ -4,6 +4,7 @@
 //   Windows: %LOCALAPPDATA%\Programs\Utility Suite\Utility Hub\  + Start Menu/desktop shortcuts
 //            + "Utility Hub" in Settings > Apps
 const path = require('path');
+const os = require('os');
 const fs = require('./fsx');
 const fsp = require('./fsx').promises;
 const { spawn } = require('child_process');
@@ -125,19 +126,35 @@ class SelfHub {
       ].join('; ');
       spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore' }).unref();
     } else {
+      // A .cmd run outside the hub (PowerShell scripts were blocked or died with the hub on some PCs).
+      // It waits until every Utility Hub process has gone (Electron leaves helper processes behind
+      // for a moment), copies the new version over the old one file by file with retries (renaming
+      // the folder fails while anything still has it open), then starts the hub again either way.
       const exe = path.join(dest, `${HUB_NAME}.exe`);
-      const ps = [
-        `Wait-Process -Id ${pid} -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500`,
-        `$d=${psQuote(dest)}; $n=${psQuote(newCopy)}; $o="$d.old"`,
-        `Remove-Item -Recurse -Force $o -ErrorAction SilentlyContinue`,
-        `try { Rename-Item $d $o -ErrorAction Stop; Copy-Item $n $d -Recurse -ErrorAction Stop; Remove-Item -Recurse -Force $o -ErrorAction SilentlyContinue }`,
-        `catch { if (Test-Path $o) { Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue; Rename-Item $o $d } }`,
-        `Get-ChildItem -LiteralPath $d -Recurse -File | Unblock-File -ErrorAction SilentlyContinue`,
-        `Remove-Item -Recurse -Force $n -ErrorAction SilentlyContinue`,
-        `Start-Process -FilePath ${psQuote(exe)}`,
-      ].join('\n');
-      spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command', ps], { detached: true, stdio: 'ignore' }).unref();
+      const log = path.join(path.dirname(path.dirname(newCopy)), 'update.log');
+      const q = (p) => `"${p}"`;
+      const lines = [
+        '@echo off', 'setlocal', `set PID=${pid}`, 'set /a N=0',
+        `echo %date% %time% updating Utility Hub from ${q(newCopy)} >>${q(log)}`,
+        ':wait',
+        'tasklist /FI "PID eq %PID%" /NH 2>nul | find " %PID% " >nul',
+        'if not errorlevel 1 ( ping -n 2 127.0.0.1 >nul & goto wait )',
+        ':helpers',
+        `tasklist /FI "IMAGENAME eq ${HUB_NAME}.exe" /NH 2>nul | find /I "${HUB_NAME}.exe" >nul`,
+        'if errorlevel 1 goto copy',
+        'set /a N+=1',
+        `if %N% GEQ 15 ( taskkill /F /IM "${HUB_NAME}.exe" >nul 2>&1 & ping -n 3 127.0.0.1 >nul & goto copy )`,
+        'ping -n 2 127.0.0.1 >nul', 'goto helpers',
+        ':copy',
+        `robocopy ${q(newCopy)} ${q(dest)} /MIR /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >>${q(log)} 2>&1`,
+        `if errorlevel 8 ( echo %date% %time% FAILED, robocopy code %errorlevel% >>${q(log)} ) else ( echo %date% %time% updated >>${q(log)} & rmdir /s /q ${q(newCopy)} )`,
+        `start "" /D ${q(dest)} ${q(exe)}`,
+        'del "%~f0"',
+      ];
+      const script = path.join(os.tmpdir(), `utility-hub-update-${Date.now()}.cmd`);
+      fs.writeFileSync(script, lines.join('\r\n') + '\r\n');
+      spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe'), ['/d', '/c', script],
+        { detached: true, stdio: 'ignore', windowsHide: true, cwd: os.tmpdir() }).unref();
     }
   }
 
