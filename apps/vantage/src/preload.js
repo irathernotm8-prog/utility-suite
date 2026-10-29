@@ -80,5 +80,11 @@ contextBridge.exposeInMainWorld('vantage', {
   data: { clear: inv('data:clear') },
   defaultBrowser: { status: inv('default:status'), set: inv('default:set') },
   info: inv('app:info'), notify: inv('notify'),
+  favicon: { get: (url, refresh) => ipcRenderer.invoke('favicon:get', { url, refresh }) },
+  thumbs: { capture: (wcId, url) => ipcRenderer.invoke('thumb:capture', { wcId, url }), get: inv('thumb:get') },
+  newtab: { daily: inv('newtab:daily'), pickImage: inv('newtab:pick-image') },
+  readLater: { list: inv('readlater:list'), add: inv('readlater:add'), remove: inv('readlater:remove'), onChanged: on('readlater:changed') },
+  notes: { get: inv('notes:get'), set: inv('notes:set'), onChanged: on('notes:changed') },
+  signin: { blocked: inv('signin:blocked'), set: inv('signin:set'), reset: inv('signin:reset') },
   onCmd: on('cmd'), onOpenTab: on('tab:open'), onFullscreen: on('win:fullscreen')
 });

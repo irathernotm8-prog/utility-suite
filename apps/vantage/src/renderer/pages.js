@@ -12,43 +12,8 @@
   };
   const sections = (items, cur) => `<nav class="side-nav">${items.map(([k, label, icon]) => `<button data-sec="${k}" class="${k === cur ? 'active' : ''}">${ic(icon, 17)}<span>${label}</span></button>`).join('')}</nav>`;
 
-  /* ---------------- New Tab ---------------- */
-  pages.newtab = async (t, body) => {
-    const hour = new Date().getHours();
-    const greet = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-    const eng = (V.ENGINES[V.settings.searchEngine] || V.ENGINES.google).label;
-    body.innerHTML = `<div class="nt ${V.isPrivate ? 'private' : ''}">
-      <div class="nt-glow"></div>
-      <div class="nt-center">
-        ${V.isPrivate ? `<div class="nt-priv">${ic('mask', 34)}<h1>Private window</h1><p>Pages you open here aren’t saved to history, and cookies and site data are erased when you close the last private window. Downloads and bookmarks you make are kept.</p></div>`
-          : `<div class="nt-clock" id="ntClock"></div><h1 class="nt-greet">${greet}</h1>`}
-        <form class="nt-search" id="ntSearch">${ic('search', 18)}<input id="ntQ" placeholder="Search ${esc(eng)} or type an address" autocomplete="off" spellcheck="false"></form>
-        <div class="nt-tiles" id="ntTiles"></div>
-        <div class="nt-stats" id="ntStats"></div>
-      </div>
-    </div>`;
-    const clock = $('#ntClock', body);
-    const tick = () => { if (!clock.isConnected) return clearInterval(iv); clock.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
-    const iv = setInterval(tick, 10000); if (clock) tick();
-    $('#ntSearch', body).onsubmit = (e) => { e.preventDefault(); const q = $('#ntQ', body).value.trim(); if (q) V.navigate(q, t); };
-    $('#ntQ', body).onfocus = () => { V.focusOmni(); };
-    if (V.isPrivate) { $('#ntTiles', body).remove(); return; }
-    const top = await vantage.history.top(8).catch(() => []);
-    const pinned = V.bookmarks.filter(b => b.folder === 'Bar').slice(0, 8 - Math.min(top.length, 4));
-    const tiles = [...pinned.map(b => ({ url: b.url, title: b.title })), ...top.filter(x => !pinned.some(b => hostOf(b.url) === x.host)).map(x => ({ url: x.url, title: x.title || x.host }))].slice(0, 8);
-    const tilesEl = $('#ntTiles', body);
-    if (!tilesEl) return;
-    tilesEl.innerHTML = tiles.map(x => `<a class="nt-tile" data-url="${esc(x.url)}" title="${esc(x.url)}"><span class="nt-ic" style="--c:${tileColor(hostOf(x.url))}"><span class="nt-letter">${esc((hostOf(x.url)[0] || '?').toUpperCase())}</span><img src="${esc(new URL(x.url).origin)}/favicon.ico" alt="" class="nt-fav" draggable="false"></span><span>${esc((x.title || hostOf(x.url)).slice(0, 22))}</span></a>`).join('')
-      || `<div class="nt-empty">Sites you visit often show up here.</div>`;
-    $$('.nt-tile', tilesEl).forEach(a => {
-      a.onclick = (e) => (e.metaKey || e.ctrlKey ? V.openTab(a.dataset.url, { background: true }) : V.navigate(a.dataset.url, t));
-      a.onauxclick = (e) => { if (e.button === 1) V.openTab(a.dataset.url, { background: true }); };
-    });
-    const st = await vantage.adblock.status().catch(() => ({}));
-    const statsEl = $('#ntStats', body);
-    if (statsEl) statsEl.innerHTML = `<span>${ic('shieldCheck', 14)} ${(st.total || 0).toLocaleString()} ads & trackers blocked</span>
-      <span class="${V.vpn.status === 'on' ? 'on' : ''}">${ic('vpn', 14)} ${V.vpn.status === 'on' ? `VPN on${V.vpn.loc ? ' · ' + esc(V.vpn.loc) : ''}` : 'VPN off'}</span>`;
-  };
+  /* ---------------- New Tab (newtab.js) ---------------- */
+  pages.newtab = (t, body) => V.renderNewTab(t, body);
 
   /* ---------------- Library & Passwords (from Relay) ---------------- */
   pages.library = (t, body) => {
@@ -131,7 +96,7 @@
     const draw = () => {
       const q = $('#bQ', body).value.toLowerCase();
       const list = V.bookmarks.filter(b => (cur === 'all' || (b.folder || 'Bar') === cur) && (!q || (b.title || '').toLowerCase().includes(q) || b.url.toLowerCase().includes(q)));
-      $('#bList', body).innerHTML = list.map(b => `<div class="h-row" data-id="${b.id}">${faviconHTML({ url: b.url, title: b.title }, 16)}<span class="h-title">${esc(b.title || b.url)}</span><span class="h-host">${esc(hostOf(b.url))}</span><span class="chip">${esc(label(b.folder || 'Bar'))}</span><button class="icon-btn sm" data-more>${ic('dots', 14)}</button></div>`).join('')
+      $('#bList', body).innerHTML = list.map(b => `<div class="h-row" data-id="${b.id}">${bmIconHTML(b, 18)}<span class="h-title">${esc(b.title || b.url)}</span><span class="h-host">${esc(hostOf(b.url))}</span><span class="chip">${esc(label(b.folder || 'Bar'))}</span><button class="icon-btn sm" data-more>${ic('dots', 14)}</button></div>`).join('')
         || `<div class="pg-empty">${ic('star', 28)}<p>No bookmarks here yet. Press ⌘D on any page.</p></div>`;
       $$('.h-row', body).forEach(r => {
         const b = V.bookmarks.find(x => x.id === r.dataset.id);
@@ -142,6 +107,7 @@
     const bmMenu = (b, x, y) => popMenu(x, y, [
       { label: 'Open in New Tab', icon: 'plus', onClick: () => V.openTab(b.url, { background: true }) },
       { label: 'Open in Split View', icon: 'split', onClick: () => V.openInSplit(b.url) },
+      { label: 'Change Icon…', icon: 'palette', onClick: () => V.iconPicker(b, async (patch) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, ...patch }); draw(); }) },
       { label: 'Rename…', icon: 'edit', onClick: () => openModal({ title: 'Rename bookmark', icon: 'star', body: `<input class="input" id="rnT" value="${esc(b.title)}">`, actions: [{ label: 'Cancel' }, { label: 'Save', cls: 'brand', onClick: async (m) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, title: $('#rnT', m).value }); draw(); } }] }) },
       { label: 'Delete', icon: 'trash', danger: true, onClick: async () => { V.bookmarks = await vantage.bookmarks.del(b.id); draw(); } }
     ]);
@@ -179,7 +145,7 @@
 
   /* ---------------- Settings ---------------- */
   const SET_SECTIONS = [
-    ['general', 'General', 'settings'], ['tabs', 'Tabs & split view', 'split'], ['privacy', 'Privacy & ad blocking', 'shieldCheck'],
+    ['general', 'General', 'settings'], ['appearance', 'Appearance', 'palette'], ['tabs', 'Tabs & split view', 'split'], ['privacy', 'Privacy & ad blocking', 'shieldCheck'],
     ['vpn', 'VPN', 'vpn'], ['passwords', 'Passwords', 'key'], ['downloads', 'Downloads', 'download'], ['library', 'Library', 'library'],
     ['containers', 'Containers', 'container'], ['import', 'Import', 'upload'], ['about', 'About', 'sparkles']
   ];
@@ -200,30 +166,63 @@
   const bindSelect = (el, id, fn) => { const x = $('#' + id, el); if (x) x.onchange = () => fn(x.value); };
 
   const settingsPages = {
-    async general(el) {
-      const isDef = await vantage.defaultBrowser.status().catch(() => false);
+    general(el) {
       el.innerHTML = `<h1>General</h1>
-        ${card('', `${row('Default browser', isDef ? 'Vantage opens your links.' : 'Open links from other apps in Vantage.', isDef ? '<span class="chip ok">Default</span>' : '<button class="btn brand" id="sDef">Make default</button>')}`)}
-        ${card('Look', `${row('Theme', '', select('sTheme', [['system', 'Match the system'], ['dark', 'Dark'], ['light', 'Light']], S().theme))}
-          ${row('Bookmarks bar', 'Show your bookmarks under the address bar.', toggle('sBm', S().bookmarksBar !== false))}`, 'palette')}
-        ${card('Search', `${row('Search engine', 'Used by the address bar.', select('sEng', Object.entries(V.ENGINES).map(([k, v]) => [k, v.label]), S().searchEngine))}
-          ${row('Search suggestions', 'Ask the search engine for suggestions as you type.', toggle('sSug', S().suggestions !== false))}`, 'search')}
-        ${card('Starting up', `${row('When Vantage opens', '', select('sStart', [['restore', 'Continue where you left off'], ['newtab', 'Open a new tab']], S().startup))}`, 'home')}`;
-      $('#sDef', el)?.addEventListener('click', async () => { const ok = await vantage.defaultBrowser.set(); toast(ok ? 'Vantage is now your default browser' : 'Confirm in the system prompt or settings'); setTimeout(() => settingsPages.general(el), 1500); });
-      bindSelect(el, 'sTheme', v => set({ theme: v }));
-      bindToggle(el, 'sBm', v => set({ bookmarksBar: v }));
+        ${card('', `${row('Default browser', 'Open links from other apps in Vantage.', '<span id="sDefC"><span class="spin"></span></span>')}`)}
+        ${card('Address bar', `${row('Search engine', 'Used by the address bar and New Tab.', select('sEng', Object.entries(V.ENGINES).map(([k, v]) => [k, v.label]), S().searchEngine))}
+          ${row('Suggestions while you type', 'The list under the address bar: open tabs, bookmarks, history and searches. Off means no list at all.', toggle('sSug', S().suggestions !== false))}
+          ${row('Ask the search engine too', 'Sends what you type to your search engine for ideas. Your history and bookmarks are searched on this computer either way.', toggle('sSugE', S().engineSuggestions !== false && S().suggestions !== false))}`, 'search')}
+        ${card('Starting up', `${row('When Vantage opens', '', select('sStart', [['restore', 'Continue where you left off'], ['newtab', 'Open a new tab']], S().startup))}`, 'home')}
+        <p class="muted-sm set-note">Theme, colors and toolbar buttons are under <a data-sec2="appearance">Appearance</a>.</p>`;
+      vantage.defaultBrowser.status().catch(() => false).then((isDef) => {
+        const c = $('#sDefC', el); if (!c) return;
+        c.innerHTML = isDef ? '<span class="chip ok">Default</span>' : '<button class="btn brand" id="sDef">Make default</button>';
+        $('#sDef', el)?.addEventListener('click', async () => { const ok = await vantage.defaultBrowser.set(); toast(ok ? 'Vantage is now your default browser' : 'Confirm in the system prompt or settings'); setTimeout(() => settingsPages.general(el), 1500); });
+      });
+      $('[data-sec2]', el).onclick = () => { const t = V.activeTab(); t.section = 'appearance'; t.mounted = null; V.mount(t); };
       bindSelect(el, 'sEng', v => set({ searchEngine: v }));
-      bindToggle(el, 'sSug', v => set({ suggestions: v }));
+      bindToggle(el, 'sSug', v => { set({ suggestions: v }); const e = $('#sSugE', el); e.disabled = !v; if (!v) e.checked = false; });
+      const sugE = $('#sSugE', el); sugE.disabled = S().suggestions === false;
+      bindToggle(el, 'sSugE', v => set({ engineSuggestions: v }));
       bindSelect(el, 'sStart', v => set({ startup: v }));
+    },
+    appearance(el) {
+      const a = S().accent || 'ocean';
+      const tb = S().toolbar || {};
+      el.innerHTML = `<h1>Appearance</h1>
+        ${card('Color', `${row('Theme', '', select('sTheme', [['system', 'Match the system'], ['dark', 'Dark'], ['light', 'Light']], S().theme))}
+          <div class="set-sub"><b>Accent</b><div class="acc-grid">${V.ACCENTS.map(([k, c, l]) => `<button class="acc ${a === k ? 'on' : ''}" data-acc="${k}" style="--c:${c}"><i></i><span>${l}</span></button>`).join('')}
+            <label class="acc ${a === 'custom' ? 'on' : ''}" style="--c:${esc(S().accentCustom || '#3fa9f5')}"><i class="any"></i><span>Any color</span><input type="color" id="sAccC" value="${esc(S().accentCustom || '#3fa9f5')}"></label></div></div>`, 'palette')}
+        ${card('Layout', `${row('Density', 'Compact makes tabs, the toolbar and the bookmarks bar a little shorter.', select('sDen', [['comfortable', 'Comfortable'], ['compact', 'Compact']], S().density || 'comfortable'))}
+          ${row('Tabs on the side', 'A vertical list of tabs on the left.', toggle('sSide', S().tabsOnSide))}
+          ${row('Bookmarks bar', 'Show your bookmarks under the address bar.', toggle('sBm', S().bookmarksBar !== false))}
+          ${row('Names on the bookmarks bar', 'Off shows icons only, so more fit. Right-click one bookmark to hide just its name.', toggle('sBmN', S().bookmarkNames !== false))}`, 'window')}
+        ${card('Toolbar buttons', [['vpn', 'VPN', 'vpn'], ['split', 'Split view', 'split'], ['downloads', 'Downloads', 'download'], ['vault', 'Passwords', 'key'], ['library', 'Library', 'library']].map(([k, l, i]) => row(`${ic(i, 15)} ${l}`, '', toggle('tb_' + k, tb[k] !== false))).join(''), 'command')}
+        ${card('New Tab', `<p class="set-p">Background, widgets, shortcuts and weather are set from the <b>Customize</b> button on any New Tab.</p><div class="btn-row"><button class="btn" id="sNt">${ic('customize', 14)} Customize New Tab</button></div>`, 'home')}`;
+      bindSelect(el, 'sTheme', v => set({ theme: v }));
+      $$('[data-acc]', el).forEach(b => b.onclick = async () => { await set({ accent: b.dataset.acc }); settingsPages.appearance(el); });
+      $('#sAccC', el).oninput = (e) => document.documentElement.style.setProperty('--accent', e.target.value);
+      $('#sAccC', el).onchange = async (e) => { await set({ accent: 'custom', accentCustom: e.target.value }); settingsPages.appearance(el); };
+      bindSelect(el, 'sDen', v => set({ density: v }));
+      bindToggle(el, 'sSide', v => set({ tabsOnSide: v }));
+      bindToggle(el, 'sBm', v => set({ bookmarksBar: v }));
+      bindToggle(el, 'sBmN', v => set({ bookmarkNames: v }));
+      for (const k of ['vpn', 'split', 'downloads', 'vault', 'library']) bindToggle(el, 'tb_' + k, v => set({ toolbar: { [k]: v } }));
+      $('#sNt', el).onclick = () => V.cmd('customize-newtab');
     },
     tabs(el) {
       el.innerHTML = `<h1>Tabs & split view</h1>
         ${card('Tabs', `${row('Tabs on the side', 'A vertical list of tabs on the left, handy with lots of tabs.', toggle('tSide', S().tabsOnSide))}
           ${row('Put inactive tabs to sleep', 'Tabs you haven’t looked at give back their memory, and reload when you click them.', select('tSleep', [[0, 'Never'], [10, 'After 10 minutes'], [30, 'After 30 minutes'], [60, 'After 1 hour'], [240, 'After 4 hours']], S().sleepAfterMin))}`, 'window')}
         ${card('Split view', `<p class="set-p">Show up to four pages on one screen. Pick a layout from the ${ic('split', 14)} button or with ⌘⌥1–6, drag tabs onto the page to place them, and drag the gaps to resize. <b>Focus mode</b> (⇧⌘F) goes full screen and hides the toolbar until you move to the top edge.</p>
-          <div class="layouts big">${Object.keys(V.LAYOUTS).map((k, i) => `<button class="lay" data-l="${k}">${ic({ one: 'layout1', cols2: 'layoutCols2', rows2: 'layoutRows2', main3: 'layoutMain3', cols3: 'layoutCols3', grid4: 'layoutGrid4' }[k], 34)}<span>${V.LAYOUT_NAMES[k]}</span><kbd>⌘⌥${i + 1}</kbd></button>`).join('')}</div>`, 'split')}`;
+          <div class="layouts big">${Object.keys(V.LAYOUTS).map((k, i) => `<button class="lay" data-l="${k}">${ic({ one: 'layout1', cols2: 'layoutCols2', rows2: 'layoutRows2', main3: 'layoutMain3', cols3: 'layoutCols3', grid4: 'layoutGrid4' }[k], 34)}<span>${V.LAYOUT_NAMES[k]}</span><kbd>⌘⌥${i + 1}</kbd></button>`).join('')}</div>`, 'split')}
+        ${card('Mini player', `<p class="set-p">A video keeps playing in a small window in the corner while you use other tabs. Drag it to any corner; double-click it to go back to its tab. <kbd>⌥⌘M</kbd> sends the current video there.</p>
+          ${row('Pop out playing videos when you switch tabs', '', toggle('tMini', (S().miniPlayer || {}).auto !== false))}
+          ${row('Size', '', select('tMiniS', [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']], (S().miniPlayer || {}).size || 'm'))}`, 'miniPlayer')}`;
       bindToggle(el, 'tSide', v => set({ tabsOnSide: v }));
       bindSelect(el, 'tSleep', v => set({ sleepAfterMin: +v }));
+      bindToggle(el, 'tMini', v => set({ miniPlayer: { auto: v } }));
+      bindSelect(el, 'tMiniS', v => set({ miniPlayer: { size: v } }));
       $$('[data-l]', el).forEach(b => b.onclick = () => V.setLayout(b.dataset.l));
     },
     async privacy(el) {
@@ -240,7 +239,12 @@
           ${row('Secure DNS', 'Look up sites over an encrypted connection so your network can’t see or change them.', select('pDns', [['automatic', 'On when available'], ['secure', 'Always (strict)'], ['off', 'Off']], S().secureDns))}
           ${row('DNS provider', '', select('pDnsP', [['cloudflare', 'Cloudflare (1.1.1.1)'], ['google', 'Google'], ['quad9', 'Quad9 (blocks malware)'], ['nextdns', 'NextDNS']], S().dnsProvider))}
           ${row('Ask sites not to sell or share your data', 'Sends Global Privacy Control and Do Not Track.', toggle('pGpc', S().gpc !== false))}`, 'lock')}
+        ${card('Signing in to Google & Microsoft', `<p class="set-p">These sign-in pages refuse browsers they don’t recognize, so Vantage presents itself as a mainstream browser there (only there). Ad blocking is always off on sign-in pages. If Google still says “This browser or app may not be secure”, Vantage tries the next browser on its own.</p>
+          ${row('Look like', '', select('pSi', [['auto', 'Automatic (Firefox for Google, Edge for Microsoft)'], ['safari', 'Safari'], ['firefox', 'Firefox'], ['edge', 'Edge'], ['chrome', 'Chrome']], S().signinMode || 'auto'))}
+          ${row('Start over', 'Forgets the half-finished Google sign-in and goes back to Automatic.', '<button class="btn" id="pSiR">Reset sign-in</button>')}`, 'key')}
         ${card('Browsing data', `${row('Clear history, cache and cookies', '', '<button class="btn danger" id="pClear">Clear…</button>')}`, 'trash')}`;
+      bindSelect(el, 'pSi', v => set({ signinMode: v }));
+      $('#pSiR', el).onclick = async () => { await vantage.signin.reset(); V.settings = await vantage.settings.get(); toast('Sign-in reset — try again'); settingsPages.privacy(el); };
       bindToggle(el, 'pAb', v => set({ adblock: { enabled: v } }));
       bindSelect(el, 'pStr', v => { set({ adblock: { strict: v === 'strict' } }); toast('Reloading the filter lists…'); });
       $('#pUpd', el).onclick = async () => { toast('Updating filter lists…'); await vantage.adblock.reload(); toast('Filter lists updated'); };
@@ -369,7 +373,7 @@
         ${card('Keyboard shortcuts', `<div class="kbd-grid">${[
           ['New tab', '⌘T'], ['Reopen closed tab', '⇧⌘T'], ['Address bar', '⌘L'], ['Command palette', '⌘K'], ['Find in page', '⌘F'],
           ['Split layouts', '⌘⌥1–6'], ['Next / previous pane', '⌘⌥] / ⌘⌥['], ['Focus mode', '⇧⌘F'], ['Reader view', '⌥⌘R'],
-          ['Bookmark page', '⌘D'], ['History', '⌘Y'], ['Downloads', '⇧⌘J'], ['Library', '⇧⌘L'], ['Passwords', '⌥⌘K'], ['VPN on/off', '⇧⌘U'],
+          ['Bookmark page', '⌘D'], ['Save to Read Later', '⇧⌘D'], ['Mini player', '⌥⌘M'], ['History', '⌘Y'], ['Downloads', '⇧⌘J'], ['Library', '⇧⌘L'], ['Passwords', '⌥⌘K'], ['VPN on/off', '⇧⌘U'],
           ['Screenshot', '⇧⌘2'], ['Search tabs', '⇧⌘A'], ['New private window', '⇧⌘N']
         ].map(([a, k]) => `<span>${a}</span><kbd>${V.platform === 'darwin' ? k : k.replace(/⌘/g, 'Ctrl+').replace(/⇧/g, 'Shift+').replace(/⌥/g, 'Alt+')}</kbd>`).join('')}</div>`, 'command')}
         <p class="muted-sm set-note">Data lives in <span class="mono">${esc(i.userData)}</span>.</p>`;

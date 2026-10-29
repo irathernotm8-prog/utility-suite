@@ -3,8 +3,9 @@
 // We present a consistent, ordinary browser identity (headers + JavaScript) for their sign-in pages.
 const CHROME_FULL = process.versions.chrome || '140.0.0.0';
 const CHROME_MAJOR = CHROME_FULL.split('.')[0];
-// Firefox's version number runs a release or two ahead of Chrome's; keep it current as Electron updates
-const FIREFOX_V = `${Number(CHROME_MAJOR) + 1}.0`;
+// Firefox ships a new version every four weeks (128 came out on 9 July 2024), so work out the current one
+// from today's date. An out-of-date Firefox is one of the things Google's sign-in check looks at.
+const FIREFOX_V = `${128 + Math.max(0, Math.floor((Date.now() - Date.UTC(2024, 6, 9)) / (28 * 86400000)))}.0`;
 const WIN = process.platform === 'win32';
 const OS_UA = WIN ? 'Windows NT 10.0; Win64; x64' : 'Macintosh; Intel Mac OS X 10_15_7';
 const FX_OS = WIN ? 'Windows NT 10.0; Win64; x64' : 'Macintosh; Intel Mac OS X 10.15';
@@ -111,4 +112,4 @@ function navigatorPatch(id) {
   })();`;
 }
 
-module.exports = { IDENTITIES, identityFor, rewriteHeaders, navigatorPatch, GOOGLE_LOGIN, MS_LOGIN };
+module.exports = { FIREFOX_V, IDENTITIES, identityFor, rewriteHeaders, navigatorPatch, GOOGLE_LOGIN, MS_LOGIN };

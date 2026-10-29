@@ -58,7 +58,8 @@
   /* ---------------- address bar & suggestions ---------------- */
   const sug = { items: [], sel: -1, q: '', seq: 0, typed: '' };
   function focusOmni() { omni.focus(); omni.select(); }
-  omni.addEventListener('focus', () => { const t = active(); omni.value = t && t.kind === 'web' ? t.url : ''; setTimeout(() => omni.select(), 0); document.body.classList.add('omni-focus'); buildSuggest(''); });
+  // on a web page, focusing the address bar lists recent sites; on New Tab the page itself is the list, so wait for typing
+  omni.addEventListener('focus', () => { const t = active(); omni.value = t && t.kind === 'web' ? t.url : ''; setTimeout(() => omni.select(), 0); document.body.classList.add('omni-focus'); if (t?.kind === 'web') buildSuggest(''); });
   omni.addEventListener('blur', () => { setTimeout(() => { if (document.activeElement !== omni) { hideSuggest(); document.body.classList.remove('omni-focus'); const t = active(); if (t) omni.value = pretty(t.url); } }, 150); });
   omni.addEventListener('input', (e) => {
     const deleting = e.inputType && e.inputType.startsWith('delete');
@@ -96,6 +97,8 @@
   }
   async function buildSuggest(q, complete = false) {
     const seq = ++sug.seq;
+    // suggestions off: no drop-down at all, just the address bar
+    if (V.settings.suggestions === false) { hideSuggest(); return; }
     const ql = q.trim().toLowerCase();
     const items = [];
     const seen = new Set();
@@ -121,7 +124,7 @@
       }
     }
     renderSuggest();
-    if (ql && V.settings.suggestions !== false && !V.isPrivate) {
+    if (ql && V.settings.engineSuggestions !== false && !V.isPrivate) {
       const remote = await vantage.suggest(q.trim()).catch(() => []);
       if (seq !== sug.seq) return;
       const at = Math.max(1, items.findIndex(i => i.kind === 'search') + 1);
@@ -177,7 +180,7 @@
     const folders = [...new Set(V.bookmarks.filter(b => (b.folder || '').startsWith('Bar/')).map(b => b.folder.split('/')[1]))];
     const others = V.bookmarks.filter(b => !(b.folder || 'Bar').startsWith('Bar'));
     bar.innerHTML = folders.map(f => `<button class="bm folder" data-folder="Bar/${esc(f)}">${ic('folder', 14)}<span>${esc(f)}</span></button>`).join('') +
-      items.map(b => `<button class="bm" data-id="${b.id}" title="${esc(b.title)}\n${esc(b.url)}" draggable="true">${faviconHTML({ url: b.url, title: b.title, favicon: b.icon || '' }, 14)}<span>${esc(b.title || hostOf(b.url))}</span></button>`).join('') +
+      items.map(b => `<button class="bm ${V.settings.bookmarkNames === false || b.hideName ? 'icon-only' : ''}" data-id="${b.id}" title="${esc(b.title)}\n${esc(b.url)}" draggable="true">${bmIconHTML(b, 15)}<span>${esc(b.title || hostOf(b.url))}</span></button>`).join('') +
       (others.length ? `<span class="bm-fill"></span><button class="bm folder" data-folder="__other">${ic('folder', 14)}<span>Other bookmarks</span></button>` : '') +
       (!V.bookmarks.length ? `<span class="bm-empty">Bookmark pages with ⌘D, or <a data-import>import from Chrome</a></span>` : '');
     $$('.bm[data-id]', bar).forEach(el => {
@@ -198,10 +201,28 @@
       const f = el.dataset.folder;
       const list = f === '__other' ? others : V.bookmarks.filter(b => b.folder === f || (b.folder || '').startsWith(f + '/'));
       const r = el.getBoundingClientRect();
-      popMenu(r.left, r.bottom + 4, list.slice(0, 40).map(b => ({ label: b.title || b.url, icon: 'globe', onClick: () => V.navigate(b.url) })).concat(list.length > 40 ? ['-', { label: `All ${list.length}…`, onClick: () => V.openInternal('bookmarks') }] : []));
+      popMenu(r.left, r.bottom + 4, list.slice(0, 40).map(b => ({ label: b.title || b.url, iconHTML: bmIconHTML(b, 15), onClick: () => V.navigate(b.url) })).concat(list.length > 40 ? ['-', { label: `All ${list.length}…`, onClick: () => V.openInternal('bookmarks') }] : []));
     });
     $('[data-import]', bar)?.addEventListener('click', () => V.openInternal('settings:import'));
+    fillBookmarkIcons();
   }
+  // bookmarks without an icon get the site's own, fetched once and saved with the bookmark
+  const iconTried = new Set();
+  let iconRun = null;
+  function fillBookmarkIcons() {
+    if (iconRun || V.isPrivate) return;
+    const need = V.bookmarks.filter(b => !b.icon && !b.iconType && !iconTried.has(b.id) && /^https?:/.test(b.url))
+      .sort((a, b) => ((a.folder || 'Bar') === 'Bar' ? 0 : 1) - ((b.folder || 'Bar') === 'Bar' ? 0 : 1)).slice(0, 60);
+    if (!need.length) return;
+    iconRun = (async () => {
+      for (const b of need) {
+        iconTried.add(b.id);
+        const data = await vantage.favicon.get(b.url).catch(() => null);
+        if (data && V.bookmarks.some(x => x.id === b.id && !x.icon)) V.bookmarks = await vantage.bookmarks.save({ id: b.id, icon: data });
+      }
+    })().finally(() => { iconRun = null; });
+  }
+  V.fillBookmarkIcons = fillBookmarkIcons;
   function bookmarkMenu(b, x, y) {
     popMenu(x, y, [
       { label: 'Open in New Tab', icon: 'plus', onClick: () => V.openTab(b.url, { background: true }) },
@@ -209,6 +230,8 @@
       { label: 'Open in Private Window', icon: 'mask', onClick: () => vantage.newWindow({ isPrivate: true, urls: [b.url] }) },
       '-',
       { label: 'Edit…', icon: 'edit', onClick: () => editBookmark(b) },
+      { label: 'Change Icon…', icon: 'palette', onClick: () => iconPicker(b, async (patch) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, ...patch }); renderBookmarksBar(); }) },
+      { label: b.hideName ? 'Show Name' : 'Show Icon Only', icon: 'star', onClick: async () => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, hideName: !b.hideName }); renderBookmarksBar(); } },
       { label: 'Copy Link', icon: 'link', onClick: () => navigator.clipboard.writeText(b.url) },
       { label: 'Delete', icon: 'trash', danger: true, onClick: async () => { V.bookmarks = await vantage.bookmarks.del(b.id); renderBookmarksBar(); updateToolbar(); } }
     ]);
@@ -219,15 +242,84 @@
   }
   function editBookmark(b) {
     openModal({
-      title: 'Edit bookmark', icon: 'star', body: `<div class="field"><label>Name</label><input class="input" id="bT" value="${esc(b.title)}"></div>
+      title: 'Edit bookmark', icon: 'star', body: `<div class="bm-edit-ic"><span id="bIc">${bmIconHTML(b, 40)}</span><button class="btn sm" id="bIcB">${ic('palette', 14)} Change icon…</button></div>
+        <div class="field"><label>Name</label><input class="input" id="bT" value="${esc(b.title)}"></div>
         <div class="field"><label>Address</label><input class="input" id="bU" value="${esc(b.url)}"></div>
         <div class="field"><label>Folder</label><select class="select" id="bF">${folderOptions(b.folder)}</select></div>`,
       actions: [{ label: 'Cancel' }, { label: 'Save', cls: 'brand', onClick: async (m) => {
         V.bookmarks = await vantage.bookmarks.save({ id: b.id, title: $('#bT', m).value.trim(), url: V.toURL($('#bU', m).value), folder: $('#bF', m).value });
         renderBookmarksBar(); updateToolbar();
-      } }]
+      } }],
+      onMount: (m) => { $('#bIcB', m).onclick = () => { const vals = { t: $('#bT', m).value, u: $('#bU', m).value, f: $('#bF', m).value };
+        iconPicker(b, async (patch) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, ...patch, title: vals.t.trim() || b.title, url: V.toURL(vals.u) || b.url, folder: vals.f }); renderBookmarksBar(); updateToolbar(); }); }; }
     });
   }
+
+  /* ---------------- icon picker: site icon, emoji, symbol, letter or your own picture ---------------- */
+  const EMOJI = ['⭐️','🔥','❤️','🎵','🎬','📺','🎮','⚽️','🏀','📚','📰','💼','💰','📈','🛒','🍔','☕️','✈️','🏠','💡','🚀','🧠','🎨','📷','🧩','🐶','🌿','🌙','☀️','⚡️','🔒','📬','🗓️','🧪','💻','🤖','🎧','🏆','🎯','🍿'];
+  const GLYPHS = ['star','heart','home','mail','chat','calendar','music','film','tv','play','game','ball','book','news','library','briefcase','chart','cart','code','coffee','plane','rocket','leaf','paw','bulb','camera','image','cloud','globe','wifi','key','lock','sparkles','flag','folder','note','bolt','box'];
+  const SWATCHES = ['#3fa9f5','#6a7dff','#8b6dff','#c04bff','#ff4f9a','#e5484d','#ff7a45','#ffb03b','#22c55e','#14b8a6','#0ea5e9','#64748b','#111827'];
+  function iconPicker(target, onSave) {
+    const st = { iconType: target.iconType || 'site', emoji: target.emoji || '⭐️', glyph: target.glyph || 'star', color: target.color || tileColor(hostOf(target.url)), letter: target.letter || letterOf(target), image: target.image || '', icon: target.icon || '' };
+    const preview = () => bmIconHTML({ ...target, ...st, iconType: st.iconType === 'site' ? '' : st.iconType }, 56);
+    const body = () => `<div class="ip-wrap">
+        <div class="ip-prev" id="ipPrev">${preview()}</div>
+        <div class="seg wide ip-tabs">${[['site', 'Site icon'], ['emoji', 'Emoji'], ['glyph', 'Symbol'], ['letter', 'Letter'], ['image', 'Picture']].map(([k, l]) => `<button data-k="${k}" class="${st.iconType === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+        <div class="ip-pane" id="ipPane"></div></div>`;
+    openModal({
+      title: 'Choose an icon', subtitle: target.title || hostOf(target.url), icon: 'palette', body: body(),
+      actions: [{ label: 'Cancel' }, { label: 'Use this icon', cls: 'brand', onClick: async () => {
+        const patch = { iconType: st.iconType === 'site' ? null : st.iconType, emoji: st.emoji, glyph: st.glyph, color: st.color, letter: st.letter, image: st.iconType === 'image' ? st.image : null };
+        if (st.iconType === 'site') patch.icon = st.icon || null;
+        await onSave(patch);
+      } }],
+      onMount: (m) => {
+        const pane = $('#ipPane', m);
+        const refresh = () => { $('#ipPrev', m).innerHTML = preview(); };
+        const swatches = () => `<div class="ip-sw">${SWATCHES.map(c => `<button class="swatch ${c === st.color ? 'active' : ''}" style="--c:${c}" data-c="${c}"></button>`).join('')}<label class="swatch custom" title="Any color"><input type="color" value="${esc(st.color)}" data-cc></label></div>`;
+        const bindSw = () => {
+          $$('[data-c]', pane).forEach(b => b.onclick = () => { st.color = b.dataset.c; draw(); });
+          const cc = $('[data-cc]', pane); if (cc) cc.oninput = () => { st.color = cc.value; refresh(); };
+        };
+        const draw = () => {
+          $$('.ip-tabs button', m).forEach(b => b.classList.toggle('active', b.dataset.k === st.iconType));
+          if (st.iconType === 'site') {
+            pane.innerHTML = `<p class="set-p">The icon the site itself uses. Vantage fetches the sharpest one it offers.</p><button class="btn" id="ipRe">${ic('refresh', 14)} Fetch it again</button>`;
+            $('#ipRe', pane).onclick = async () => { $('#ipRe', pane).textContent = 'Fetching…'; const d = await vantage.favicon.get(target.url, true).catch(() => null); if (d) { st.icon = d; refresh(); toast('Got the site’s icon'); } else toast('That site doesn’t offer an icon', 'error'); draw(); };
+          } else if (st.iconType === 'emoji') {
+            pane.innerHTML = `<div class="ip-grid emoji">${EMOJI.map(e => `<button data-e="${e}" class="${e === st.emoji ? 'on' : ''}">${e}</button>`).join('')}</div><div class="field"><label>Or type any emoji</label><input class="input" id="ipE" value="${esc(st.emoji)}" maxlength="8"></div>`;
+            $$('[data-e]', pane).forEach(b => b.onclick = () => { st.emoji = b.dataset.e; draw(); });
+            $('#ipE', pane).oninput = (e) => { st.emoji = e.target.value.trim() || '⭐️'; refresh(); };
+          } else if (st.iconType === 'glyph') {
+            pane.innerHTML = `<div class="ip-grid glyph" style="--c:${esc(st.color)}">${GLYPHS.map(g => `<button data-g="${g}" class="${g === st.glyph ? 'on' : ''}">${ic(g, 20)}</button>`).join('')}</div>${swatches()}`;
+            $$('[data-g]', pane).forEach(b => b.onclick = () => { st.glyph = b.dataset.g; draw(); });
+            bindSw();
+          } else if (st.iconType === 'letter') {
+            pane.innerHTML = `<div class="field"><label>Letters (up to 2)</label><input class="input" id="ipL" value="${esc(st.letter)}" maxlength="2"></div>${swatches()}`;
+            $('#ipL', pane).oninput = (e) => { st.letter = e.target.value || letterOf(target); refresh(); };
+            bindSw();
+          } else {
+            pane.innerHTML = `<p class="set-p">Any picture from your computer. It’s cropped to a square.</p><label class="btn">${ic('image', 14)} Choose a picture…<input type="file" accept="image/*" id="ipF" hidden></label>`;
+            $('#ipF', pane).onchange = (e) => {
+              const f = e.target.files[0]; if (!f) return;
+              const img = new Image();
+              img.onload = () => {
+                const c = document.createElement('canvas'); c.width = c.height = 128;
+                const k = Math.min(img.width, img.height);
+                c.getContext('2d').drawImage(img, (img.width - k) / 2, (img.height - k) / 2, k, k, 0, 0, 128, 128);
+                st.image = c.toDataURL('image/png'); refresh(); URL.revokeObjectURL(img.src);
+              };
+              img.src = URL.createObjectURL(f);
+            };
+          }
+          refresh();
+        };
+        $$('.ip-tabs button', m).forEach(b => b.onclick = () => { st.iconType = b.dataset.k; draw(); });
+        draw();
+      }
+    });
+  }
+  V.iconPicker = iconPicker;
   async function toggleBookmark() {
     const t = active();
     if (!isWeb(t)) return;
@@ -235,17 +327,20 @@
     if (!existing) {
       V.bookmarks = await vantage.bookmarks.save({ title: t.title || hostOf(t.url), url: t.url, folder: 'Bar' });
       renderBookmarksBar(); updateToolbar();
+      const fresh = V.bookmarks.find(x => x.url === t.url);
+      vantage.favicon.get(t.url).then(async (d) => { if (d && fresh) { V.bookmarks = await vantage.bookmarks.save({ id: fresh.id, icon: d }); renderBookmarksBar(); } }).catch(() => {});
     }
     const b = V.bookmarks.find(x => x.url === t.url);
     popover($('#omniStar'), {
       width: 320, html: `<div class="pop-h">${ic('star', 16)}<b>${existing ? 'Edit bookmark' : 'Bookmark added'}</b></div>
         <div class="pop-b"><div class="field"><label>Name</label><input class="input" id="pbT" value="${esc(b.title)}"></div>
         <div class="field"><label>Folder</label><select class="select" id="pbF">${folderOptions(b.folder)}</select></div></div>
-        <div class="pop-f"><button class="btn danger" id="pbDel">Remove</button><span class="spacer"></span><button class="btn brand" id="pbOk">Done</button></div>`,
+        <div class="pop-f"><button class="btn danger" id="pbDel">Remove</button><button class="btn ghost" id="pbIc" title="Change icon">${ic('palette', 14)}</button><span class="spacer"></span><button class="btn brand" id="pbOk">Done</button></div>`,
       onMount: (p, close) => {
         const save = async () => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, title: $('#pbT', p).value.trim() || b.title, folder: $('#pbF', p).value }); renderBookmarksBar(); };
         $('#pbOk', p).onclick = async () => { await save(); close(); };
         $('#pbT', p).onkeydown = async (e) => { if (e.key === 'Enter') { await save(); close(); } };
+        $('#pbIc', p).onclick = () => { close(); const bb = V.bookmarks.find(x => x.id === b.id) || b; iconPicker(bb, async (patch) => { V.bookmarks = await vantage.bookmarks.save({ id: b.id, ...patch }); renderBookmarksBar(); }); };
         $('#pbDel', p).onclick = async () => { V.bookmarks = await vantage.bookmarks.del(b.id); renderBookmarksBar(); updateToolbar(); close(); };
         setTimeout(() => $('#pbT', p).select(), 30);
       }
@@ -642,7 +737,7 @@
     const css = `body{margin:0;background:${dark ? '#121417' : '#fbf9f5'};color:${dark ? '#e4e6ea' : '#1f1d1a'};font:${size}px/1.65 Charter,"Iowan Old Style",Georgia,serif}
       main{max-width:700px;margin:0 auto;padding:56px 28px 120px}h1{font:700 2em/1.2 -apple-system,system-ui,sans-serif;letter-spacing:-.02em;margin:0 0 .3em}
       .by{font:14px -apple-system,system-ui,sans-serif;color:${dark ? '#9aa1ab' : '#7a746b'};margin-bottom:2.2em}img,video,figure{max-width:100%;height:auto;border-radius:6px}
-      a{color:${dark ? '#6fd8c6' : '#0b7d6f'}}pre,code{font-size:.82em;background:${dark ? '#1c1f24' : '#f0ece4'};border-radius:5px}pre{padding:12px;overflow:auto}
+      a{color:${dark ? '#7cc4ff' : '#1f6fc4'}}pre,code{font-size:.82em;background:${dark ? '#1c1f24' : '#f0ece4'};border-radius:5px}pre{padding:12px;overflow:auto}
       blockquote{margin:1em 0;padding-left:1em;border-left:3px solid ${dark ? '#333' : '#ddd'};color:${dark ? '#b8bcc4' : '#555'}}`;
     const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; media-src https:"><base href="${esc(t.url)}" target="_blank"><style>${css}</style></head>
       <body><main><h1>${esc(a.title || t.title)}</h1><div class="by">${esc([a.byline, a.siteName || hostOf(t.url)].filter(Boolean).join(' · '))}</div>${a.content}</main></body></html>`;
@@ -673,6 +768,9 @@
       { label: 'Downloads', icon: 'download', hint: '⇧⌘J', onClick: () => V.openInternal('downloads') },
       { label: 'Library', icon: 'library', hint: '⇧⌘L', onClick: () => V.openInternal('library') },
       { label: 'Passwords', icon: 'key', hint: '⌥⌘K', onClick: () => V.openInternal('vault') },
+      '-',
+      { label: 'Save to Read Later', icon: 'readLater', hint: '⇧⌘D', onClick: () => readLater(), disabled: !isWeb(t) },
+      { label: 'Mini Player', icon: 'miniPlayer', hint: '⌥⌘M', onClick: () => V.popOutMini?.(t), disabled: !t?.wv },
       '-',
       { html: `<div class="zoom-row"><span>Zoom</span><span class="spacer"></span><button class="icon-btn sm" data-z="-1">${ic('minus', 14)}</button><b>${Math.round((t?.zoom || 1) * 100)}%</b><button class="icon-btn sm" data-z="1">${ic('plus', 14)}</button><button class="icon-btn sm" data-z="fs" title="Focus mode">${ic('maximize', 14)}</button></div>`,
         mount: (m) => $$('[data-z]', m).forEach(b => b.onclick = () => { if (b.dataset.z === 'fs') { $('#menuRoot').innerHTML = ''; toggleFocusMode(); } else { V.zoom(+b.dataset.z); setTimeout(() => { const z = b.parentElement.querySelector('b'); if (z) z.textContent = Math.round((active()?.zoom || 1) * 100) + '%'; }, 120); } }) },
@@ -706,6 +804,8 @@
       ['Downloads', 'download', () => V.openInternal('downloads')], ['Library', 'library', () => V.openInternal('library')], ['Passwords', 'key', () => V.openInternal('vault')],
       ['Settings', 'settings', () => V.openInternal('settings')], ['Clear browsing data', 'trash', () => V.clearDataModal?.()],
       ['Toggle bookmarks bar', 'star', () => cmd('toggle-bookmarks-bar')], ['Tabs on the side', 'panel', () => cmd('toggle-side-tabs')],
+      ['Save to Read Later', 'readLater', () => readLater()], ['Mini player', 'miniPlayer', () => V.popOutMini?.(active())],
+      ['Customize New Tab', 'customize', () => cmd('customize-newtab')], ['Sign-in help', 'key', () => signinHelp()],
       ['Open in Vantage Player…', 'play', () => cmd('open-player')], ['Open in Vantage Reader…', 'book', () => cmd('open-reader')]
     ];
     openModal({
@@ -743,6 +843,41 @@
       }
     });
   }
+
+  /* ---------------- read later ---------------- */
+  async function readLater(t = active()) {
+    if (!isWeb(t) || !/^https?:/.test(t.url)) return toast('Open a web page to save it for later', 'error');
+    await vantage.readLater.add({ url: t.url, title: t.title });
+    toast('Saved to Read Later — it’s on your New Tab page', '', { label: 'Undo', onClick: () => vantage.readLater.remove(t.url) });
+  }
+
+  /* ---------------- Google sign-in blocked: try another browser identity (from Relay) ---------------- */
+  const MODE_NAME = { auto: 'Automatic', firefox: 'Firefox', safari: 'Safari', edge: 'Edge', chrome: 'Chrome' };
+  let lastBlock = 0;
+  V.onSigninBlocked = async (t) => {
+    if (!t?.wcId || Date.now() - lastBlock < 4000) return;
+    lastBlock = Date.now();
+    const r = await vantage.signin.blocked(t.wcId);
+    if (r.next) {
+      V.infobar(t, { id: 'signin', icon: 'key', cls: 'accent', keep: true, html: `Google turned that sign-in away. Trying again as <b>${MODE_NAME[r.next]}</b>…`, actions: [{ label: 'Sign-in help', cls: 'ghost', onClick: () => { signinHelp(t); } }] });
+      setTimeout(() => V.dropInfobar(t, 'signin'), 9000);
+    } else signinHelp(t, true);
+  };
+  function signinHelp(t = active(), blocked = false) {
+    let pick = V.settings.signinMode || 'auto';
+    const modes = [['auto', 'Automatic', 'Firefox on Google’s sign-in page, Edge on Microsoft’s'], ['safari', 'Safari', 'Looks like Safari on a Mac'], ['firefox', 'Firefox', 'Looks like Firefox'], ['edge', 'Edge', 'Best for Microsoft accounts'], ['chrome', 'Chrome', 'Looks like Google Chrome']];
+    openModal({
+      title: blocked ? 'Sign-in was blocked' : 'Sign-in trouble?', icon: 'key',
+      subtitle: 'Google and Microsoft sometimes refuse sign-in from browsers they don’t recognize. Vantage can present itself as another browser on their sign-in pages only.',
+      body: `<div class="mode-list" id="modeList">${modes.map(([v, l, d]) => `<button data-v="${v}" class="${v === pick ? 'active' : ''}"><span class="radio"></span><span><b>${l}</b><small>${d}</small></span></button>`).join('')}</div>
+        <div class="tip">${ic('sparkles', 15)}<span>If Google asks for a passkey or security key, choose <b>“Try another way”</b> and use your password or phone prompt instead.</span></div>`,
+      actions: [{ label: 'Cancel' },
+        { label: 'Start over', onClick: async () => { await vantage.signin.set({ mode: pick, wcId: t?.wcId, restart: true }); toast('Starting the sign-in again'); } },
+        { label: 'Use this', cls: 'brand', onClick: async () => { await vantage.signin.set({ mode: pick, wcId: t?.wcId, restart: /accounts\.google\.com/.test(t?.url || '') }); toast(`Sign-in pages now see ${MODE_NAME[pick]}`); } }],
+      onMount: (m) => $$('#modeList button', m).forEach(b => b.onclick = () => { pick = b.dataset.v; $$('#modeList button', m).forEach(x => x.classList.toggle('active', x === b)); })
+    });
+  }
+  V.signinHelp = signinHelp;
 
   /* ---------------- keyboard & menu commands ---------------- */
   function cmd(name, arg) {
@@ -791,16 +926,19 @@
       case 'print': return t?.wv?.print();
       case 'screenshot': return screenshot();
       case 'open-in-split': return V.openInSplit(arg.url);
+      case 'read-later': return readLater(arg?.wcId != null ? (tabByWc(arg.wcId) || t) : t);
+      case 'mini-player': return V.popOutMini?.(arg?.wcId != null ? (tabByWc(arg.wcId) || t) : t);
+      case 'customize-newtab': { const nt = V.tabs.find(x => x.kind === 'internal' && x.page === 'newtab'); if (nt) V.showTab(nt.id); else V.openTab(); setTimeout(() => V.customizeNewTab?.(), 80); return; }
     }
   }
   vantage.onCmd((name, arg) => {
     // commands from a page's right-click menu act on that page's tab
-    if (arg && arg.wcId != null && ['reader-view', 'save-page', 'screenshot'].includes(name)) { const t = tabByWc(arg.wcId); if (t && V.panes.includes(t.id)) V.setFocus(V.panes.indexOf(t.id)); }
+    if (arg && arg.wcId != null && ['reader-view', 'save-page', 'screenshot', 'read-later'].includes(name)) { const t = tabByWc(arg.wcId); if (t && V.panes.includes(t.id)) V.setFocus(V.panes.indexOf(t.id)); }
     cmd(name, arg);
   });
   vantage.onOpenTab(({ url, background, fromWcId, container }) => V.openTab(url, { background, fromWcId, container }));
   async function setSetting(patch) { V.settings = await vantage.settings.set(patch); }
   vantage.settings.onChanged((s) => { V.settings = s; V.applySettings?.(); });
 
-  Object.assign(V, { updateToolbar, updateShield, focusOmni, hideSuggest, renderBookmarksBar, openFind, readerView, palette, toggleFocusMode, toggleVpn, loadDownloads, updateDlButton, renderVpnPill, setSetting, cmd, genPassword });
+  Object.assign(V, { readLater, updateToolbar, updateShield, focusOmni, hideSuggest, renderBookmarksBar, openFind, readerView, palette, toggleFocusMode, toggleVpn, loadDownloads, updateDlButton, renderVpnPill, setSetting, cmd, genPassword });
 })();

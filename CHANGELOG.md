@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-29 15:19 — **Vantage 0.2.0** — Matches the new blue globe icon, with seven accent colors (or any color), compact density and a choice of toolbar buttons. New Tab is a dashboard: clock, weather, a search box that also searches YouTube, Maps, Wikipedia and more, shortcuts with real site icons, Jump back in with page previews, Read later, a privacy summary and notes, on an aurora, picture-of-the-day or your own background. A mini player keeps a video playing in the corner while you use other tabs. Google sign-in no longer gets blocked, YouTube videos start without a reload, turning off search suggestions now really turns them off, and bookmarks show site icons or one you pick.
 - 2026-10-29 13:50 — **Helm 0.1.1** — New app icon, in line with the rest of the suite
 - 2026-10-29 13:50 — **Bench 0.1.3** — New app icon, in line with the rest of the suite
 - 2026-10-29 13:50 — **Lumen 0.7.2** — New app icon, in line with the rest of the suite

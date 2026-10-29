@@ -16,6 +16,18 @@
 
   V.applySettings = () => {
     applyTheme();
+    const s = V.settings;
+    const root = document.documentElement;
+    root.dataset.accent = s.accent || 'ocean';
+    if (s.accent === 'custom' && /^#[0-9a-f]{6}$/i.test(s.accentCustom || '')) {
+      root.style.setProperty('--accent', s.accentCustom);
+      root.style.setProperty('--accent-2', `color-mix(in srgb, ${s.accentCustom} 60%, #6a7dff)`);
+      root.style.setProperty('--gradient', `linear-gradient(120deg, ${s.accentCustom}, color-mix(in srgb, ${s.accentCustom} 55%, #6a7dff))`);
+    } else ['--accent', '--accent-2', '--gradient'].forEach(k => root.style.removeProperty(k));
+    document.body.classList.toggle('compact', s.density === 'compact');
+    const tb = s.toolbar || {};
+    $('#btnVpn').hidden = tb.vpn === false; $('#btnSplit').hidden = tb.split === false; $('#btnDownloads').hidden = tb.downloads === false;
+    $('#btnVault').hidden = tb.vault === false; $('#btnLibrary').hidden = tb.library === false;
     document.body.classList.toggle('side-tabs', !!V.settings.tabsOnSide);
     V.renderBookmarksBar();
     V.renderTabs();

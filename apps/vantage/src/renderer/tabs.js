@@ -94,7 +94,7 @@
       if (t.muted) wv.setAudioMuted(true);
     });
     wv.addEventListener('did-start-loading', () => { t.loading = true; t.view.classList.add('loading'); sync(); });
-    wv.addEventListener('did-stop-loading', () => { t.loading = false; t.view.classList.remove('loading'); sync(); refreshBlocked(t); });
+    wv.addEventListener('did-stop-loading', () => { t.loading = false; t.view.classList.remove('loading'); sync(); refreshBlocked(t); thumbSoon(t); });
     wv.addEventListener('did-start-navigation', (e) => { if (e.isMainFrame && !e.isSameDocument) { clearErr(t); t.blocked = 0; } });
     const nav = (e) => {
       if (e.isMainFrame === false) return;
@@ -102,6 +102,8 @@
       t.url = e.url;
       if (!V.isPrivate) vantage.history.visit({ url: e.url, title: t.title });
       if (hostOf(e.url) !== prevHost) { applySite(t); t.infobars = t.infobars.filter(b => b.keep); renderInfobars(t); }
+      if (GOOGLE_REJECT.test(e.url)) V.onSigninBlocked?.(t);
+      if (e.type === 'did-navigate-in-page') { thumbSoon(t, 2500); if (t.id === V.mini) setTimeout(() => tagMiniVideo(t), 1200); }
       sync(); persist();
     };
     wv.addEventListener('did-navigate', nav);
@@ -121,6 +123,19 @@
     wv.addEventListener('leave-html-full-screen', () => { t.view.classList.remove('html-fs'); document.body.classList.remove('html-fs'); });
     wv.addEventListener('focus', () => { focusTab(t); closePopover(); V.hideSuggest?.(); });
     wv.addEventListener('did-change-theme-color', (e) => { t.theme = e.themeColor; renderPaneHead(t); });
+  }
+
+  const GOOGLE_REJECT = /^https:\/\/accounts\.google\.com\/.*(rejected|disallowed|deniedsignin|unsupportedbrowser)/i;
+
+  /* ---------------- page thumbnails for New Tab ---------------- */
+  const thumbTimers = new Map();
+  function thumbSoon(t, ms = 1500) {
+    if (V.isPrivate || t.kind !== 'web' || !/^https?:/.test(t.url)) return;
+    clearTimeout(thumbTimers.get(t.id));
+    thumbTimers.set(t.id, setTimeout(() => {
+      thumbTimers.delete(t.id);
+      if (t.wcId != null && V.panes.includes(t.id) && t.id !== V.mini && !t.error && document.visibilityState === 'visible') vantage.thumbs.capture(t.wcId, t.url).catch(() => {});
+    }, ms));
   }
 
   async function refreshBlocked(t) {
@@ -233,9 +248,15 @@
     const boxes = paneBoxes();
     const multi = V.panes.length > 1;
     document.body.classList.toggle('multi', multi);
+    // a tab that was showing and now isn't: if it's playing a video, it can carry on in the mini player
+    const prev = V._shownPanes || [];
+    V._shownPanes = V.panes.slice();
+    for (const id of prev) if (!V.panes.includes(id) && id !== V.mini) maybeAutoMini(tabById(id));
+    if (V.mini && V.panes.includes(V.mini)) exitMini(tabById(V.mini));
     for (const t of V.tabs) {
       if (!t.view) continue;
       const i = V.panes.indexOf(t.id);
+      if (t.id === V.mini && i < 0) { placeMini(t); continue; }
       if (i < 0) { t.view.classList.add('off'); continue; }
       const b = boxes[i];
       t.view.classList.remove('off');
@@ -245,7 +266,7 @@
     }
     // hidden views keep the focused pane's size, so background tabs lay out at a real size
     const fb = boxes[V.focus] || boxes[0];
-    for (const t of V.tabs) if (t.view && V.panes.indexOf(t.id) < 0) Object.assign(t.view.style, { left: fb.left + 'px', top: fb.top + 'px', width: fb.width + 'px', height: fb.height + 'px' });
+    for (const t of V.tabs) if (t.view && V.panes.indexOf(t.id) < 0 && t.id !== V.mini) Object.assign(t.view.style, { left: fb.left + 'px', top: fb.top + 'px', width: fb.width + 'px', height: fb.height + 'px' });
     renderDividers();
   }
   function renderDividers() {
@@ -389,6 +410,8 @@
       const existing = V.tabs.find(x => x.kind === 'internal' && x.page === kind && kind !== 'newtab' && x !== t);
       if (existing) return showTab(existing.id);
       t.kind = 'internal'; t.page = kind; t.url = url; t.title = PAGE_TITLES[kind] || 'Vantage'; t.favicon = '';
+      for (const b of t.infobars) if (!b.keep) b.onDismiss?.();
+      t.infobars = []; renderInfobars(t);
       mount(t);
     } else {
       const wasInternal = t.kind === 'internal';
@@ -409,6 +432,7 @@
       if (V.closed.length > 30) V.closed.shift();
     }
     if (V.tabs.length === 1) { V.tabs = []; vantage.closeWindow(); return; }
+    if (V.mini === t.id) { V.mini = null; }
     t.view?.remove();
     V.tabs.splice(idx, 1);
     const p = V.panes.indexOf(id);
@@ -453,7 +477,7 @@
     const mins = V.settings.sleepAfterMin;
     if (!mins) return;
     const cutoff = Date.now() - mins * 60000;
-    for (const t of V.tabs) if (t.wv && !V.panes.includes(t.id) && !t.audible && t.lastActive < cutoff) sleepTab(t);
+    for (const t of V.tabs) if (t.wv && !V.panes.includes(t.id) && !t.audible && t.id !== V.mini && t.lastActive < cutoff) sleepTab(t);
   }, 60000);
 
   /* ---------------- tab strip ---------------- */
@@ -467,6 +491,7 @@
       ${t.pinned ? '' : `<span class="tt">${esc(t.title || hostOf(t.url) || 'New Tab')}</span>`}
       ${t.audible || t.muted ? `<button class="aud ${t.muted ? 'muted' : ''}" data-mute title="${t.muted ? 'Unmute' : 'Mute'}">${ic(t.muted ? 'mute' : 'volume', 13)}</button>` : ''}
       ${p >= 0 && V.panes.length > 1 ? `<span class="pn">${p + 1}</span>` : ''}
+      ${t.id === V.mini ? `<span class="mini-badge" title="Playing in the mini player">${ic('miniPlayer', 12)}</span>` : ''}
       ${t.pinned ? '' : `<button class="tx" data-close title="Close tab (⌘W)">${ic('x', 12)}</button>`}
       ${c ? '<span class="cbar"></span>' : ''}
     </div>`;
@@ -538,6 +563,8 @@
       shown && V.panes.length > 1 ? { label: 'Close This Pane', icon: 'layout1', onClick: () => closePane(V.panes.indexOf(t.id)) } : null,
       t.kind === 'web' ? { label: 'Move to New Window', icon: 'window', onClick: () => { vantage.newWindow({ urls: [t.url] }); closeTab(t.id, { record: false }); } } : null,
       t.wv && !shown ? { label: 'Put to Sleep', icon: 'sleep', onClick: () => sleepTab(t) } : null,
+      t.wv && t.id !== V.mini ? { label: 'Play in Mini Player', icon: 'miniPlayer', onClick: () => popOutMini(t) } : null,
+      t.id === V.mini ? { label: 'Close Mini Player', icon: 'miniPlayer', onClick: async () => { await exitMini(t, { pause: true }); applyLayout(); } } : null,
       t.kind === 'web' ? { label: 'Copy Link', icon: 'link', onClick: () => { navigator.clipboard.writeText(t.url); toast('Link copied'); } } : null,
       '-',
       { label: 'Close Tab', icon: 'x', onClick: () => closeTab(t.id) },
@@ -628,6 +655,148 @@
     });
   }
 
+  /* ---------------- mini player ----------------
+     A video keeps playing in a small floating window over whatever you're looking at. The page itself is
+     shrunk into the corner and its video is styled to fill it, so nothing reloads and the site's own player
+     (and your place in it) carries on. */
+  const MINI_CSS = `html[vantage-mini-on], html[vantage-mini-on] body { overflow: hidden !important; }
+    html[vantage-mini-on] body *:not([vantage-mini]):not([vantage-mini-anc]) { visibility: hidden !important; }
+    [vantage-mini-anc] { contain: none !important; transform: none !important; filter: none !important; will-change: auto !important; clip-path: none !important; z-index: 2147483646 !important; visibility: visible !important; }
+    video[vantage-mini] { position: fixed !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; width: 100vw !important; height: 100vh !important;
+      max-width: none !important; max-height: none !important; margin: 0 !important; z-index: 2147483647 !important; background: #000 !important; object-fit: contain !important; transform: none !important; visibility: visible !important; }`;
+  // the video that matters: playing with sound beats playing muted (previews), which beats paused; then size
+  const TAG_JS = `(() => { const area = (v) => v.offsetWidth * v.offsetHeight;
+    const score = (v) => (!v.paused && !v.ended ? 4 : 0) + (!v.muted && v.volume > 0 ? 2 : 0) + (v.readyState > 1 ? 1 : 0) + (v.closest('#movie_player') ? 1 : 0);
+    const vs = [...document.querySelectorAll('video')].filter(v => v.isConnected);
+    const v = vs.sort((a, b) => score(b) - score(a) || area(b) - area(a))[0];
+    document.querySelectorAll('[vantage-mini],[vantage-mini-anc]').forEach(e => { e.removeAttribute('vantage-mini'); e.removeAttribute('vantage-mini-anc'); });
+    if (!v) return false;
+    v.setAttribute('vantage-mini', '');
+    for (let p = v.parentElement; p && p !== document.documentElement; p = p.parentElement) p.setAttribute('vantage-mini-anc', '');
+    document.documentElement.setAttribute('vantage-mini-on', '');
+    return true; })()`;
+  const UNTAG_JS = `(() => { document.documentElement.removeAttribute('vantage-mini-on'); document.querySelectorAll('[vantage-mini],[vantage-mini-anc]').forEach(e => { e.removeAttribute('vantage-mini'); e.removeAttribute('vantage-mini-anc'); }); window.dispatchEvent(new Event('resize')); })()`;
+  const PLAYING_JS = `(() => [...document.querySelectorAll('video')].some(v => !v.paused && !v.ended && !v.muted && v.readyState > 2 && v.offsetWidth * v.offsetHeight > 30000))()`;
+  const MINI_SIZES = { s: 300, m: 400, l: 540 };
+  const miniCfg = () => ({ corner: 'br', size: 'm', ...(V.settings.miniPlayer || {}) });
+
+  async function tagMiniVideo(t) { try { return await t.wv.executeJavaScript(TAG_JS); } catch { return false; } }
+  async function maybeAutoMini(t) {
+    if (!t?.wv || !t.ready || miniCfg().auto === false || !V.tabs.includes(t) || V._noAutoMini === t.id) return;
+    let playing = false;
+    try { playing = await t.wv.executeJavaScript(PLAYING_JS); } catch {}
+    if (playing && !V.panes.includes(t.id) && V.tabs.includes(t)) enterMini(t);
+  }
+  async function enterMini(t) {
+    if (!t?.wv) return false;
+    if (V.mini && V.mini !== t.id) exitMini(tabById(V.mini));
+    if (t.miniCss) { try { await t.wv.removeInsertedCSS(t.miniCss); } catch {} }
+    try { t.miniCss = await t.wv.insertCSS(MINI_CSS); } catch {}
+    const ok = await tagMiniVideo(t);
+    if (!ok) { try { await t.wv.removeInsertedCSS(t.miniCss); } catch {} t.miniCss = null; return false; }
+    V.mini = t.id;
+    t.view.classList.add('mini');
+    if (!t.view.querySelector('.mini-ctl')) t.view.insertAdjacentHTML('beforeend', `<div class="mini-ctl">
+        <div class="mc-top"><span class="mc-t"></span><button class="mc-b" data-mc="size" title="Size">${ic('fullscreen', 14)}</button><button class="mc-b" data-mc="x" title="Close mini player">${ic('x', 15)}</button></div>
+        <div class="mc-mid"><button class="mc-b big" data-mc="back10" title="Back 10 seconds">${ic('back10', 20)}</button><button class="mc-b big play" data-mc="play" title="Play / pause">${ic('pause', 24)}</button><button class="mc-b big" data-mc="fwd10" title="Forward 10 seconds">${ic('fwd10', 20)}</button></div>
+        <div class="mc-bot"><button class="mc-b" data-mc="mute" title="Mute">${ic(t.muted ? 'mute' : 'volume', 15)}</button><button class="mc-b" data-mc="pip" title="Picture in Picture (floats over other apps)">${ic('pip', 15)}</button><span class="spacer"></span><button class="mc-b wide" data-mc="open" title="Back to the tab">${ic('expand', 14)} Open tab</button></div></div>`);
+    bindMini(t);
+    renderMiniState(t);
+    applyLayout(); renderTab(t);
+    return true;
+  }
+  async function exitMini(t, { pause = false } = {}) {
+    if (!t) { V.mini = null; return; }
+    if (V.mini === t.id) V.mini = null;
+    t.view?.classList.remove('mini');
+    t.view?.querySelector('.mini-ctl')?.remove();
+    if (t.wv) {
+      try { await t.wv.executeJavaScript(pause ? `document.querySelectorAll('video').forEach(v => v.pause()); ${UNTAG_JS}` : UNTAG_JS); } catch {}
+      if (t.miniCss) { try { await t.wv.removeInsertedCSS(t.miniCss); } catch {} t.miniCss = null; }
+    }
+    if (!V.panes.includes(t.id) && t.view) t.view.classList.add('off');
+    renderTab(t);
+  }
+  const miniJS = (code) => `(() => { const v = document.querySelector('video[vantage-mini]') || document.querySelector('#movie_player video') || document.querySelector('video'); if (!v) return null; ${code}; return { paused: v.paused, muted: v.muted }; })()`;
+  async function renderMiniState(t) {
+    if (!t.wv || V.mini !== t.id) return;
+    let st = null; try { st = await t.wv.executeJavaScript(miniJS('')); } catch {}
+    const c = t.view.querySelector('.mini-ctl');
+    if (!c) return;
+    $('.mc-t', c).textContent = t.title || hostOf(t.url);
+    if (st) $('[data-mc=play]', c).innerHTML = ic(st.paused ? 'play' : 'pause', 24);
+  }
+  function bindMini(t) {
+    const c = t.view.querySelector('.mini-ctl');
+    $$('[data-mc]', c).forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      const a = b.dataset.mc;
+      if (a === 'open') return showTab(t.id);
+      if (a === 'x') { await exitMini(t, { pause: true }); applyLayout(); return; }
+      if (a === 'play') { await t.wv.executeJavaScript(miniJS('v.paused ? v.play() : v.pause()')).catch(() => {}); setTimeout(() => renderMiniState(t), 120); }
+      if (a === 'back10' || a === 'fwd10') t.wv.executeJavaScript(miniJS(`v.currentTime = Math.max(0, v.currentTime ${a === 'back10' ? '-' : '+'} 10)`)).catch(() => {});
+      if (a === 'mute') { toggleMute(t); b.innerHTML = ic(t.muted ? 'mute' : 'volume', 15); }
+      if (a === 'pip') t.wv.executeJavaScript(miniJS('v.requestPictureInPicture().catch(() => {})'), true).catch(() => {});
+      if (a === 'size') { const order = ['s', 'm', 'l']; const cur = miniCfg().size; V.settings.miniPlayer = { ...miniCfg(), size: order[(order.indexOf(cur) + 1) % 3] }; vantage.settings.set({ miniPlayer: { size: V.settings.miniPlayer.size } }); applyLayout(); }
+    });
+    c.ondblclick = (e) => { if (!e.target.closest('[data-mc]')) showTab(t.id); };
+    // drag it anywhere; it settles into the nearest corner
+    c.onmousedown = (e) => {
+      if (e.button !== 0 || e.target.closest('[data-mc]')) return;
+      e.preventDefault();
+      const box = $('#views').getBoundingClientRect();
+      const r = t.view.getBoundingClientRect();
+      const dx = e.clientX - r.left, dy = e.clientY - r.top;
+      const shield = $('#dragShield'); shield.hidden = false; shield.style.cursor = 'grabbing';
+      t.view.classList.add('dragging');
+      const move = (ev) => { t.view.style.left = (ev.clientX - box.left - dx) + 'px'; t.view.style.top = (ev.clientY - box.top - dy) + 'px'; };
+      const up = (ev) => {
+        shield.hidden = true; t.view.classList.remove('dragging');
+        removeEventListener('mousemove', move); removeEventListener('mouseup', up);
+        const cx = ev.clientX - box.left - dx + r.width / 2, cy = ev.clientY - box.top - dy + r.height / 2;
+        const corner = (cy < box.height / 2 ? 't' : 'b') + (cx < box.width / 2 ? 'l' : 'r');
+        V.settings.miniPlayer = { ...miniCfg(), corner };
+        vantage.settings.set({ miniPlayer: { corner } });
+        applyLayout();
+      };
+      addEventListener('mousemove', move); addEventListener('mouseup', up);
+    };
+  }
+  function placeMini(t) {
+    const box = $('#views');
+    const W = box.clientWidth, H = box.clientHeight;
+    const cfg = miniCfg();
+    const w = Math.min(MINI_SIZES[cfg.size] || 400, Math.max(220, W - 40)), h = Math.round(w * 9 / 16);
+    const m = 16;
+    const left = cfg.corner.includes('l') ? m : W - w - m;
+    const top = cfg.corner.includes('t') ? m : H - h - m;
+    t.view.classList.remove('off', 'focused');
+    t.view.classList.add('mini');
+    Object.assign(t.view.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px' });
+  }
+  // the Mini Player command: send this tab's video to the corner and show the tab you were on before
+  async function popOutMini(t = activeTab()) {
+    if (!t?.wv) return toast('Open a page with a video first', 'error');
+    let has = false;
+    try { has = await t.wv.executeJavaScript(`!!document.querySelector('video')`); } catch {}
+    if (!has) return toast('No video on this page', 'error');
+    const other = mru([t.id, ...V.panes])[0];
+    const i = V.panes.indexOf(t.id);
+    V._noAutoMini = t.id;
+    try {
+      // move something else into its place first, so the tab is free to float
+      if (i >= 0) {
+        if (V.panes.length > 1 && !other) closePane(i);
+        else { const next = other || makeTab(); if (!other) insertTab(next); showTab(next.id, { pane: i }); }
+      }
+      const ok = await enterMini(t);
+      if (!ok) { toast('Couldn’t find a video to pop out', 'error'); if (i >= 0) showTab(t.id); }
+    } finally { V._noAutoMini = null; }
+    applyLayout();
+  }
+  // keep the play/pause button honest
+  setInterval(() => { const t = V.mini && tabById(V.mini); if (t) renderMiniState(t); }, 1500);
+
   /* ---------------- session ---------------- */
   let saveT = null;
   function persist() {
@@ -673,6 +842,7 @@
   Object.assign(V, {
     toURL, searchUrl, makeTab, tabById, activeTab, openTab, closeTab, showTab, navigate, reopenClosed, duplicate, togglePin, toggleMute, sleepTab, stepTab,
     setLayout, openInSplit, closePane, maximizePane, swapPanes, evenOut, setFocus, focusTab, applyLayout, renderTabs, renderTab, renderPaneHead,
+    enterMini, exitMini, popOutMini, thumbSoon,
     infobar, dropInfobar, renderInfobars, persist, restore, openInternal, isShown, zoom, setSite, siteInfo, applySite, mount, partitionFor, layoutFor
   });
 })();

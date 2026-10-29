@@ -25,6 +25,8 @@ const NORMAL = 'persist:vantage';
 const PRIVATE = 'vantage-private';
 const CONTAINER = (id) => `persist:vantage-c-${String(id).replace(/[^a-z0-9-]/gi, '')}`;
 const CHROME_UA = IDENTITIES.chrome.ua;
+// pages and requests that don't go through a session's own user agent still look like plain Chrome
+app.userAgentFallback = CHROME_UA;
 const DOH = {
   cloudflare: 'https://cloudflare-dns.com/dns-query',
   google: 'https://dns.google/dns-query',
@@ -152,7 +154,7 @@ function prepareSession(partition) {
   ses.webRequest.onBeforeSendHeaders((d, cb) => {
     let pageUrl = d.url;
     if (d.resourceType !== 'mainFrame') { try { pageUrl = d.frame?.top?.url || d.webContents?.getURL() || d.referrer || d.url; } catch { pageUrl = d.referrer || d.url; } }
-    const h = rewriteHeaders(d.requestHeaders, identityFor(pageUrl, 'auto'));
+    const h = rewriteHeaders(d.requestHeaders, identityFor(pageUrl, signinMode()));
     if (settings().gpc !== false) { h['Sec-GPC'] = '1'; h.DNT = '1'; }
     cb({ requestHeaders: h });
   });
@@ -241,13 +243,56 @@ const YT_WATCH = /^https:\/\/(www\.|m\.)?(youtube\.com\/(watch\?|shorts\/|live\/
 const POP_OUT_JS = `(() => { const v = [...document.querySelectorAll('video')].sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
   if (!v) return false; if (document.pictureInPictureElement) { document.exitPictureInPicture(); return true; } v.requestPictureInPicture(); return true; })()`;
 
+const signinMode = () => settings().signinMode || 'auto';
 function applyIdentityTracking(contents) {
-  const setFor = (url) => { const id = identityFor(url, 'auto'); if (contents.getUserAgent() !== id.ua) contents.setUserAgent(id.ua); };
+  const setFor = (url) => { const id = identityFor(url, signinMode()); if (contents.getUserAgent() !== id.ua) contents.setUserAgent(id.ua); };
   contents.on('did-start-navigation', (e) => { if (e.isMainFrame && !e.isSameDocument && e.url) setFor(e.url); });
   contents.on('will-redirect', (e) => { if (e.isMainFrame && e.url) setFor(e.url); });
 }
 ipcMain.on('vantage:navigator-patch', (event, url) => {
-  try { event.returnValue = navigatorPatch(identityFor(url, 'auto')); } catch { event.returnValue = null; }
+  try { event.returnValue = navigatorPatch(identityFor(url, signinMode())); } catch { event.returnValue = null; }
+});
+
+/* ---------------- sign-in help (from Relay) ----------------
+   Google shows "This browser or app may not be secure" when it rejects a sign-in. Vantage then steps through
+   other browser identities for the sign-in page by itself, and the Sign-in settings let you pick one or start over. */
+const SIGNIN_NEXT = { auto: 'safari', firefox: 'safari', safari: 'edge', edge: 'chrome', chrome: null };
+async function restartSignin(wc) {
+  const ses = wc.session;
+  try { await ses.clearStorageData({ origin: 'https://accounts.google.com' }); } catch {}
+  // go back to the last sign-in step that wasn't the rejection, so "continue to" survives
+  let target = 'https://accounts.google.com/';
+  try {
+    const entries = wc.navigationHistory.getAllEntries();
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const u = entries[i].url || '';
+      if (/^https:\/\/accounts\.google\.com\//.test(u) && !/rejected|disallowed|deniedsignin|unsupportedbrowser/i.test(u)) {
+        try { const x = new URL(u); const cont = x.searchParams.get('continue'); target = cont ? `https://accounts.google.com/ServiceLogin?continue=${encodeURIComponent(cont)}` : u; } catch { target = u; }
+        break;
+      }
+    }
+  } catch {}
+  wc.loadURL(target).catch(() => {});
+}
+ipcMain.handle('signin:blocked', async (_e, wcId) => {
+  const wc = webContents.fromId(wcId);
+  const cur = signinMode();
+  const next = SIGNIN_NEXT[cur];
+  if (!wc || !next) return { mode: cur, next: null };
+  settings().signinMode = next; store.save(); broadcast('settings:changed', settings());
+  await restartSignin(wc);
+  return { mode: cur, next };
+});
+ipcMain.handle('signin:set', async (_e, { mode, wcId, restart }) => {
+  if (mode) { settings().signinMode = mode; store.save(); broadcast('settings:changed', settings()); }
+  const wc = wcId != null && webContents.fromId(wcId);
+  if (wc && restart) await restartSignin(wc);
+  return settings().signinMode;
+});
+ipcMain.handle('signin:reset', async () => {
+  for (const ses of allSessions()) { try { await ses.clearStorageData({ origin: 'https://accounts.google.com' }); } catch {} }
+  settings().signinMode = 'auto'; store.save(); broadcast('settings:changed', settings());
+  return true;
 });
 
 function searchUrl(q) {
@@ -308,7 +353,7 @@ function pageMenu(contents, p) {
     items.push({ label: 'Play in Vantage Player', click: () => send(win, 'media:open-url', { url: p.srcURL, title: contents.getTitle(), partition: partitionOf(contents), referer: pageUrl }) },
       { label: `Save ${p.mediaType === 'video' ? 'Video' : 'Audio'} As…`, click: () => contents.downloadURL(p.srcURL) });
   }
-  if (p.mediaType === 'video') items.push({ label: 'Picture in Picture', click: () => contents.executeJavaScript(POP_OUT_JS, true).catch(() => {}) });
+  if (p.mediaType === 'video') items.push({ label: 'Open in Mini Player', click: () => tell('mini-player') }, { label: 'Picture in Picture', click: () => contents.executeJavaScript(POP_OUT_JS, true).catch(() => {}) });
   sep();
   if (YT_WATCH.test(pageUrl) && !p.linkURL) { items.push({ label: 'Watch in Vantage Player (cinema view)', click: () => send(win, 'media:open-url', { url: pageUrl, title: contents.getTitle(), web: true }) }); sep(); }
   if (p.misspelledWord) {
@@ -339,6 +384,7 @@ function pageMenu(contents, p) {
       { label: 'Reload', click: () => contents.reload() },
       { type: 'separator' },
       { label: 'Reader View', click: () => tell('reader-view') },
+      { label: 'Save to Read Later', click: () => tell('read-later') },
       { label: 'Save Page As…', click: () => tell('save-page') },
       { label: 'Print…', click: () => contents.print() },
       { label: 'Take Screenshot', click: () => tell('screenshot') },
@@ -490,7 +536,7 @@ ipcMain.handle('bookmarks:import', (_e, name) => {
 
 /* ---------------- search suggestions ---------------- */
 ipcMain.handle('suggest', async (_e, q) => {
-  if (!q || settings().suggestions === false) return [];
+  if (!q || settings().suggestions === false || settings().engineSuggestions === false) return [];
   const engine = settings().searchEngine;
   const url = engine === 'duckduckgo' ? `https://duckduckgo.com/ac/?type=list&q=${encodeURIComponent(q)}`
     : engine === 'bing' ? `https://api.bing.com/osjson.aspx?query=${encodeURIComponent(q)}`
@@ -534,8 +580,159 @@ ipcMain.handle('page:adblock-count', (_e, wcId) => adblock.count(wcId));
 ipcMain.handle('page:devtools', (_e, wcId) => { const wc = webContents.fromId(wcId); if (wc) wc.isDevToolsOpened() ? wc.closeDevTools() : wc.openDevTools({ mode: 'right' }); });
 ipcMain.handle('page:print', (_e, wcId) => { webContents.fromId(wcId)?.print(); });
 
+/* ---------------- site icons ----------------
+   The best icon a site offers (apple-touch-icon or a large <link rel=icon>, else /favicon.ico), fetched through
+   the browsing session (so it follows the VPN) and kept as a small data URL for bookmarks and New Tab tiles. */
+const iconJobs = new Map();
+async function fetchIcon(pageUrl) {
+  let origin;
+  try { origin = new URL(pageUrl).origin; } catch { return null; }
+  const ses = prepareSession(NORMAL);
+  const get = async (u, ms = 7000) => {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+    try { return await ses.fetch(u, { signal: ctl.signal, headers: { 'User-Agent': CHROME_UA } }); } finally { clearTimeout(t); }
+  };
+  const cands = [];
+  try {
+    const r = await get(origin + '/');
+    if (r.ok && /html/i.test(r.headers.get('content-type') || '')) {
+      const html = (await r.text()).slice(0, 300000);
+      const base = r.url || origin + '/';
+      for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+        const tag = m[0];
+        const rel = (/\brel\s*=\s*["']?([^"'>]+)/i.exec(tag) || [])[1] || '';
+        if (!/icon/i.test(rel) || /mask-icon/i.test(rel)) continue;
+        const href = (/\bhref\s*=\s*["']?([^"' >]+)/i.exec(tag) || [])[1];
+        if (!href) continue;
+        const sizes = (/\bsizes\s*=\s*["']?([^"'>]+)/i.exec(tag) || [])[1] || '';
+        const px = /any/i.test(sizes) ? 256 : Math.max(0, ...sizes.split(/\s+/).map(x => parseInt(x, 10) || 0));
+        let score = /apple-touch/i.test(rel) ? 180 : px || (/\.svg(\?|$)/i.test(href) ? 200 : 32);
+        if (score > 400) score = 400 - score / 100;   // huge images are slow and look the same
+        try { cands.push({ url: new URL(href, base).href, score }); } catch {}
+      }
+    }
+  } catch {}
+  cands.sort((a, b) => b.score - a.score);
+  cands.push({ url: origin + '/favicon.ico', score: 1 });
+  for (const c of cands.slice(0, 5)) {
+    try {
+      if (/^data:image\//.test(c.url)) return c.url.length < 300000 ? c.url : null;
+      const r = await get(c.url);
+      if (!r.ok) continue;
+      const type = (r.headers.get('content-type') || '').split(';')[0].trim();
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 60 || buf.length > 400000) continue;
+      const mime = /^image\//.test(type) ? type : /\.svg(\?|$)/i.test(c.url) ? 'image/svg+xml' : /\.png(\?|$)/i.test(c.url) ? 'image/png' : 'image/x-icon';
+      if (mime === 'image/svg+xml' || mime === 'image/x-icon' || mime === 'image/vnd.microsoft.icon') return `data:${mime};base64,${buf.toString('base64')}`;
+      // shrink big bitmaps so the data stays small
+      const img = nativeImage.createFromBuffer(buf);
+      if (img.isEmpty()) continue;
+      const { width } = img.getSize();
+      return (width > 128 ? img.resize({ width: 128, quality: 'best' }) : img).toDataURL();
+    } catch {}
+  }
+  return null;
+}
+ipcMain.handle('favicon:get', async (_e, { url, refresh }) => {
+  let host; try { host = new URL(url).hostname; } catch { return null; }
+  const cache = store.get().favicons;
+  const hit = cache[host];
+  if (hit && !refresh && (hit.data || Date.now() - hit.t < 86400000)) return hit.data || null;
+  if (!iconJobs.has(host)) iconJobs.set(host, fetchIcon(url).then((data) => {
+    cache[host] = { data: data || '', t: Date.now() };
+    const keys = Object.keys(cache);
+    if (keys.length > 600) for (const k of keys.sort((a, b) => cache[a].t - cache[b].t).slice(0, 100)) delete cache[k];
+    store.save(); return data;
+  }).finally(() => iconJobs.delete(host)));
+  return iconJobs.get(host);
+});
+
+/* ---------------- page thumbnails (New Tab's "Jump back in") ---------------- */
+const thumbsFile = () => path.join(app.getPath('userData'), 'thumbs.json');
+let thumbs = null;
+const loadThumbs = () => { if (!thumbs) { try { thumbs = JSON.parse(fs.readFileSync(thumbsFile(), 'utf8')); } catch { thumbs = {}; } } return thumbs; };
+let thumbsT = null;
+const saveThumbs = () => { clearTimeout(thumbsT); thumbsT = setTimeout(() => { try { fs.writeFileSync(thumbsFile(), JSON.stringify(thumbs)); } catch {} }, 1500); };
+const thumbKey = (u) => String(u || '').replace(/#.*$/, '');
+ipcMain.handle('thumb:capture', async (e, { wcId, url }) => {
+  if (wins.get(BrowserWindow.fromWebContents(e.sender)?.id)?.private) return false;
+  const wc = webContents.fromId(wcId);
+  if (!wc || !/^https?:/.test(url || '')) return false;
+  try {
+    const img = await wc.capturePage();
+    if (img.isEmpty()) return false;
+    const small = img.resize({ width: 480, quality: 'good' });
+    const t = loadThumbs();
+    t[thumbKey(url)] = { d: 'data:image/jpeg;base64,' + small.toJPEG(68).toString('base64'), t: Date.now() };
+    const keys = Object.keys(t);
+    if (keys.length > 60) for (const k of keys.sort((a, b) => t[a].t - t[b].t).slice(0, keys.length - 60)) delete t[k];
+    saveThumbs();
+    return true;
+  } catch { return false; }
+});
+ipcMain.handle('thumb:get', (_e, urls) => { const t = loadThumbs(); const out = {}; for (const u of urls || []) { const x = t[thumbKey(u)]; if (x) out[u] = x.d; } return out; });
+
+/* ---------------- New Tab: background picture of the day, your own picture ---------------- */
+ipcMain.handle('newtab:daily', async () => {
+  const dir = path.join(app.getPath('userData'), 'wallpapers');
+  const today = new Date().toISOString().slice(0, 10);
+  const metaFile = path.join(dir, 'daily.json');
+  try { const m = JSON.parse(fs.readFileSync(metaFile, 'utf8')); if (m.day === today && fs.existsSync(m.file)) return { url: require('url').pathToFileURL(m.file).href, credit: m.credit, link: m.link }; } catch {}
+  try {
+    const ses = prepareSession(NORMAL);
+    const j = await (await ses.fetch('https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US')).json();
+    const im = j.images?.[0];
+    if (!im?.url) throw new Error('no image');
+    const r = await ses.fetch('https://www.bing.com' + im.url.replace(/_\d+x\d+\.jpg/, '_UHD.jpg'));
+    const buf = Buffer.from(await r.arrayBuffer());
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of fs.readdirSync(dir)) if (/^daily-/.test(f)) try { fs.unlinkSync(path.join(dir, f)); } catch {}
+    const file = path.join(dir, `daily-${today}.jpg`);
+    fs.writeFileSync(file, buf);
+    const meta = { day: today, file, credit: im.copyright || '', link: im.copyrightlink || '' };
+    fs.writeFileSync(metaFile, JSON.stringify(meta));
+    return { url: require('url').pathToFileURL(file).href, credit: meta.credit, link: meta.link };
+  } catch { return null; }
+});
+ipcMain.handle('newtab:pick-image', async (e) => {
+  const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender), { title: 'Choose a background picture', properties: ['openFile'], filters: [{ name: 'Pictures', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const dir = path.join(app.getPath('userData'), 'wallpapers');
+  fs.mkdirSync(dir, { recursive: true });
+  for (const f of fs.readdirSync(dir)) if (/^mine-/.test(f)) try { fs.unlinkSync(path.join(dir, f)); } catch {}
+  const file = path.join(dir, `mine-${Date.now()}${path.extname(r.filePaths[0]).toLowerCase() || '.jpg'}`);
+  fs.copyFileSync(r.filePaths[0], file);
+  const url = require('url').pathToFileURL(file).href;
+  settings().newtab.image = url; settings().newtab.bg = 'image'; store.save(); broadcast('settings:changed', settings());
+  return url;
+});
+
+/* ---------------- read later & notes ---------------- */
+ipcMain.handle('readlater:list', () => store.get().readLater);
+ipcMain.handle('readlater:add', (_e, { url, title }) => {
+  const list = store.get().readLater;
+  if (!/^https?:/.test(url || '')) return list;
+  const i = list.findIndex(x => x.url === url);
+  if (i >= 0) list.splice(i, 1);
+  list.unshift({ url, title: title || url, at: Date.now() });
+  if (list.length > 200) list.length = 200;
+  store.save(); broadcast('readlater:changed', list); return list;
+});
+ipcMain.handle('readlater:remove', (_e, url) => {
+  store.get().readLater = store.get().readLater.filter(x => x.url !== url);
+  store.save(); broadcast('readlater:changed', store.get().readLater); return store.get().readLater;
+});
+ipcMain.handle('notes:get', () => store.get().notes || '');
+ipcMain.handle('notes:set', (e, text) => { store.get().notes = String(text || '').slice(0, 20000); store.save(); for (const { win } of wins.values()) if (win.webContents !== e.sender) send(win, 'notes:changed', store.get().notes); return true; });
+
 /* ---------------- privacy ---------------- */
-ipcMain.handle('adblock:status', () => ({ ...adblock.status(), total: store.get().stats.blocked, since: store.get().stats.since }));
+const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+ipcMain.handle('adblock:status', () => {
+  const st = store.get().stats;
+  const week = [];
+  for (let i = 6; i >= 0; i--) { const k = dayKey(Date.now() - i * 86400000); week.push({ day: k, n: st.daily?.[k] || 0 }); }
+  return { ...adblock.status(), total: st.blocked, since: st.since, week };
+});
 ipcMain.handle('adblock:site', (_e, { host, allow }) => { adblock.setAllowed(host, allow); broadcast('settings:changed', settings()); return true; });
 ipcMain.handle('adblock:reload', () => adblock.reload(true).then(() => true));
 ipcMain.handle('data:clear', async (_e, { since = 0, history = true, cookies = false, cache = true, downloadsList = false }) => {
@@ -716,6 +913,7 @@ function buildMenu() {
       { label: 'Dark Pages on This Site', click: cmd('toggle-dark') },
       { label: 'Show Bookmarks Bar', accelerator: 'CmdOrCtrl+Shift+B', click: cmd('toggle-bookmarks-bar') },
       { label: 'Tabs on the Side', click: cmd('toggle-side-tabs') },
+      { label: 'Customize New Tab…', click: cmd('customize-newtab') },
       { type: 'separator' },
       { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: cmd('zoom', 0) },
       { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: cmd('zoom', 1) },
@@ -738,7 +936,9 @@ function buildMenu() {
     ] },
     { label: 'Bookmarks', submenu: [
       { label: 'Bookmark This Page…', accelerator: 'CmdOrCtrl+D', click: cmd('bookmark') },
-      { label: 'Show All Bookmarks', accelerator: 'CmdOrCtrl+Alt+B', click: cmd('open-internal', 'bookmarks') }
+      { label: 'Show All Bookmarks', accelerator: 'CmdOrCtrl+Alt+B', click: cmd('open-internal', 'bookmarks') },
+      { type: 'separator' },
+      { label: 'Save to Read Later', accelerator: 'CmdOrCtrl+Shift+D', click: cmd('read-later') }
     ] },
     { label: 'Tools', submenu: [
       { label: 'Downloads', accelerator: 'CmdOrCtrl+Shift+J', click: cmd('open-internal', 'downloads') },
@@ -750,6 +950,7 @@ function buildMenu() {
       { label: 'Turn VPN On or Off', accelerator: 'CmdOrCtrl+Shift+U', click: cmd('toggle-vpn') },
       { label: 'Pause Ad Blocking on This Site', click: cmd('toggle-adblock-site') },
       { label: 'Mute Tab', accelerator: 'CmdOrCtrl+Shift+M', click: cmd('mute') },
+      { label: 'Mini Player', accelerator: 'CmdOrCtrl+Alt+M', click: cmd('mini-player') },
       { label: 'Picture in Picture', accelerator: 'CmdOrCtrl+Shift+P', click: cmd('pip') }
     ] },
     { label: 'Tab', submenu: [
@@ -821,7 +1022,13 @@ app.whenReady().then(async () => {
   media.register({ ...ctx, downloadsDir: () => downloads.dir() });
   downloads.register({ store, getWin: () => focusedWin(), notifyAll: broadcast });
   await adblock.init(store, (wcId, n) => {
-    store.get().stats.blocked++; store.save();
+    const st = store.get().stats;
+    st.blocked++;
+    st.daily = st.daily || {};
+    const k = dayKey();
+    st.daily[k] = (st.daily[k] || 0) + 1;
+    if (Object.keys(st.daily).length > 40) for (const d of Object.keys(st.daily).sort().slice(0, -35)) delete st.daily[d];
+    store.save();
     const wc = webContents.fromId(wcId);
     const owner = wc && ownerOf(wc);
     if (owner) send(owner, 'adblock:count', { wcId, n });

@@ -26,6 +26,29 @@ function pageHost(wcId) {
   if (wcId == null) return '';
   try { const wc = webContents.fromId(wcId); return wc ? hostOf(wc.getURL()) : ''; } catch { return ''; }
 }
+// Sign-in pages are never filtered: Google's check for "is this a real browser" breaks when any of its
+// scripts are blocked, and it then refuses the sign-in ("This browser or app may not be secure").
+const AUTH_HOSTS = ['accounts.google.com', 'accounts.youtube.com', 'gds.google.com', 'myaccount.google.com', 'login.live.com', 'login.microsoftonline.com',
+  'login.microsoft.com', 'account.live.com', 'signup.live.com', 'account.microsoft.com', 'appleid.apple.com', 'idmsa.apple.com', 'login.yahoo.com',
+  'api.login.yahoo.com', 'account.proton.me', 'accounts.zoho.com', 'challenges.cloudflare.com', 'www.recaptcha.net', 'hcaptcha.com'];
+const isAuthHost = (h) => !!h && AUTH_HOSTS.some(a => h === a || h.endsWith('.' + a));
+// Sites where the lists' injected scripts (scriptlets) do more harm than good. Their ads are still blocked at
+// the network level; only the scripts are skipped. YouTube's player won't start after in-page navigation with them.
+const NO_SCRIPTLETS = ['youtube.com', 'youtube-nocookie.com', 'google.com'];
+const skipScriptlets = (h) => NO_SCRIPTLETS.some(a => h === a || h.endsWith('.' + a));
+let tldts = null;
+try { tldts = require('tldts-experimental'); } catch {}   // comes with the Ghostery engine
+function parseUrl(url) {
+  if (tldts) return tldts.parse(url);
+  const hostname = rawHost(url);
+  return { hostname, domain: hostname.split('.').slice(-2).join('.') };
+}
+function rawHost(u) { try { return new URL(u).hostname; } catch { return ''; } }
+
+function pageRawHost(wcId) {
+  if (wcId == null) return '';
+  try { const wc = webContents.fromId(wcId); return wc ? rawHost(wc.getURL()) : ''; } catch { return ''; }
+}
 function allowed(host) {
   if (!host) return false;
   const list = settings().allow || [];
@@ -34,6 +57,7 @@ function allowed(host) {
 function enabledFor(details) {
   if (!blocker || settings().enabled === false) return false;
   const host = details.resourceType === 'mainFrame' ? hostOf(details.url) : pageHost(details.webContentsId);
+  if (isAuthHost(rawHost(details.url)) || isAuthHost(host) || isAuthHost('www.' + host) || isAuthHost(pageRawHost(details.webContentsId))) return false;
   return !allowed(host);
 }
 
@@ -94,12 +118,38 @@ function onHeadersReceived(details, callback) {
   blocker.onHeadersReceived(details, callback);
 }
 
-ipcMain.handle('@ghostery/adblocker/inject-cosmetic-filters', (event, url, msg) => {
-  if (!blocker || settings().enabled === false || allowed(hostOf(event.sender.getURL()))) return undefined;
-  return blocker.onInjectCosmeticFilters(event, url, msg);
+// Cosmetic filtering: hide ad boxes and run the lists' scriptlets. The engine's own handler injects into the
+// top page no matter which frame asked, and runs scriptlets again on every update; this one targets the
+// frame that asked and runs scriptlets once per frame.
+const cosmeticOff = (url) => !blocker || settings().enabled === false || allowed(hostOf(url)) || isAuthHost(rawHost(url));
+ipcMain.handle('@ghostery/adblocker/inject-cosmetic-filters', async (event, url, msg) => {
+  try {
+    const top = event.sender.getURL();
+    if (cosmeticOff(top) || cosmeticOff(url)) return undefined;
+    const parsed = parseUrl(url);
+    const hostname = parsed.hostname || '';
+    const first = msg === undefined;
+    const { active, styles, scripts } = blocker.getCosmeticsFilters({
+      domain: parsed.domain || '', hostname, url,
+      classes: msg?.classes, hrefs: msg?.hrefs, ids: msg?.ids,
+      getBaseRules: first, getInjectionRules: first, getExtendedRules: false, getRulesFromHostname: first, getRulesFromDOM: !first,
+      callerContext: { frameId: event.frameId, processId: event.processId, lifecycle: msg?.lifecycle }
+    });
+    if (active === false) return undefined;
+    const frame = event.senderFrame;
+    if (!frame) return undefined;
+    if (styles && styles.length) {
+      if (frame === event.sender.mainFrame) event.sender.insertCSS(styles, { cssOrigin: 'user' }).catch(() => {});
+      else frame.executeJavaScript(`(() => { const s = document.createElement('style'); s.textContent = ${JSON.stringify(styles)}; (document.head || document.documentElement).appendChild(s); })()`).catch(() => {});
+    }
+    if (first && scripts && scripts.length && !skipScriptlets(hostname) && !skipScriptlets(rawHost(top))) {
+      for (const script of scripts) frame.executeJavaScript(script, true).catch(() => {});
+    }
+  } catch (e) { if (process.env.VANTAGE_DEBUG) console.error('cosmetics', e.message); }
+  return undefined;
 });
 ipcMain.handle('@ghostery/adblocker/is-mutation-observer-enabled', (event) => {
-  if (!blocker || settings().enabled === false || allowed(hostOf(event.sender.getURL()))) return false;
+  if (cosmeticOff(event.sender.getURL())) return false;
   return blocker.onIsMutationObserverEnabled(event);
 });
 
@@ -112,7 +162,7 @@ function setAllowed(host, allow) {
 }
 
 module.exports = {
-  init, reload, attach, onBeforeRequest, onHeadersReceived, applyCustom, setAllowed, allowed,
+  init, reload, attach, isAuthHost, onBeforeRequest, onHeadersReceived, applyCustom, setAllowed, allowed,
   count: (wcId) => counts.get(wcId) || 0,
   status: () => ({ available: !!ElectronBlocker, ready: !!blocker, loading: !blocker && !!loading })
 };

@@ -79,12 +79,36 @@ t('every icon the UI asks for exists', () => {
   const icons = fs.readFileSync(path.join(dir, 'icons.js'), 'utf8') + fs.readFileSync(path.join(dir, 'shell.js'), 'utf8');
   const names = new Set([...icons.matchAll(/^\s+([a-zA-Z0-9]+): '</gm)].map(m => m[1]));
   const missing = new Set();
-  for (const f of ['tabs.js', 'toolbar.js', 'pages.js', 'boot.js']) {
+  for (const f of ['tabs.js', 'toolbar.js', 'pages.js', 'boot.js', 'newtab.js']) {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
     for (const m of src.matchAll(/\bic\('([a-zA-Z0-9]+)'/g)) if (!names.has(m[1])) missing.add(`${m[1]} (${f})`);
     for (const m of src.matchAll(/icon: '([a-zA-Z0-9]+)'/g)) if (!names.has(m[1])) missing.add(`${m[1]} (${f})`);
   }
+  // the symbols offered in the bookmark icon picker and New Tab's search modes
+  const tb = fs.readFileSync(path.join(dir, 'toolbar.js'), 'utf8');
+  for (const g of JSON.parse(/const GLYPHS = (\[[^\]]+\])/.exec(tb)[1].replace(/'/g, '"'))) if (!names.has(g)) missing.add(`${g} (GLYPHS)`);
+  const nt = fs.readFileSync(path.join(dir, 'newtab.js'), 'utf8');
+  for (const m of nt.matchAll(/\['[a-z]+', (?:null|'[^']+'), '([a-zA-Z0-9]+)', \(q\)/g)) if (!names.has(m[1])) missing.add(`${m[1]} (MODES)`);
   assert.deepStrictEqual([...missing], []);
+});
+t('sign-in pages are never ad-blocked; YouTube skips scriptlets', () => {
+  const ab = require('../src/core/adblock');
+  assert.ok(ab.isAuthHost('accounts.google.com'));
+  assert.ok(ab.isAuthHost('login.microsoftonline.com'));
+  assert.ok(!ab.isAuthHost('google.com.evil.example'));
+  assert.ok(!ab.isAuthHost('example.com'));
+});
+t('Firefox identity carries a current version number', () => {
+  const id = require('../src/core/identity');
+  assert.ok(parseInt(id.FIREFOX_V, 10) >= 150);
+  assert.ok(id.IDENTITIES.firefox.ua.includes('Firefox/' + id.FIREFOX_V));
+});
+t('new settings have defaults (accent, New Tab, mini player, sign-in)', () => {
+  const st = store.settings();
+  assert.strictEqual(st.accent, 'ocean'); assert.strictEqual(st.signinMode, 'auto');
+  assert.strictEqual(st.newtab.bg, 'aurora'); assert.strictEqual(st.newtab.widgets.notes, true);
+  assert.strictEqual(st.miniPlayer.auto, true); assert.strictEqual(st.engineSuggestions, true);
+  assert.deepStrictEqual(store.get().readLater, []);
 });
 t('suite link copy matches the Utility Package', () => {
   const canon = path.join(__dirname, '..', '..', '..', 'tools', 'suitelink.js');

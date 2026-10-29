@@ -7,7 +7,24 @@ const { app } = require('electron');
 const DEFAULT_SETTINGS = {
   theme: 'system',              // system | dark | light
   searchEngine: 'google',       // google | duckduckgo | bing | brave | startpage
-  suggestions: true,
+  suggestions: true,            // the drop-down under the address bar at all
+  engineSuggestions: true,      // ask the search engine for suggestions as you type
+  signinMode: 'auto',           // browser identity on Google/Microsoft sign-in pages: auto | firefox | safari | edge | chrome
+  accent: 'ocean',              // ocean | teal | violet | rose | amber | lime | graphite | custom
+  accentCustom: '#3fa9f5',
+  density: 'comfortable',       // comfortable | compact
+  toolbar: { vpn: true, split: true, downloads: true, vault: true, library: true },
+  bookmarkNames: true,          // names next to icons on the bookmarks bar
+  miniPlayer: { auto: true, corner: 'br', size: 'm' },
+  newtab: {
+    bg: 'aurora',               // aurora | daily | image | plain
+    image: '',
+    clock24: false,
+    city: '', units: 'auto',    // weather; units: auto | c | f
+    shortcuts: 'auto',          // auto (most visited) | custom
+    dial: [],
+    widgets: { clock: true, weather: true, shortcuts: true, jump: true, readLater: true, privacy: true, notes: true }
+  },
   startup: 'restore',           // restore | newtab
   tabsOnSide: false,
   bookmarksBar: true,
@@ -54,6 +71,9 @@ function load() {
     mediaProgress: raw.mediaProgress || {},
     stats: raw.stats || { blocked: 0, since: Date.now() },
     secrets: raw.secrets || {},
+    readLater: raw.readLater || [],
+    notes: raw.notes || '',
+    favicons: raw.favicons || {},
     migrated: raw.migrated || {}
   };
   try { history = JSON.parse(fs.readFileSync(hfile(), 'utf8')); } catch { history = []; }
