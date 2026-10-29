@@ -11,6 +11,7 @@ const ai = require('./lib/ai');
 const fsops = require('./lib/fsops');
 const launch = require('./lib/launch');
 const {History} = require('./lib/history');
+const docs = require('./lib/docpreview');
 
 const isMac = process.platform === 'darwin', isWin = process.platform === 'win32';
 let win, history, prefsCache;
@@ -146,6 +147,15 @@ handle('transfer', async (kind, sources, dest) => {
     done.map(r => kind === 'copy' ? {type: 'create', path: r.to} : {type: 'move', from: r.from, to: r.to}));
   return results;
 });
+handle('renameMany', async items => {
+  const done = await fsops.renameMany((items || []).map(x => ({from: asPath(x.from), name: x.name})));
+  if (done.length) await history.record(`Rename ${done.length} items`, done.map(d => ({type: 'rename', ...d})));
+  return done;
+});
+handle('docPreview', async (p, opts) => docs.docPreview(asPath(p), opts || {}));
+handle('readBytes', async p => docs.readBytes(asPath(p)));
+// Windows draws its own caption buttons; keep them matched to the app's theme.
+handle('setChrome', async ({bg, fg} = {}) => { if (isWin && win && /^#[0-9a-f]{6}$/i.test(bg) && /^#[0-9a-f]{6}$/i.test(fg)) try { win.setTitleBarOverlay({color: bg, symbolColor: fg}); } catch {} });
 handle('duplicate', async sources => {
   const results = [];
   for (const p of asPaths(sources)) results.push(...await fsops.transfer('copy', [p], path.dirname(p)));

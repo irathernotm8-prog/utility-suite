@@ -63,6 +63,13 @@ class History {
     let results;
     if (batch.type === 'tidy') {
       results = await organizer.undo(batch.ops, () => this.save());
+    } else if (batch.ops.length > 1 && batch.ops.every(o => o.type === 'rename')) {
+      // Batch renames go back in one two-pass step so swapped names don't collide.
+      try {
+        await require('./fsops').renameMany(batch.ops.map(o => ({from: o.to, name: path.basename(o.from)})));
+        for (const o of batch.ops) o.undone = true;
+        results = batch.ops.map(o => ({name: path.basename(o.from), ok: true}));
+      } catch (e) { results = [{name: batch.label, ok: false, error: e.message}]; }
     } else {
       results = [];
       for (const op of [...batch.ops].reverse()) {

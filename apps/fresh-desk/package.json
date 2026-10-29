@@ -1,7 +1,7 @@
 {
   "name": "fresh-desk",
   "productName": "Fresh Desk",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "A fast, keyboard-first file explorer with Tidy, preview and undo",
   "author": "Bilal",
   "license": "UNLICENSED",
@@ -61,6 +61,8 @@
   "dependencies": {
     "@thednp/dommatrix": "^3.1.2",
     "exceljs": "^4.4.0",
+    "jszip": "^3.10.2",
+    "mammoth": "^1.13.0",
     "pdfjs-dist": "^6.4.299"
   },
   "overrides": {

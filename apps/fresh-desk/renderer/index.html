@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: fdfile:; media-src fdfile:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: fdfile:; media-src fdfile:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; object-src 'none'">
 <title>Fresh Desk</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -60,8 +60,11 @@
 
 <script src="util.js"></script>
 <script src="icons.js"></script>
+<script src="glyphs.js"></script>
+<script src="docview.js"></script>
 <script src="review-model.js"></script>
 <script src="app.js"></script>
 <script src="tidy.js"></script>
+<script src="extras.js"></script>
 </body>
 </html>

@@ -139,6 +139,32 @@ async function rename(from, newName) {
   return to;
 }
 
+// Rename many items at once (batch rename). Two passes through temporary names so
+// swaps like a→b, b→a work; refuses clashes with files outside the batch.
+async function renameMany(items) {
+  if (!Array.isArray(items) || !items.length || items.length > 5000) throw Error('Nothing to rename.');
+  const plan = items.map(({from, name}) => ({from, to: path.join(path.dirname(from), checkName(name))})).filter(x => x.from !== x.to);
+  const targets = new Set();
+  for (const x of plan) {
+    const key = x.to.toLowerCase();
+    if (targets.has(key)) throw Error(`Two items would both be named “${path.basename(x.to)}”.`);
+    targets.add(key);
+  }
+  const sources = new Set(plan.map(x => x.from.toLowerCase()));
+  for (const x of plan) if (!sources.has(x.to.toLowerCase()) && await exists(x.to)) throw Error(`“${path.basename(x.to)}” already exists.`);
+  const done = [];
+  const tag = `.fd-batch-${process.pid}-${Date.now()}`;
+  try {
+    for (const [i, x] of plan.entries()) { x.tmp = path.join(path.dirname(x.from), `${tag}-${i}`); await fs.rename(x.from, x.tmp); x.stage = 1; }
+    for (const x of plan) { await fs.rename(x.tmp, x.to); x.stage = 2; done.push({from: x.from, to: x.to}); }
+  } catch (e) {
+    // Put everything back where it was.
+    for (const x of plan.reverse()) { try { if (x.stage === 2) await fs.rename(x.to, x.from); else if (x.stage === 1) await fs.rename(x.tmp, x.from); } catch {} }
+    throw e;
+  }
+  return done;
+}
+
 function inside(child, parent) {
   const rel = path.relative(parent, child);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
@@ -296,4 +322,4 @@ async function volumes() {
   return out;
 }
 
-module.exports = {list, entry, kindOf, extOf, isHidden, uniquePath, makeFolder, makeFile, rename, transfer, folderSize, search, readText, info, diskSpace, places, volumes, exists, inside, checkName, TEXT_EXT, KINDS};
+module.exports = {renameMany, list, entry, kindOf, extOf, isHidden, uniquePath, makeFolder, makeFile, rename, transfer, folderSize, search, readText, info, diskSpace, places, volumes, exists, inside, checkName, TEXT_EXT, KINDS};

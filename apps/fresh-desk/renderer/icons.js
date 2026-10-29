@@ -44,14 +44,14 @@
 
   // Kind colors for file badges (work on light and dark).
   const KIND = {
-    Folder: '#3fcf95', Application: '#8a8f98', Image: '#e2833a', PDF: '#e5484d', Document: '#3e7be0', Spreadsheet: '#2fa96a',
+    Folder: '#3d7ff0', Application: '#8a8f98', Image: '#e2833a', PDF: '#e5484d', Document: '#3e7be0', Spreadsheet: '#2fa96a',
     Presentation: '#e0662f', Video: '#8b5cf6', Audio: '#e04f9a', Archive: '#a1824a', Installer: '#6b7280', Code: '#0ea5b7',
     Font: '#64748b', Design: '#d946ef', File: '#94a3b8',
   };
   const kindColor = k => KIND[k] || KIND.File;
   function folderIcon(size = 18, variant = '') {
-    const back = variant === 'open' ? '#2bb983' : '#34c78c';
-    return `<svg viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 015.5 6h6.2l2.6 2.6h12.2A2.5 2.5 0 0129 11.1V24a2.5 2.5 0 01-2.5 2.5h-21A2.5 2.5 0 013 24z" fill="${back}"/><path d="M3 12.2A2.2 2.2 0 015.2 10h21.6a2.2 2.2 0 012.2 2.2V24a2.5 2.5 0 01-2.5 2.5h-21A2.5 2.5 0 013 24z" fill="#5fdcab"/><path d="M3 12.2A2.2 2.2 0 015.2 10h21.6a2.2 2.2 0 012.2 2.2v.6H3z" fill="#fff" opacity=".28"/></svg>`;
+    // Colors come from the accent theme (--folder-back / --folder-front in style.css).
+    return `<svg viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 015.5 6h6.2l2.6 2.6h12.2A2.5 2.5 0 0129 11.1V24a2.5 2.5 0 01-2.5 2.5h-21A2.5 2.5 0 013 24z" class="fo-back"/><path d="M3 12.2A2.2 2.2 0 015.2 10h21.6a2.2 2.2 0 012.2 2.2V24a2.5 2.5 0 01-2.5 2.5h-21A2.5 2.5 0 013 24z" class="fo-front"/><path d="M3 12.2A2.2 2.2 0 015.2 10h21.6a2.2 2.2 0 012.2 2.2v.6H3z" fill="#fff" opacity=".28"/></svg>`;
   }
   function fileIcon(entry, size = 18) {
     if (entry.isDir) return folderIcon(size);

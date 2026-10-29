@@ -71,7 +71,7 @@ async function load(t, {keep = false} = {}) {
   } finally { t.loading = false; }
   if (t.pendingSelect) { const p = t.pendingSelect; t.pendingSelect = null; if (t.listing?.entries.some(e => e.path === p)) { t.sel = new Set([p]); t.cursor = t.anchor = p; t.scrollTo = p; } }
   refreshItems(t);
-  if (t === tab()) { addRecent(t.path); render(); watchVisible(); diskSpace(); }
+  if (t === tab()) { addRecent(t.path); render(); watchVisible(); diskSpace(); sizeFolders(t); }
   else renderTabs();
   savePrefsSoon();
 }
@@ -92,6 +92,7 @@ function refreshItems(t) {
     items = (t.listing?.entries || []).slice();
     if (q) { const words = q.split(/\s+/); items = items.filter(e => words.every(w => e.name.toLowerCase().includes(w))); }
   }
+  if (S.prefs.folderSizes && S.prefs.sort.key === 'size') items = items.map(e => e.isDir && S.dirSizes.get(e.path)?.bytes != null ? {...e, size: S.dirSizes.get(e.path).bytes, sizeIsDir: true} : e);
   items.sort(U.compareEntries(S.prefs.sort, S.prefs.foldersFirst));
   t.items = items;
 }
@@ -130,20 +131,56 @@ function render() {
   renderPlaces(); renderToolbar(); renderTabs(); renderContent(); renderStatus(); renderPreviewSoon();
 }
 
-function placeItem(p, {icon, name, removable, kind}) {
+function placeItem(p, {icon, name, kind, color}) {
   const active = tab()?.path === p;
+  const ic = el('span', {class: 'ic', html: (Glyphs.G[icon] || I[icon] || I.folder)});
+  if (color && color !== 'accent') ic.style.color = color;
   const item = el('button', {class: 'place' + (active ? ' active' : ''), title: p, dataset: {path: p, kind},
     onclick: e => navigate(p, {newTab: mod(e)}),
-    oncontextmenu: async e => { e.preventDefault(); placeMenu(p, kind); }},
-  el('span', {class: 'ic', html: I[icon] || I.folder}), el('span', {class: 'place-name', text: name}));
+    oncontextmenu: async e => { e.preventDefault(); placeMenu(p, kind, {name, icon}); }},
+  ic, el('span', {class: 'place-name', text: name}));
   dropTarget(item, () => p);
+  if (kind === 'fav') {
+    // Drag favorites up and down to reorder them.
+    item.draggable = true;
+    item.addEventListener('dragstart', e => { e.dataTransfer.setData('application/x-fd-place', p); e.dataTransfer.effectAllowed = 'move'; item.classList.add('dragging'); });
+    item.addEventListener('dragend', () => item.classList.remove('dragging'));
+    item.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes('application/x-fd-place')) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      const r = item.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+      item.classList.toggle('ins-after', after); item.classList.toggle('ins-before', !after);
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('ins-after', 'ins-before'));
+    item.addEventListener('drop', e => {
+      const from = e.dataTransfer.getData('application/x-fd-place');
+      if (!from) return;
+      e.preventDefault(); e.stopPropagation();
+      const after = item.classList.contains('ins-after');
+      item.classList.remove('ins-after', 'ins-before');
+      moveFavorite(from, p, after);
+    });
+  }
   return item;
+}
+function favorites() {
+  const unpinned = new Set(S.prefs.unpinned);
+  const metaOf = p => S.prefs.favMeta?.[p] || {};
+  const list = [...S.places.favorites.filter(f => !unpinned.has(f.path)), ...S.prefs.pins.map(p => ({name: U.basename(p) || p, path: p, icon: 'folder'}))]
+    .map(f => { const m = metaOf(f.path); return {...f, baseName: f.name, baseIcon: f.icon, name: m.name || f.name, icon: m.icon || f.icon, color: m.color}; });
+  const order = S.prefs.favOrder || [];
+  const rank = p => { const i = order.indexOf(p); return i < 0 ? 1e6 : i; };
+  return list.map((f, i) => ({f, i})).sort((a, b) => rank(a.f.path) - rank(b.f.path) || a.i - b.i).map(x => x.f);
+}
+function moveFavorite(from, to, after) {
+  const paths = favorites().map(f => f.path).filter(p => p !== from);
+  let i = paths.indexOf(to); if (i < 0) i = paths.length - 1;
+  paths.splice(after ? i + 1 : i, 0, from);
+  S.prefs.favOrder = paths;
+  renderPlaces(); savePrefsSoon();
 }
 function renderPlaces() {
   const nav = $('places'); nav.replaceChildren();
-  const unpinned = new Set(S.prefs.unpinned);
-  const favs = S.places.favorites.filter(f => !unpinned.has(f.path));
-  const pins = S.prefs.pins.map(p => ({name: U.basename(p), path: p, icon: 'folder'}));
   const section = (title, key, items, kind) => {
     const collapsed = (S.prefs.collapsed || []).includes(key);
     const head = el('button', {class: 'place-head', 'aria-expanded': String(!collapsed), onclick: () => { const c = new Set(S.prefs.collapsed || []); c.has(key) ? c.delete(key) : c.add(key); S.prefs.collapsed = [...c]; renderPlaces(); }}, title, el('span', {class: 'ic', html: I.chevronDown}));
@@ -151,23 +188,30 @@ function renderPlaces() {
     nav.append(el('div', {class: 'place-section'}, head, box));
     return box;
   };
-  const favBox = section('Favorites', 'fav', [...favs, ...pins], 'fav');
-  // Drop a folder on the Favorites heading area to pin it.
+  const favs = favorites();
+  const favBox = section('Favorites', 'fav', favs, 'fav');
+  // Drop a folder on the Favorites list to pin it.
   favBox.addEventListener('dragover', e => { if (e.target === favBox && e.dataTransfer.types.includes('Files')) { e.preventDefault(); favBox.classList.add('drop'); } });
   favBox.addEventListener('dragleave', () => favBox.classList.remove('drop'));
   favBox.addEventListener('drop', e => { if (e.target !== favBox) return; e.preventDefault(); favBox.classList.remove('drop'); for (const f of e.dataTransfer.files) { const p = desk.pathForFile(f); if (p) pin(p); } });
-  const favSet = new Set([...favs, ...pins].map(f => f.path));
+  const favSet = new Set(favs.map(f => f.path));
   const recents = S.prefs.recents.filter(p => !favSet.has(p) && p !== S.env.home).slice(0, 5).map(p => ({name: U.basename(p) || p, path: p, icon: 'clock'}));
   if (recents.length && S.prefs.showRecents !== false) section('Recent', 'recent', recents, 'recent');
   section('Locations', 'loc', S.places.volumes, 'vol');
 }
-async function placeMenu(p, kind) {
+async function placeMenu(p, kind, info = {}) {
   const items = [{id: 'open', label: 'Open'}, {id: 'tab', label: 'Open in New Tab'}, {id: 'term', label: 'Open in Terminal'}, {type: 'separator'}];
-  if (kind === 'fav') items.push({id: 'remove', label: 'Remove from Sidebar'});
-  if (kind === 'recent') items.push({id: 'pin', label: 'Add to Favorites'}, {id: 'forget', label: 'Remove from Recent'}, {type: 'separator'}, {id: 'hideRecents', label: 'Hide Recent Folders'});
+  if (kind === 'fav') {
+    const list = favorites(), i = list.findIndex(f => f.path === p);
+    items.push({id: 'edit', label: 'Change Icon & Name…'}, {id: 'mvUp', label: 'Move Up', enabled: i > 0}, {id: 'mvDown', label: 'Move Down', enabled: i < list.length - 1}, {type: 'separator'}, {id: 'remove', label: 'Remove from Sidebar'});
+  }
+  if (kind === 'recent') items.push({id: 'pin', label: 'Add to Favorites…'}, {id: 'forget', label: 'Remove from Recent'}, {type: 'separator'}, {id: 'hideRecents', label: 'Hide Recent Folders'});
+  if (kind === 'vol') items.push({id: 'pin', label: 'Add to Favorites…'});
   const id = await desk.menu(items);
   if (id === 'open') navigate(p); else if (id === 'tab') navigate(p, {newTab: true}); else if (id === 'term') desk.terminal(p).catch(err);
-  else if (id === 'remove') { if (S.prefs.pins.includes(p)) S.prefs.pins = S.prefs.pins.filter(x => x !== p); else S.prefs.unpinned = [...new Set([...S.prefs.unpinned, p])]; renderPlaces(); savePrefsSoon(); }
+  else if (id === 'edit') { const f = favorites().find(x => x.path === p); Extras.editFavorite(p, {baseName: f?.baseName, baseIcon: f?.baseIcon}); }
+  else if (id === 'mvUp' || id === 'mvDown') { const list = favorites(), i = list.findIndex(f => f.path === p), j = id === 'mvUp' ? i - 1 : i + 1; if (list[j]) moveFavorite(p, list[j].path, id === 'mvDown'); }
+  else if (id === 'remove') { if (S.prefs.pins.includes(p)) S.prefs.pins = S.prefs.pins.filter(x => x !== p); else S.prefs.unpinned = [...new Set([...S.prefs.unpinned, p])]; const m = {...S.prefs.favMeta}; delete m[p]; S.prefs.favMeta = m; renderPlaces(); savePrefsSoon(); }
   else if (id === 'pin') pin(p);
   else if (id === 'hideRecents') setRecents(false);
   else if (id === 'forget') { S.prefs.recents = S.prefs.recents.filter(x => x !== p); renderPlaces(); savePrefsSoon(); }
@@ -178,10 +222,15 @@ function setRecents(on) {
   renderPlaces(); savePrefsSoon();
   toast(on ? 'Recent folders are back in the sidebar' : 'Recent folders hidden and cleared — turn them back on in Settings');
 }
+// Adding a favorite opens the editor so it gets a name, icon and color right away.
 function pin(p) {
+  if (favorites().some(f => f.path === p)) { toast(`“${U.basename(p)}” is already a favorite`); return; }
+  Extras.editFavorite(p, {adding: true});
+}
+function pinPath(p) {
   if (S.places.favorites.some(f => f.path === p)) S.prefs.unpinned = S.prefs.unpinned.filter(x => x !== p);
   else if (!S.prefs.pins.includes(p)) S.prefs.pins.push(p);
-  renderPlaces(); savePrefsSoon(); toast(`Added “${U.basename(p)}” to the sidebar`);
+  renderPlaces(); savePrefsSoon();
 }
 
 function crumbsFor(p) {
@@ -309,10 +358,39 @@ function listRow(t, e, i, deep) {
   if (e.isLink) name.append(el('span', {class: 'badge', text: 'alias'}));
   row.append(name,
     el('div', {class: 'c-date', text: when(e.mtime)}),
-    el('div', {class: 'c-size', text: e.isDir ? '—' : bytes(e.size)}),
+    el('div', {class: 'c-size', text: e.isDir ? dirSizeText(e) : bytes(e.size)}),
     el('div', {class: 'c-kind', text: deep ? relativeWhere(t, e) : e.kind}));
   if (e.isDir) dropTarget(row, () => e.path);
   return row;
+}
+// Folder sizes (optional): worked out a couple at a time for the folder on screen.
+S.dirSizes = new Map();
+function dirSizeText(e) {
+  if (!S.prefs.folderSizes) return '—';
+  const v = S.dirSizes.get(e.path);
+  return v == null ? '…' : v.bytes == null ? '—' : bytes(v.bytes);
+}
+let sizeRun = 0;
+async function sizeFolders(t) {
+  if (!S.prefs.folderSizes || !t.listing) return;
+  const run = ++sizeRun;
+  for (const id of S.sizeJobs || []) desk.cancel(id);
+  S.sizeJobs = new Set();
+  const dirs = t.listing.entries.filter(e => e.isDir && !(S.dirSizes.get(e.path)?.mtime === e.mtime));
+  const repaint = U.debounce(() => { if (tab() === t) { refreshItems(t); renderContent(); } }, 250);
+  const next = async () => {
+    while (dirs.length && run === sizeRun) {
+      const e = dirs.shift();
+      const id = `ds${run}-${e.path}`;
+      S.sizeJobs.add(id);
+      try { const r = await desk.folderSize(e.path, id); S.dirSizes.set(e.path, {bytes: r.bytes, mtime: e.mtime}); } catch { S.dirSizes.set(e.path, {bytes: null, mtime: e.mtime}); }
+      S.sizeJobs.delete(id);
+      if (run !== sizeRun) return;
+      if (S.dirSizes.size > 5000) S.dirSizes.delete(S.dirSizes.keys().next().value);
+      repaint();
+    }
+  };
+  await Promise.all([next(), next()]);
 }
 function relativeWhere(t, e) { const d = U.dirname(e.path, sep()); return d === t.path ? '—' : d.slice(t.path.length + 1) || d; }
 
@@ -631,6 +709,10 @@ async function fillMedia(media, e, size, token, big = false) {
   }
   if (kind === 'Video' && /^(mp4|m4v|webm|mov|ogg)$/.test(e.ext)) { media.append(el('video', {class: 'pv-video', src: U.fileUrl(e.path), controls: true, preload: 'metadata'})); return; }
   if (kind === 'Audio' && /^(mp3|wav|m4a|aac|ogg|opus|flac)$/.test(e.ext)) { await thumbInto(media, e, size, big); media.append(el('audio', {src: U.fileUrl(e.path), controls: true, preload: 'metadata'})); return; }
+  if (window.DocView?.handles(e)) {
+    const alive = big ? () => media.isConnected : () => token === previewToken && media.isConnected;
+    if (await DocView.render(media, e, {big, alive})) return;
+  }
   if (e.size < 5e6 && (/^(txt|md|markdown|log|csv|tsv|json|jsonc|xml|yml|yaml|toml|ini|cfg|conf|env|js|mjs|cjs|ts|tsx|jsx|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sh|zsh|bash|ps1|bat|cmd|html|htm|css|scss|vue|svelte|sql|lua|r|dart|srt|vtt|gitignore|lock)$/.test(e.ext) || (!e.ext && e.size < 200000))) {
     const r = await desk.readText(e.path).catch(() => null);
     if (token !== previewToken && !big) return;
@@ -750,14 +832,14 @@ async function itemMenu() {
     {id: 'reveal', label: `Show in ${term}`},
     {id: 'quicklook', label: 'Quick Look', accel: 'Space'},
     {type: 'separator'},
-    {id: 'rename', label: 'Rename…', enabled: !!one, accel: isMac() ? 'Enter' : 'F2'},
+    {id: 'rename', label: one ? 'Rename…' : `Rename ${sel.length} Items…`, accel: isMac() ? 'Enter' : 'F2'},
     {id: 'duplicate', label: 'Duplicate', accel: isMac() ? 'Cmd+D' : 'Ctrl+D'},
     {id: 'compress', label: one ? `Compress “${one.name}”` : `Compress ${sel.length} items`},
     one && one.ext === 'zip' ? {id: 'extract', label: 'Extract Here'} : null,
     {type: 'separator'},
     {id: 'cut', label: 'Cut', accel: isMac() ? 'Cmd+X' : 'Ctrl+X'}, {id: 'copy', label: 'Copy', accel: isMac() ? 'Cmd+C' : 'Ctrl+C'},
     {id: 'copyPath', label: sel.length > 1 ? 'Copy Paths' : 'Copy Path', accel: isMac() ? 'Alt+Cmd+C' : 'Ctrl+Alt+C'},
-    one?.isDir ? {id: 'pin', label: 'Add to Sidebar'} : null,
+    one?.isDir ? {id: 'pin', label: 'Add to Favorites…'} : null,
     {type: 'separator'},
     {id: 'trash', label: isWin() ? 'Delete (Recycle Bin)' : 'Move to Trash', accel: isMac() ? 'Cmd+Backspace' : 'Delete'},
   ].filter(Boolean);
@@ -781,7 +863,8 @@ async function folderMenu() {
     {id: 'toggleHidden', label: 'Show Hidden Files', checked: S.prefs.showHidden},
     {id: 'foldersFirst', label: 'Keep Folders on Top', checked: S.prefs.foldersFirst},
     {type: 'separator'},
-    {id: 'copyPathHere', label: 'Copy Folder Path'}, {id: 'pinHere', label: 'Add Folder to Sidebar'},
+    {id: 'copyPathHere', label: 'Copy Folder Path'}, {id: 'pinHere', label: 'Add Folder to Favorites…'},
+    {id: 'folderSizes', label: 'Show Folder Sizes', checked: !!S.prefs.folderSizes},
   ]);
   if (!id) return;
   if (id.startsWith('sort:')) { S.prefs.sort = {key: id.slice(5), dir: id.slice(5) === 'name' || id.slice(5) === 'kind' ? 1 : -1}; for (const x of S.tabs) refreshItems(x); renderContent(); savePrefsSoon(); }
@@ -790,6 +873,7 @@ async function folderMenu() {
   else if (id === 'editorHere') desk.editor(t.path).catch(err);
   else if (id === 'copyPathHere') { desk.copyText(t.path); toast('Copied folder path'); }
   else if (id === 'pinHere') pin(t.path);
+  else if (id === 'folderSizes') { S.prefs.folderSizes = !S.prefs.folderSizes; savePrefsSoon(); if (S.prefs.folderSizes) sizeFolders(tab()); renderContent(); }
   else if (id === 'foldersFirst') { S.prefs.foldersFirst = !S.prefs.foldersFirst; for (const x of S.tabs) refreshItems(x); renderContent(); savePrefsSoon(); }
   else command(id);
 }
@@ -828,7 +912,7 @@ function command(id) {
     case 'editor': return desk.editor(one ? one.path : t.path).catch(err);
     case 'reveal': return desk.reveal(one ? one.path : t.path);
     case 'quicklook': return quickLook();
-    case 'rename': return one && startRename(one.path);
+    case 'rename': return sel.length > 1 ? Extras.batchRename(sel) : one && startRename(one.path);
     case 'duplicate': return sel.length && desk.duplicate(sel.map(e => e.path)).then(r => { report(r, 'Duplicated'); return reload(); }).catch(err);
     case 'compress': return compress();
     case 'copyPath': { const p = sel.length ? sel.map(e => e.path) : [t.path]; desk.copyText(p.join('\n')); return toast(p.length > 1 ? `Copied ${p.length} paths` : 'Copied path'); }
@@ -858,6 +942,9 @@ function command(id) {
     case 'viewColumns': return setView('columns');
     case 'togglePreview': S.prefs.showPreview = !S.prefs.showPreview; render(); return savePrefsSoon();
     case 'toggleHidden': S.prefs.showHidden = !S.prefs.showHidden; savePrefsSoon(); toast(S.prefs.showHidden ? 'Showing hidden files' : 'Hiding hidden files'); return reload();
+    case 'folderSizes': S.prefs.folderSizes = !S.prefs.folderSizes; savePrefsSoon(); if (S.prefs.folderSizes) sizeFolders(t); return renderContent();
+    case 'pinHere': return pin(t.path);
+    case 'batchRename': return sel.length ? (sel.length > 1 ? Extras.batchRename(sel) : startRename(sel[0].path)) : toast('Select some files first');
     case 'toggleRecents': return setRecents(S.prefs.showRecents === false);
     case 'tidy': return window.Tidy?.isOpen() ? Tidy.close() : window.Tidy?.open(t.path);
     case 'settings': return openSettings();
@@ -945,7 +1032,7 @@ window.addEventListener('mouseup', e => { if (e.button === 3) { e.preventDefault
 const PALETTE_COMMANDS = [
   ['newFolder', 'New folder', '⌘⇧N'], ['newFile', 'New text file', '⌘⌥N'], ['newTab', 'New tab', '⌘T'], ['terminal', 'Open in Terminal', '⌃`'], ['editor', 'Open in code editor', '⌘⇧E'],
   ['reveal', 'Show in Finder / Explorer', ''], ['copyPath', 'Copy path', '⌘⌥C'], ['tidy', 'Tidy this folder', '⌘⇧Y'], ['toggleHidden', 'Show / hide hidden files', '⌘⇧.'],
-  ['togglePreview', 'Show / hide preview', '⌘⇧P'], ['toggleRecents', 'Show / hide recent folders in sidebar', ''], ['viewList', 'View as list', '⌘1'], ['viewGrid', 'View as grid', '⌘2'], ['viewColumns', 'View as columns', '⌘3'],
+  ['togglePreview', 'Show / hide preview', '⌘⇧P'], ['toggleRecents', 'Show / hide recent folders in sidebar', ''], ['folderSizes', 'Show / hide folder sizes', ''], ['pinHere', 'Add this folder to Favorites', ''], ['batchRename', 'Rename selected items…', ''], ['viewList', 'View as list', '⌘1'], ['viewGrid', 'View as grid', '⌘2'], ['viewColumns', 'View as columns', '⌘3'],
   ['undo', 'Undo last change', '⌘Z'], ['history', 'Recent changes (undo any)', ''], ['compress', 'Compress selection', ''], ['duplicate', 'Duplicate selection', '⌘D'],
   ['trash', 'Move selection to Trash', '⌘⌫'], ['goto', 'Go to folder by path…', '⌘⇧G'], ['settings', 'Settings', '⌘,'], ['refresh', 'Refresh', ''],
 ];
@@ -991,6 +1078,16 @@ $('paletteInput').addEventListener('keydown', e => {
 $('palette').addEventListener('mousedown', e => { if (e.target === $('palette')) closePalette(); });
 
 // ---------------------------------------------------------------- settings
+const ACCENTS = [['blue', 'Blue'], ['mint', 'Mint'], ['teal', 'Teal'], ['violet', 'Violet'], ['rose', 'Rose'], ['amber', 'Amber'], ['graphite', 'Graphite']];
+function accentPicker() {
+  const box = el('div', {class: 'swatches accents'});
+  for (const [id, label] of ACCENTS) {
+    const b = el('button', {type: 'button', class: 'swatch accent-' + id + ((S.prefs.accent || 'blue') === id ? ' on' : ''), title: label, 'aria-label': label,
+      onclick: () => { S.prefs.accent = id; box.querySelectorAll('.swatch').forEach(x => x.classList.toggle('on', x === b)); applyTheme(); }});
+    box.append(b);
+  }
+  return box;
+}
 async function openSettings() {
   const d = $('settingsDialog');
   const L = S.launchers;
@@ -999,18 +1096,28 @@ async function openSettings() {
   d.replaceChildren(el('form', {method: 'dialog', class: 'settings'},
     el('h2', {text: 'Settings'}),
     pick('setTheme', 'Appearance', [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark']], S.prefs.theme),
+    el('div', {class: 'field'}, el('span', {text: 'Accent color'}), accentPicker()),
+    check('setOled', 'Pure black background (OLED)', !!S.prefs.oled, 'True black in dark mode — easier on OLED screens'),
     pick('setTerminal', 'Terminal app', L.terminals.map(x => [x.id, x.label]), S.prefs.terminal || L.terminals[0]?.id),
     pick('setEditor', 'Code editor', L.editors.map(x => [x.id, x.label]), S.prefs.editor || L.editors[0]?.id),
     check('setFolders', 'Keep folders on top', S.prefs.foldersFirst),
     check('setHidden', 'Show hidden files', S.prefs.showHidden, 'Dotfiles and system files'),
     check('setRecents', 'Show recent folders in the sidebar', S.prefs.showRecents !== false, 'Turning this off also clears the list'),
+    check('setSizes', 'Show folder sizes in list view', !!S.prefs.folderSizes, 'Adds up each folder in the background'),
     el('p', {class: 'muted small', text: `Fresh Desk ${S.env.version} · part of the Utility Package. Nothing is ever deleted permanently; removals go to the ${isWin() ? 'Recycle Bin' : 'Trash'}.`}),
     el('div', {class: 'dialog-actions'}, el('button', {class: 'btn ghost', value: 'cancel', text: 'Cancel'}), el('button', {class: 'btn primary', value: 'save', text: 'Save'}))));
+  const before = {accent: S.prefs.accent, oled: S.prefs.oled};
+  const oledBox = d.querySelector('#setOled');
+  oledBox.onchange = () => { S.prefs.oled = oledBox.checked; applyTheme(); };
   d.onclose = async () => {
-    if (d.returnValue !== 'save') return;
+    if (d.returnValue !== 'save') { Object.assign(S.prefs, before); applyTheme(); return; }
+    S.prefs.oled = $('setOled').checked;
+    const sizesOn = $('setSizes').checked && !S.prefs.folderSizes; S.prefs.folderSizes = $('setSizes').checked;
+    if (sizesOn) sizeFolders(tab());
     const hiddenChanged = S.prefs.showHidden !== $('setHidden').checked;
     if ((S.prefs.showRecents !== false) !== $('setRecents').checked) { S.prefs.showRecents = $('setRecents').checked; if (!S.prefs.showRecents) S.prefs.recents = []; else addRecent(tab().path); }
     Object.assign(S.prefs, {theme: $('setTheme').value, terminal: $('setTerminal').value, editor: $('setEditor').value, foldersFirst: $('setFolders').checked, showHidden: $('setHidden').checked});
+    applyTheme();
     await savePrefs();
     for (const x of S.tabs) refreshItems(x);
     if (hiddenChanged) await reload(); else render();
@@ -1059,7 +1166,19 @@ desk.on('dir-changed', async d => {
   for (const t of S.tabs) if (t.path === d && !S.renaming) await load(t, {keep: true});
   if (S.prefs.view === 'columns' && tab().path !== d && crumbsFor(tab().path).some(c => c.path === d)) renderContent();
 });
-desk.on('theme', dark => document.documentElement.classList.toggle('dark', dark));
+desk.on('theme', dark => { document.documentElement.classList.toggle('dark', dark); applyTheme(); });
+// Accent color, pure-black (OLED) mode, and matching Windows caption buttons.
+function applyTheme() {
+  const root = document.documentElement;
+  root.dataset.accent = S.prefs.accent || 'blue';
+  root.classList.toggle('oled', !!S.prefs.oled);
+  if (isWin()) {
+    const cs = getComputedStyle(root);
+    const hex = v => { const m = v.trim().match(/^#([0-9a-f]{6})$/i); return m ? '#' + m[1] : null; };
+    const bg = hex(cs.getPropertyValue('--bg')), fg = hex(cs.getPropertyValue('--fg'));
+    if (bg && fg) desk.setChrome({bg, fg});
+  }
+}
 desk.on('open-path', async p => {
   const info = await desk.info(p).catch(() => null); if (!info) return;
   if (info.isDir) navigate(p, {newTab: true}); else navigate(U.dirname(p, sep()), {newTab: true, select: p});
@@ -1124,6 +1243,7 @@ async function start() {
   S.prefs = S.env.prefs;
   document.body.classList.add(S.env.platform);
   document.documentElement.classList.toggle('dark', S.env.dark);
+  applyTheme();
   applyWidths();
   $('zoom').value = S.prefs.iconSize;
   wire();
@@ -1137,5 +1257,5 @@ async function start() {
   render();
   $('content').focus();
 }
-window.App = {S, tab, navigate, render, renderStatus, toast, err, reload, iconFor, btn, command, isMac, isWin, sep, selected, refreshItems, short};
+window.App = {S, tab, navigate, render, renderStatus, renderPlaces, savePrefsSoon, pin, pinPath, favorites, toast, err, reload, iconFor, btn, command, isMac, isWin, sep, selected, refreshItems, short};
 start().catch(e => { document.body.textContent = 'Fresh Desk could not start: ' + e.message; });

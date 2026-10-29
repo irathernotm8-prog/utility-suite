@@ -16,7 +16,7 @@ const entries = [
 function mockDesk(calls) {
   const record = name => (...a) => { (calls[name] ||= []).push(a); return Promise.resolve(); };
   return new Proxy({
-    init: async () => ({platform: 'linux', sep: '/', home: '/u', dark: false, version: '1.0.0', open: [], paths: {home: '/u', desktop: '/u/Desktop', documents: '/u/Documents', downloads: '/u/Downloads'}, prefs: {view: 'list', sort: {key: 'name', dir: 1}, foldersFirst: true, showHidden: false, showPreview: true, iconSize: 104, pins: [], unpinned: [], recents: [], tabs: ['/u/Downloads'], activeTab: 0, sidebarWidth: 212, previewWidth: 300, theme: 'system', collapsed: []}}),
+    init: async () => ({platform: 'linux', sep: '/', home: '/u', dark: false, version: '1.0.0', open: [], paths: {home: '/u', desktop: '/u/Desktop', documents: '/u/Documents', downloads: '/u/Downloads'}, prefs: {view: 'list', sort: {key: 'name', dir: 1}, foldersFirst: true, showHidden: false, showPreview: true, iconSize: 104, pins: [], unpinned: [], recents: [], tabs: ['/u/Downloads'], activeTab: 0, sidebarWidth: 212, previewWidth: 300, theme: 'system', collapsed: [], accent: 'blue', oled: false, favMeta: {}, favOrder: []}}),
     places: async () => ({favorites: [{name: 'Downloads', path: '/u/Downloads', icon: 'download'}], volumes: []}),
     launchers: async () => ({terminals: [{id: 'Terminal', label: 'Terminal'}], editors: []}),
     list: async p => ({path: p, parent: '/u', entries: p === '/u/Downloads' ? entries : [], hiddenCount: 0}),
@@ -41,7 +41,7 @@ async function setup(t) {
   w.HTMLDialogElement.prototype.close = function () { this.open = false; };
   w.ResizeObserver = class { observe() {} };
   w.desk = mockDesk(calls);
-  for (const f of ['util.js', 'icons.js', 'review-model.js', 'app.js', 'tidy.js']) w.eval(fs.readFileSync(path.join(R, f), 'utf8'));
+  for (const f of ['util.js', 'icons.js', 'glyphs.js', 'docview.js', 'review-model.js', 'app.js', 'tidy.js', 'extras.js']) w.eval(fs.readFileSync(path.join(R, f), 'utf8'));
   await new Promise(r => setTimeout(r, 120));
   return {w, d: w.document, calls};
 }
@@ -105,4 +105,44 @@ test('tidy model helpers', () => {
   assert.equal(g.moves.length, 1); assert.equal(g.staying.length, 1); assert.equal(g.blocked.length, 1);
   assert.deepEqual([...model.defaultChecked(rows)], ['a']);
   assert.deepEqual(model.summary(rows, new Set(['a', 'b', 'c', 'd'])), {files: 2, folders: 1, bytes: 3});
+});
+
+test('markdown and CSV previews are built as plain DOM', async t => {
+  const {w} = await setup(t);
+  const md = w.DocView.markdown('# Plan\n\n- **Ship** Fresh Desk\n- [ ] Test on Windows\n\n<script>alert(1)</script>\n\n| a | b |\n|---|---|\n| 1 | 2 |');
+  assert.equal(md.querySelector('h1').textContent, 'Plan');
+  assert.equal(md.querySelector('li strong').textContent, 'Ship');
+  assert.equal(md.querySelectorAll('li')[1].textContent, '☐ Test on Windows');
+  assert.equal(md.querySelector('script'), null, 'raw HTML stays text');
+  assert.equal(md.querySelectorAll('td').length, 2);
+  assert.equal(JSON.stringify(w.DocView.parseCsv('a,"b, c"\n1,"say ""hi"""\n', ',')), JSON.stringify([['a', 'b, c'], ['1', 'say "hi"']]));
+  const safe = w.DocView.safeHtml('<p onclick="x()">Hi <a href="https://evil">link</a><img src="https://x/y.png"><script>bad()</script></p>');
+  assert.equal(safe.querySelector('[onclick]'), null);
+  assert.equal(safe.querySelector('a'), null);
+  assert.equal(safe.querySelector('img'), null);
+  assert.equal(safe.querySelector('script'), null);
+  assert.match(safe.textContent, /Hi link/);
+});
+
+test('batch rename previews names: replace, number, case', async t => {
+  const {w} = await setup(t);
+  const es = [{name: 'IMG_001.JPG', path: '/u/a', isDir: false}, {name: 'IMG_002.JPG', path: '/u/b', isDir: false}];
+  const base = {keepExt: true, caseSensitive: false, regex: false};
+  assert.deepEqual(w.Extras.computeNames(es, {...base, mode: 'replace', find: 'img_', replace: 'Trip '}).map(r => r.name), ['Trip 001.JPG', 'Trip 002.JPG']);
+  assert.deepEqual(w.Extras.computeNames(es, {...base, mode: 'format', base: 'Houston', start: 1, digits: 2, joiner: ' ', numberFirst: false}).map(r => r.name), ['Houston 01.JPG', 'Houston 02.JPG']);
+  assert.deepEqual(w.Extras.computeNames(es, {...base, mode: 'case', caseMode: 'lower'}).map(r => r.name), ['img_001.JPG', 'img_002.JPG']);
+});
+
+test('adding a favorite asks for an icon and remembers it', async t => {
+  const {w, d} = await setup(t);
+  w.App.pin('/u/Projects');
+  await wait(50);
+  assert.ok(d.querySelector('.fav-dialog'), 'editor opens');
+  assert.ok(d.querySelectorAll('.glyph').length > 60, 'plenty of icons');
+  d.querySelector('.glyph[title="Rocket"]').click();
+  d.querySelector('.fav-dialog .btn.primary').click();
+  await wait(50);
+  assert.equal(w.App.S.prefs.favMeta['/u/Projects'].icon, 'rocket');
+  assert.equal(w.App.favorites().find(f => f.path === '/u/Projects').icon, 'rocket');
+  assert.ok([...d.querySelectorAll('.place-name')].some(n => n.textContent === 'Projects'), 'shows in the sidebar');
 });
