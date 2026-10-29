@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-29 00:20 — **Helm 0.1.0** — New app: run your whole computer from a PS5, PS4 or Xbox controller — pointer, touchpad gestures, on-screen keyboard, quick panel and a hold-R2 command layer; steps aside while a game plays
 - 2026-10-28 19:22 — **Bench 0.1.2** — Windows: the app icon is now the right size, matching the rest of the suite
 - 2026-10-28 19:22 — **RO2 0.3.1** — Windows: the app icon is now the right size, matching the rest of the suite
 - 2026-10-28 19:22 — **Atoll 0.2.1** — Windows: the app icon is now the right size, matching the rest of the suite

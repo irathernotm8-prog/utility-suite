@@ -1,0 +1,55 @@
+{
+  "name": "helm",
+  "productName": "Helm",
+  "version": "0.1.0",
+  "description": "Run your whole computer from a controller: a smooth pointer on the stick, a touchpad that clicks, scrolls and swipes between desktops, an on-screen keyboard, a quick panel and a hold-R2 command layer, for PlayStation and Xbox controllers on Mac and Windows. Steps aside on its own when a game is playing.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "HELM_DEMO=1 electron .",
+    "test": "node test/run.js",
+    "e2e": "node test/e2e/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "node-hid": "3.4.0"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.helm",
+    "productName": "Helm",
+    "copyright": "Personal use",
+    "npmRebuild": false,
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "build/tray*.png",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/node-hid/hidapi/**",
+      "!node_modules/node-hid/src/**",
+      "!node_modules/node-hid/prebuilds/HID-linux*/**",
+      "!node_modules/node-hid/prebuilds/HID_hidraw*/**"
+    ],
+    "asarUnpack": ["node_modules/node-hid/**", "src/platform/helpers/**"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.utilities",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Helm opens Mission Control, Launchpad and Spotlight for your controller.",
+        "NSBluetoothAlwaysUsageDescription": "Helm reads your Bluetooth game controller so it can move the pointer and type."
+      }
+    },
+    "win": { "target": ["zip"], "icon": "build/icon.png" }
+  }
+}

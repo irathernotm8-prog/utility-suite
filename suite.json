@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -252,6 +252,16 @@
       "id": "vantage",
       "name": "Vantage",
       "description": "A fast, private browser: up to four pages on one screen, built-in ad blocking and VPN, multi-connection downloads, the password vault with autofill, and your Library.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [
+        "test/e2e-out"
+      ]
+    },
+    {
+      "id": "helm",
+      "name": "Helm",
+      "description": "Run your whole computer from a controller: a smooth pointer, a touchpad that clicks, scrolls and swipes between desktops, an on-screen keyboard, a quick panel and a command layer, for PlayStation and Xbox controllers. Steps aside while a game plays.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [

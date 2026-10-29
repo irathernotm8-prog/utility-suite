@@ -1,0 +1,79 @@
+/* Helm overlay — sits above everything, never takes focus or clicks. Dark glass, one cyan-to-violet accent. */
+:root {
+  --acc: #38d6ff; --acc-2: #8b7bff; --acc-3: #f25fd0;
+  --acc-grad: linear-gradient(135deg, #46dcff 0%, #7f7bff 55%, #d86aff 100%);
+  --glass: rgba(14, 17, 26, .9); --glass-2: rgba(30, 35, 50, .92); --line: rgba(200, 220, 255, .10); --line-2: rgba(200, 220, 255, .18);
+  --fg: #eef3fb; --fg-2: #aeb8ca; --mut: #7c879b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; color: var(--fg);
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; user-select: none; cursor: default; }
+.ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.card { background: var(--glass); border: 1px solid var(--line-2); border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06); }
+
+/* glyphs (shared look with the Settings window) */
+.gl { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--fg); font-size: 10.5px; font-weight: 700; flex: none; letter-spacing: .2px; }
+.gl svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.gl.txt { border-radius: 7px; width: auto; min-width: 26px; padding: 0 5px; white-space: nowrap; } .gl.txt.wide { font-size: 10px; }
+.gl.dpad { border-radius: 7px; }
+.ps-cross { color: #8ab8ff; } .ps-circle { color: #ff7a85; } .ps-square { color: #f09ae8; } .ps-triangle { color: #4fe0b0; }
+.xb-cross { color: #5fd27a; } .xb-circle { color: #ff6b6b; } .xb-square { color: #5fa8ff; } .xb-triangle { color: #ffd04d; }
+
+/* ---------------------------------------------------------------- HUD */
+.hud { position: fixed; left: 50%; bottom: 64px; transform: translate(-50%, 16px) scale(.96); opacity: 0; transition: opacity .18s, transform .22s cubic-bezier(.2,.9,.3,1.2); pointer-events: none;
+  display: flex; align-items: center; gap: 10px; padding: 11px 18px 11px 12px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line-2); box-shadow: 0 18px 50px rgba(0,0,0,.5); white-space: nowrap; font-weight: 600; font-size: 14.5px; }
+.hud.on { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.hud .bubble { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--acc-grad); color: #0b1020; }
+.hud .bubble .ic { width: 17px; height: 17px; stroke-width: 2.1; }
+body.kb-open .hud { bottom: calc(var(--kbh, 360px) + 40px); }
+
+/* ---------------------------------------------------------------- keyboard */
+.kb { position: fixed; left: 50%; bottom: 28px; width: min(1000px, 94vw); transform: translate(-50%, 30px); opacity: 0; transition: opacity .2s, transform .25s cubic-bezier(.2,.9,.3,1); padding: 16px 16px 12px; }
+.kb.on { opacity: 1; transform: translate(-50%, 0); }
+.kb .rows { display: flex; flex-direction: column; gap: 8px; }
+.kb .row { display: flex; gap: 8px; }
+.key { height: 52px; border-radius: 12px; background: var(--glass-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 19px; font-weight: 500; color: var(--fg); transition: transform .08s, background .1s, box-shadow .1s; position: relative; min-width: 0; }
+.key.fn { font-size: 13px; font-weight: 600; color: var(--fg-2); letter-spacing: .3px; }
+.key.on { color: var(--acc); border-color: color-mix(in srgb, var(--acc) 50%, transparent); }
+.key.disabled { opacity: .35; }
+.key.sel { background: var(--acc-grad); color: #0a0f1f; border-color: transparent; transform: translateY(-2px) scale(1.06); box-shadow: 0 10px 26px rgba(80, 140, 255, .45), 0 0 0 3px rgba(120, 200, 255, .25); z-index: 2; font-weight: 650; }
+.key.sel.fn { color: #0a0f1f; }
+.key.press { animation: press .16s; }
+@keyframes press { 50% { transform: translateY(0) scale(.95); } }
+.kb .help { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; color: var(--fg-2); font-size: 12.5px; }
+.kb .help span { display: inline-flex; align-items: center; gap: 6px; }
+.kb .help .gl { height: 20px; } .kb .help .gl:not(.txt) { width: 20px; }
+
+/* ---------------------------------------------------------------- quick panel */
+.panel { position: fixed; left: 50%; top: 50%; width: min(760px, 92vw); transform: translate(-50%, -46%) scale(.97); opacity: 0; transition: opacity .2s, transform .25s cubic-bezier(.2,.9,.3,1); padding: 20px; }
+.panel.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.panel .top { display: flex; align-items: center; gap: 12px; padding: 0 4px 16px; }
+.panel .mark { width: 30px; height: 30px; border-radius: 9px; background: var(--acc-grad); display: grid; place-items: center; color: #0b1020; }
+.panel .mark .ic { width: 18px; height: 18px; stroke-width: 2; }
+.panel .top b { font-size: 17px; font-weight: 700; letter-spacing: -.1px; }
+.panel .top .grow { flex: 1; }
+.panel .meta { display: flex; align-items: center; gap: 14px; color: var(--fg-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.panel .meta span { display: inline-flex; align-items: center; gap: 6px; }
+.panel .meta .ic { width: 17px; height: 17px; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.tile { height: 104px; border-radius: 16px; background: var(--glass-2); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; padding: 14px; transition: transform .1s, background .12s, box-shadow .12s; }
+.tile .ic { width: 26px; height: 26px; stroke-width: 1.7; color: var(--fg-2); }
+.tile b { font-size: 14px; font-weight: 620; } .tile small { display: block; color: var(--mut); font-size: 11.5px; margin-top: 1px; }
+.tile.sel { background: var(--acc-grad); border-color: transparent; transform: scale(1.04); box-shadow: 0 14px 34px rgba(80, 140, 255, .42); }
+.tile.sel .ic, .tile.sel b { color: #0a0f1f; } .tile.sel small { color: rgba(10,15,31,.7); }
+.panel .help { display: flex; justify-content: center; gap: 18px; margin-top: 16px; color: var(--fg-2); font-size: 12.5px; }
+.panel .help span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------------------------------------------------------------- command layer hint */
+.hint { position: fixed; right: 28px; top: 50%; transform: translate(20px, -50%); opacity: 0; transition: opacity .18s, transform .22s; width: 300px; padding: 14px 14px 12px; }
+.hint.on { opacity: 1; transform: translate(0, -50%); }
+.hint h3 { margin: 0 4px 10px; font-size: 12px; font-weight: 700; color: var(--mut); text-transform: uppercase; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; }
+.hint h3 .gl { width: auto; }
+.hint .items { display: grid; gap: 3px; }
+.hint .it { display: flex; align-items: center; gap: 10px; padding: 5px 6px; border-radius: 9px; font-size: 13px; }
+.hint .it:nth-child(odd) { background: rgba(255,255,255,.03); }
+.hint .it .lab { flex: 1; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hint .it .gl:not(.txt) { width: 22px; }
+.hint .foot { margin: 8px 6px 0; font-size: 11.5px; color: var(--mut); }
+
+.hint .it .gls { width: 52px; display: flex; flex: none; }

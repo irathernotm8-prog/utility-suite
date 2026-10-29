@@ -17,6 +17,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Facet** | 3D models from a prompt or a picture, generated on this computer's own GPU: concept sketches, photo and multi-view to mesh, textures painted from the picture or by an AI painter (Hunyuan3D Paint), optional Tripo cloud engine with your own key, character rigging with test animations, export for Unity, Unreal, Godot, Blender, Roblox, three.js and 3D printing | `apps/facet` |
 | **Fresh Desk** | Fast file explorer: tabs, preview, Terminal, undo, and Tidy for sorting and clean-up | `apps/fresh-desk` |
 | **Glean** | Collects every photo and video from Instagram, Facebook, Patreon or any page at full size, grouped by post with captions; keeps each account up to date | `apps/glean` |
+| **Helm** | Runs the whole computer from a controller (PS5 DualSense, PS4, Xbox): a smooth pointer, a touchpad that clicks, scrolls and swipes between desktops, an on-screen keyboard, a quick panel and a hold-R2 command layer; steps aside while a game plays | `apps/helm` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
 | **Lumen** | Ads and analytics: Meta first, with Google, YouTube and Salesforce, plus an AI you can ask | `apps/lumen` |
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
@@ -71,6 +72,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Droid | its app-data folder: `sdk/` (emulator and Android versions, 1–2 GB each), `avd/` (each device's disk), `apks/` (app library); movable in Android versions › Data folder. Screenshots and recordings go to `~/Pictures/Droid` |
 | Facet | `~/Documents/Facet` (one folder per model: `model.glb`, pictures, `facet.json`; change in Settings). Its app-data folder holds `Models/` (3D and image models, 2–20 GB) and `Engine/` (private Python and PyTorch, 1.5–5 GB) |
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
+| Helm | its app-data folder: `settings.json`, `helm-input.js` (the Mac input helper) and `bin/` (the Windows input helper, compiled on the PC) |
 | RO2 | `~/Documents/RO2` (one `.ro2` file per design, pictures inside; change in Settings). Its app-data folder holds `Models/` (the AI models, 300–500 MB, downloaded on first use), `settings.json` and `index.json` (Home thumbnails) |
 | Vitals | its app-data folder (`focus/` holds one small file per day of time tracking) |
 | Vantage | its app-data folder: `vantage-data.json` (settings, bookmarks, open tabs, downloads list), `history.json`, `vantage-vault.json` (encrypted), filter lists, `bin/wireproxy` (VPN engine, downloaded on first connect), browser profiles. The Library uses Relay's `~/Downloads/Relay/Relay Files` when it exists, otherwise `~/Downloads/Vantage/Vantage Files` |

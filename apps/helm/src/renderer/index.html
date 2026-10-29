@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Helm</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#46dcff"/><stop offset=".55" stop-color="#7f7bff"/><stop offset="1" stop-color="#d86aff"/></linearGradient>
+  </defs>
+</svg>
+<div id="app">
+  <aside id="side">
+    <div class="side-top"><div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M7.5 7h9a4.5 4.5 0 0 1 4.4 3.6l1 5.2a2.6 2.6 0 0 1-4.6 2.1L15.6 16H8.4l-1.7 1.9a2.6 2.6 0 0 1-4.6-2.1l1-5.2A4.5 4.5 0 0 1 7.5 7z"/></svg></span>Helm</div></div>
+    <nav class="side-nav" id="nav"></nav>
+    <div class="side-spacer"></div>
+    <div class="side-state" id="side-state"></div>
+  </aside>
+  <main id="main">
+    <section class="view" data-view="home">
+      <div class="page-bar"><div class="title"><h1>Home</h1><span class="muted" id="home-sub"></span></div><div class="grow"></div></div>
+      <div class="scroll"><div class="page" id="home"></div></div>
+    </section>
+    <section class="view" data-view="buttons">
+      <div class="page-bar"><div class="title"><h1>Buttons</h1><span class="muted">What every button does, and what it does while you hold the command button</span></div><div class="grow"></div><button class="btn sm" id="reset-binds">Reset to defaults</button></div>
+      <div class="scroll"><div class="page" id="buttons"></div></div>
+    </section>
+    <section class="view" data-view="pointer">
+      <div class="page-bar"><div class="title"><h1>Pointer &amp; touchpad</h1><span class="muted">Speed, feel and gestures</span></div><div class="grow"></div></div>
+      <div class="scroll"><div class="page" id="pointer"></div></div>
+    </section>
+    <section class="view" data-view="games">
+      <div class="page-bar"><div class="title"><h1>Games</h1><span class="muted">Helm steps aside so the controller only drives the game</span></div><div class="grow"></div></div>
+      <div class="scroll"><div class="page" id="games"></div></div>
+    </section>
+    <section class="view" data-view="settings">
+      <div class="page-bar"><div class="title"><h1>Settings</h1></div><div class="grow"></div></div>
+      <div class="scroll"><div class="page" id="settings"></div></div>
+    </section>
+  </main>
+</div>
+<script src="common.js"></script>
+<script src="pad.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
