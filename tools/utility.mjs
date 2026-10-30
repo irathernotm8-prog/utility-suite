@@ -760,13 +760,23 @@ async function cmdGithub(name, opts) {
 }
 
 async function loadPublishedCatalog(tKey, cfg, local) {
-  if (local) return readJSON(path.join(local, `catalog-${tKey}.json`), null);
+  if (local) return fromWire(readJSON(path.join(local, `catalog-${tKey}.json`), null));
   const url = `${cfg.base}/catalog-${tKey}.json?t=${Date.now()}`;
   let res;
   try { res = await fetch(url, { cache: 'no-store' }); } catch (e) { fail(`Couldn't reach GitHub to read the current ${OS_LABEL[tKey]} catalog (${e.message}). Check your connection and try again.`); }
   if (res.status === 404) return null;
   if (!res.ok) fail(`GitHub answered ${res.status} for ${url}. Try again in a minute.`);
-  return res.json();
+  return fromWire(await res.json());
+}
+
+// Windows catalogs list the hub as "hubWin", not "hub": Utility Hub 1.2.2 and older update themselves
+// on Windows with a script that can open endless command windows, so they must never see a hub update.
+// Hub 1.2.3+ reads "hubWin". People on older hubs install the new one once from the setup zip.
+const fromWire = (c) => { if (c && c.hubWin && !c.hub) c.hub = c.hubWin; if (c) delete c.hubWin; return c; };
+function toWire(cat, tKey) {
+  if (tKey !== 'win' || !cat.hub) return cat;
+  const { hub, ...rest } = cat;
+  return { ...rest, hubWin: hub };
 }
 
 async function cmdPublish(opts) {
@@ -783,7 +793,7 @@ async function cmdPublish(opts) {
 
   const files = [], catalogs = [], shipped = [], failed = [], keep = new Set();
   for (const tKey of targets) {
-    const pending = opts.force ? null : readJSON(path.join(out, `catalog-${tKey}.json`), null); // left by an interrupted publish
+    const pending = opts.force ? null : fromWire(readJSON(path.join(out, `catalog-${tKey}.json`), null)); // left by an interrupted publish
     const current = await loadPublishedCatalog(tKey, cfg, local);
     const cat = current && current.apps ? current : { format: 1, apps: [] };
     const published = (app) => (isHub(app) ? cat.hub?.version : cat.apps.find((a) => a.id === app.id)?.version);
@@ -840,7 +850,7 @@ async function cmdPublish(opts) {
       return { ...x, icon: icon ? path.basename(icon) : null };
     });
     const catFile = path.join(out, `catalog-${tKey}.json`);
-    writeJSON(catFile, cat);
+    writeJSON(catFile, toWire(cat, tKey));
     catalogs.push(catFile);
     for (const a of cat.apps) keep.add(a.file);
     if (cat.hub?.file) keep.add(cat.hub.file);

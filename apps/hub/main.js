@@ -16,6 +16,15 @@ const argv = process.argv.slice(1);
 const flag = (f) => argv.includes(f);
 const argAfter = (f) => { const i = argv.indexOf(f); return i !== -1 ? argv[i + 1] : null; };
 
+// Windows: this is the new copy of the hub, finishing an update after the old one closed
+if (flag('--finish-update')) {
+  require('./lib/finish-update').finishUpdate({
+    src: path.dirname(process.execPath), dest: argAfter('--finish-update'), pid: Number(argAfter('--wait-pid')) || 0,
+    log: path.join(app.getPath('userData'), 'hub-update', 'update.log'),
+  }).finally(() => app.exit(0));
+  return;
+}
+
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 // ───────────── settings ─────────────
@@ -290,6 +299,7 @@ ipcMain.handle('update-hub', () => enqueue(makeOp('hub', 'Updating Utility Hub',
   await sources.closeAll();
   self.scheduleSelfUpdate(staged);
   setTimeout(() => app.quit(), 300);
+  setTimeout(() => app.exit(0), 4000); // never linger: the update waits for this process to end
 })));
 
 async function removeHub(removeApps) {

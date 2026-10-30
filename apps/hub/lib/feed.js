@@ -80,7 +80,11 @@ class Feed {
     return out;
   }
 
-  hub() { return this.catalog?.hub?.file ? { ...this.catalog.hub } : null; }
+  // Windows catalogs name it "hubWin" so hubs older than 1.2.3 (whose Windows self-update was broken) never see it
+  hub() {
+    const h = (this.ctx.platform === 'win32' && this.catalog?.hubWin) || this.catalog?.hub;
+    return h?.file ? { ...h } : null;
+  }
 
   // Download one published file to dest, verifying its checksum. onProgress(fraction)
   async download(file, dest, { sha256, size, onProgress } = {}) {

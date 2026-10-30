@@ -14,6 +14,7 @@ const { Sources } = require('../lib/sources');
 const { archCompatible, compatibility } = require('../lib/catalog');
 const { parseCommand, nameRe } = require('../lib/legacy-win');
 const { Feed, externalEntry } = require('../lib/feed');
+const { finishUpdate } = require('../lib/finish-update');
 const http = require('http');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hubtest-'));
@@ -288,6 +289,13 @@ function makeSuite(root, suiteVersion, apps, { platform = 'linux', hub } = {}) {
     assert.deepStrictEqual([feed.hub().version, feed.hub().file], ['9.9.9', 'hub.zip']);
   });
 
+  await test('online: Windows hubs read the hub update from "hubWin"', async () => {
+    fs.writeFileSync(path.join(feedDir, 'catalog-win.json'), JSON.stringify({ format: 1, platform: 'win', apps: [], hubWin: { version: '9.9.9', file: 'hub-win.zip', folder: 'Utility Hub' } }));
+    const wf = new Feed({ platform: 'win32', arch: 'x64', fetch, settings: () => settings, configFile: path.join(tmp, 'feed.json') });
+    await wf.check();
+    assert.strictEqual(wf.hub().file, 'hub-win.zip');
+  });
+
   await test('online: offline is reported plainly, and the switch turns checking off', async () => {
     const bad = new Feed({ platform: 'linux', arch: 'x64', fetch, settings: () => ({ ...settings, feedUrl: 'http://127.0.0.1:9/nothing' }), configFile: '/nope' });
     await bad.check();
@@ -351,6 +359,19 @@ function makeSuite(root, suiteVersion, apps, { platform = 'linux', hub } = {}) {
     assert.strictEqual(asarVersion(res), '3.4.5');
     fs.renameSync(path.join(res, 'app.asar'), path.join(res, 'moved.asar')); // nothing kept it open
     assert.strictEqual(asarVersion(res), null);
+  });
+
+  await test('hub update: the new copy waits for the old hub, copies itself over it and starts it', async () => {
+    const src = path.join(tmp, 'fu', 'new', 'Utility Hub'), dest = path.join(tmp, 'fu', 'installed', 'Utility Hub');
+    fs.mkdirSync(path.join(src, 'resources'), { recursive: true }); fs.writeFileSync(path.join(src, 'resources', 'app.asar'), 'new');
+    fs.mkdirSync(dest, { recursive: true }); fs.writeFileSync(path.join(dest, 'old.dll'), 'x');
+    const old = require('child_process').spawn('sleep', ['1.2']);
+    const t0 = Date.now();
+    await finishUpdate({ src, dest, pid: old.pid, log: path.join(tmp, 'fu', 'update.log'), exeName: 'missing' });
+    assert.ok(Date.now() - t0 >= 1000, 'waited for the old hub to close');
+    assert.deepStrictEqual(fs.readdirSync(dest), ['resources']);
+    assert.strictEqual(fs.readFileSync(path.join(dest, 'resources', 'app.asar'), 'utf8'), 'new');
+    assert.ok(/updated/.test(fs.readFileSync(path.join(tmp, 'fu', 'update.log'), 'utf8')));
   });
   server.close();
 

@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-30 01:05 — **Utility Hub 1.2.3** — Windows: updating Utility Hub no longer opens command windows; the new version finishes the update itself
 - 2026-10-30 00:56 — **Utility Hub 1.2.2** — Windows: fixes "couldn't replace app.asar because it's in use" when updating apps
 - 2026-10-30 00:45 — **Utility Hub 1.2.1** — Windows: updating an app no longer fails with "operation not permitted" when its folder is still in use
 - 2026-10-29 21:03 — **Dither 0.1.0** (46 new) — First release: pixel art and animation studio for you and Claude — draft boards, effect lab, sprite editor, local Pixel Art XL model, Claude/Codex plugin
