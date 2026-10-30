@@ -15,12 +15,29 @@ async function retry(fn, times, wait = 1500) {
   }
 }
 const legacy = require('./legacy-win');
-const asarFs = require('fs'); // inside Electron this one can read files inside app.asar
-
 // The version inside an installed app's app.asar. Apps that update themselves (Game Hub swaps
 // its app.asar) change this without touching Info.plist or the hub's records.
+// Read with plain file reads, never Electron's asar support: Electron keeps every archive it
+// opens locked until the hub quits, which stops those apps from ever being updated on Windows.
 function asarVersion(resources) {
-  try { return JSON.parse(asarFs.readFileSync(path.join(resources, 'app.asar', 'package.json'), 'utf8')).version || null; } catch { return null; }
+  const file = path.join(resources, 'app.asar');
+  let fd = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const head = Buffer.alloc(8);
+    fs.readSync(fd, head, 0, 8, 0);
+    const headerSize = head.readUInt32LE(4);
+    if (headerSize > 64 * 1024 * 1024) return null;
+    const hb = Buffer.alloc(headerSize);
+    fs.readSync(fd, hb, 0, headerSize, 8);
+    const header = JSON.parse(hb.toString('utf8', 8, 8 + hb.readUInt32LE(4)));
+    const e = header.files && header.files['package.json'];
+    if (!e) return null;
+    let text;
+    if (e.unpacked) text = fs.readFileSync(path.join(`${file}.unpacked`, 'package.json'), 'utf8');
+    else { const b = Buffer.alloc(e.size); fs.readSync(fd, b, 0, e.size, 8 + headerSize + Number(e.offset)); text = b.toString('utf8'); }
+    return JSON.parse(text).version || null;
+  } catch { return null; } finally { if (fd !== null) try { fs.closeSync(fd); } catch {} }
 }
 
 const SUITE_FOLDER = 'Utility Suite';
@@ -410,4 +427,4 @@ class Apps {
   }
 }
 
-module.exports = { Apps, SUITE_FOLDER };
+module.exports = { Apps, SUITE_FOLDER, asarVersion };

@@ -606,7 +606,14 @@ async function packageEntry(b, tKey, outDir, scratch, { iconPrefix = 'icons/' } 
   if (fs.existsSync(iconSrc)) {
     icon = `${iconPrefix}${b.app.id}.png`;
     fs.mkdirSync(path.dirname(path.join(outDir, icon)), { recursive: true });
-    fs.copyFileSync(iconSrc, path.join(outDir, icon));
+    const dst = path.join(outDir, icon);
+    try {
+      fs.rmSync(dst, { force: true }); // an earlier copy can carry locked permissions
+      fs.writeFileSync(dst, fs.readFileSync(iconSrc));
+    } catch (e) { // the icon is nice to have; never let it stop the app from shipping
+      warn(`${b.name}: couldn't copy its icon (${e.code || e.message})${fs.existsSync(dst) ? '; keeping the earlier one' : ''}`);
+      if (!fs.existsSync(dst)) icon = null;
+    }
   }
   return {
     id: b.app.id, name: b.name, version: b.pkg.version, arch: b.arch,

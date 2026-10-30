@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { compareVersions } = require('../lib/sys');
 const { Library } = require('../lib/library');
-const { Apps } = require('../lib/apps');
+const { Apps, asarVersion } = require('../lib/apps');
 const { Sources } = require('../lib/sources');
 const { archCompatible, compatibility } = require('../lib/catalog');
 const { parseCommand, nameRe } = require('../lib/legacy-win');
@@ -337,6 +337,20 @@ function makeSuite(root, suiteVersion, apps, { platform = 'linux', hub } = {}) {
     await a.updateInPlace(src, t);
     assert.deepStrictEqual(fs.readdirSync(t).sort(), ['Atoll.exe', 'resources']);
     assert.strictEqual(fs.readFileSync(path.join(t, 'Atoll.exe'), 'utf8'), 'new');
+  });
+
+  await test('an installed app\'s version is read from its app.asar without holding the file', async () => {
+    const res = path.join(tmp, 'asar', 'resources');
+    fs.mkdirSync(res, { recursive: true });
+    const pkg = Buffer.from(JSON.stringify({ name: 'x', version: '3.4.5' }));
+    const json = Buffer.from(JSON.stringify({ files: { 'main.js': { size: 2, offset: '0' }, 'package.json': { size: pkg.length, offset: '2' } } }));
+    const pad = (4 - (json.length % 4)) % 4;
+    const hp = Buffer.alloc(8 + json.length + pad); hp.writeUInt32LE(4 + json.length + pad, 0); hp.writeUInt32LE(json.length, 4); json.copy(hp, 8);
+    const sp = Buffer.alloc(8); sp.writeUInt32LE(4, 0); sp.writeUInt32LE(hp.length, 4);
+    fs.writeFileSync(path.join(res, 'app.asar'), Buffer.concat([sp, hp, Buffer.from('//'), pkg]));
+    assert.strictEqual(asarVersion(res), '3.4.5');
+    fs.renameSync(path.join(res, 'app.asar'), path.join(res, 'moved.asar')); // nothing kept it open
+    assert.strictEqual(asarVersion(res), null);
   });
   server.close();
 
