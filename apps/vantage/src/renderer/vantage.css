@@ -69,13 +69,20 @@ code { font: 12px ui-monospace, "SF Mono", Menlo, monospace; background: var(--s
 /* tabs */
 .tabs { display: flex; align-items: center; gap: 3px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; height: 100%; padding: 0 2px; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab { -webkit-app-region: no-drag; position: relative; display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 6px 0 10px; border-radius: 9px; flex: 1 1 200px; min-width: 52px; max-width: 220px; color: var(--text-2); cursor: default; transition: background .12s, color .12s; }
+.tab { -webkit-app-region: no-drag; position: relative; display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 6px 0 10px; border-radius: 9px; flex: 1 1 250px; min-width: 60px; max-width: 280px; color: var(--text-2); cursor: default; transition: background .12s, color .12s, max-width .22s cubic-bezier(.2,.8,.2,1), min-width .22s cubic-bezier(.2,.8,.2,1); }
 .tab:hover { background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .tab.shown { background: color-mix(in srgb, var(--surface) 65%, transparent); color: var(--text); }
 .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px var(--border); }
 .tab.pinned { flex: 0 0 38px; min-width: 38px; padding: 0; justify-content: center; }
+/* minimized tabs: just the site's icon until you click it */
+.tab.collapsed { flex: 0 0 38px; min-width: 38px; max-width: 38px; padding: 0; justify-content: center; }
+.tab.collapsed .tt, .tab.collapsed .tx, .tab.collapsed .pn, .tab.collapsed .mini-badge { display: none; }
+.tab.collapsed .aud { position: absolute; top: -3px; right: -3px; width: 15px; height: 15px; border-radius: 8px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.tab.collapsed .aud .ic { width: 10px; height: 10px; }
+.side-tabs .tab.collapsed { flex: none; max-width: none; min-width: 0; justify-content: flex-start; padding: 0 6px 0 10px; }
+.side-tabs .tab.collapsed .tt { display: block; }
 .tab.sleeping .fav, .tab.sleeping .tt { opacity: .55; }
-.tab .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; font-weight: 560; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.tab .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; font-weight: 560; -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent); }
 .tab .tx { width: 20px; height: 20px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); opacity: 0; flex: none; }
 .tab:hover .tx, .tab.active .tx { opacity: 1; }
 .tab .tx:hover { background: var(--surface-hover); color: var(--text); }

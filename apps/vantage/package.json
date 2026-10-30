@@ -1,7 +1,7 @@
 {
   "name": "vantage",
   "productName": "Vantage",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A fast, private browser: up to four pages on one screen, built-in ad blocking and VPN, multi-connection downloads, the password vault with autofill, and your Library.",
   "main": "src/main.js",
   "author": "Bilal",

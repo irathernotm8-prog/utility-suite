@@ -163,7 +163,7 @@ function prepareSession(partition) {
   ses.webRequest.onHeadersReceived((d, cb) => adblock.onHeadersReceived(d, cb));
   ses.setPermissionRequestHandler((wc, permission, cb, details) => askPermission(wc, permission, cb, details, isPrivate));
   ses.setPermissionCheckHandler((wc, permission, origin) => {
-    if (['fullscreen', 'clipboard-sanitized-write', 'background-sync', 'accessibility-events'].includes(permission)) return true;
+    if (['fullscreen', 'clipboard-sanitized-write', 'background-sync', 'accessibility-events', 'storage-access', 'top-level-storage-access'].includes(permission)) return true;
     const host = hostOf(origin || wc?.getURL());
     return siteOf(host).perms?.[permission] === 'allow';
   });
@@ -176,6 +176,7 @@ function prepareSession(partition) {
 ipcMain.handle('session:prepare', (_e, { partition }) => { prepareSession(partition || NORMAL); return { preload: null }; });
 
 /* ---------------- sites: zoom, dark pages, permissions ---------------- */
+function hostRaw(u) { try { return new URL(u).hostname; } catch { return ''; } }
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } }
 function siteOf(host) { return settings().sites[host] || {}; }
 function setSite(host, patch) {
@@ -187,7 +188,9 @@ function setSite(host, patch) {
   store.save();
   return s[host] || {};
 }
-const AUTO_ALLOW = new Set(['fullscreen', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock', 'window-placement', 'speaker-selection']);
+// storage-access: embedded sign-in buttons, "Sign in with Google" and captchas need their own cookies, which Chrome
+// allows without asking. Holding them behind a prompt left those buttons spinning.
+const AUTO_ALLOW = new Set(['fullscreen', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock', 'window-placement', 'speaker-selection', 'storage-access', 'top-level-storage-access']);
 const permAsks = new Map();
 let permSeq = 0;
 function askPermission(wc, permission, cb, details, isPrivate) {
@@ -246,10 +249,25 @@ const POP_OUT_JS = `(() => { const v = [...document.querySelectorAll('video')].s
   if (!v) return false; if (document.pictureInPictureElement) { document.exitPictureInPicture(); return true; } v.requestPictureInPicture(); return true; })()`;
 
 const signinMode = () => settings().signinMode || 'auto';
+// The page's whole browser identity (including workers) follows the site it's on. Changing it is only safe
+// as a navigation starts: changed in the middle of a redirect, Chromium reloads the page you came from and the
+// trip to Google never finishes (the "Sign in with Google" loop). So when a redirect crosses into or out of a
+// sign-in page, the redirect is stopped and the same address is opened fresh with the right identity.
 function applyIdentityTracking(contents) {
-  const setFor = (url) => { const id = identityFor(url, signinMode()); if (contents.getUserAgent() !== id.ua) contents.setUserAgent(id.ua); };
-  contents.on('did-start-navigation', (e) => { if (e.isMainFrame && !e.isSameDocument && e.url) setFor(e.url); });
-  contents.on('will-redirect', (e) => { if (e.isMainFrame && e.url) setFor(e.url); });
+  const uaFor = (url) => identityFor(url, signinMode()).ua;
+  contents.on('did-start-navigation', (e) => {
+    if (!e.isMainFrame || e.isSameDocument || !e.url) return;
+    const ua = uaFor(e.url);
+    if (contents.getUserAgent() !== ua) contents.setUserAgent(ua);
+  });
+  contents.on('will-redirect', (e) => {
+    if (!e.isMainFrame || !e.url || !/^https?:/i.test(e.url)) return;
+    const ua = uaFor(e.url);
+    if (contents.getUserAgent() === ua) return;
+    e.preventDefault();
+    const url = e.url;
+    setImmediate(() => { if (!contents.isDestroyed()) contents.loadURL(url, { userAgent: ua }).catch(() => {}); });
+  });
 }
 ipcMain.on('vantage:navigator-patch', (event, url) => {
   try { event.returnValue = navigatorPatch(identityFor(url, signinMode())); } catch { event.returnValue = null; }
@@ -259,9 +277,9 @@ ipcMain.on('vantage:navigator-patch', (event, url) => {
    Google shows "This browser or app may not be secure" when it rejects a sign-in. Vantage then steps through
    other browser identities for the sign-in page by itself, and the Sign-in settings let you pick one or start over. */
 const SIGNIN_NEXT = { auto: 'safari', firefox: 'safari', safari: 'edge', edge: 'chrome', chrome: null };
-async function restartSignin(wc) {
-  const ses = wc.session;
-  try { await ses.clearStorageData({ origin: 'https://accounts.google.com' }); } catch {}
+async function restartSignin(wc, { clear = false } = {}) {
+  // clearing signs you out of Google everywhere, so it's only done when you ask to start over
+  if (clear) { try { await wc.session.clearStorageData({ origin: 'https://accounts.google.com' }); } catch {} }
   // go back to the last sign-in step that wasn't the rejection, so "continue to" survives
   let target = 'https://accounts.google.com/';
   try {
@@ -288,7 +306,7 @@ ipcMain.handle('signin:blocked', async (_e, wcId) => {
 ipcMain.handle('signin:set', async (_e, { mode, wcId, restart }) => {
   if (mode) { settings().signinMode = mode; store.save(); broadcast('settings:changed', settings()); }
   const wc = wcId != null && webContents.fromId(wcId);
-  if (wc && restart) await restartSignin(wc);
+  if (wc && restart) await restartSignin(wc, { clear: true });
   return settings().signinMode;
 });
 ipcMain.handle('signin:reset', async () => {
@@ -324,7 +342,8 @@ app.on('web-contents-created', (_e, contents) => {
   });
   contents.setWindowOpenHandler(({ url, disposition, features }) => {
     const win = ownerOf(contents);
-    const popup = disposition === 'new-window' && (/(width|height|popup)/i.test(features || '') || url === 'about:blank' || !url);
+    // sign-in windows ("Sign in with Google/Apple/Microsoft") must stay real pop-ups: the site waits to hear back from them
+    const popup = (disposition === 'new-window' && (/(width|height|popup)/i.test(features || '') || url === 'about:blank' || !url)) || (disposition !== 'background-tab' && adblock.isAuthHost(hostRaw(url)));
     if (popup) {
       const w = Number((/width=(\d+)/i.exec(features || '') || [])[1]) || 520;
       const h = Number((/height=(\d+)/i.exec(features || '') || [])[1]) || 720;
@@ -1022,6 +1041,8 @@ function startLink() {
 app.whenReady().then(async () => {
   store.load();
   migrateFromRelay();
+  // 0.2.2: earlier versions could leave sign-in stuck on another browser's identity after the retry loop
+  if ((store.get().migrated.signin || 0) < 2) { store.get().migrated.signin = 2; settings().signinMode = 'auto'; store.save(); }
   if (IS_MAC && !app.isPackaged) try { app.dock.setIcon(APP_ICON); } catch {}
   app.setAboutPanelOptions({ applicationName: 'Vantage', applicationVersion: app.getVersion(), iconPath: APP_ICON, copyright: '© 2026 Bilal' });
   applyTheme();

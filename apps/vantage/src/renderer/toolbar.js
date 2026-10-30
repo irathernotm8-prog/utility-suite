@@ -804,6 +804,7 @@
       ['Downloads', 'download', () => V.openInternal('downloads')], ['Library', 'library', () => V.openInternal('library')], ['Passwords', 'key', () => V.openInternal('vault')],
       ['Settings', 'settings', () => V.openInternal('settings')], ['Clear browsing data', 'trash', () => V.clearDataModal?.()],
       ['Toggle bookmarks bar', 'star', () => cmd('toggle-bookmarks-bar')], ['Tabs on the side', 'panel', () => cmd('toggle-side-tabs')],
+      ['Minimize this tab to its icon', 'minus', () => { const t = active(); if (t) V.toggleCollapse(t, true); }], ['Expand all tabs', 'expand', () => { V.tabs.forEach(x => { x.collapsed = false; }); V.renderTabs(); V.persist(); }],
       ['Save to Read Later', 'readLater', () => readLater()], ['Mini player', 'miniPlayer', () => V.popOutMini?.(active())],
       ['Customize New Tab', 'customize', () => cmd('customize-newtab')], ['Sign-in help', 'key', () => signinHelp()],
       ['Open in Vantage Player…', 'play', () => cmd('open-player')], ['Open in Vantage Reader…', 'book', () => cmd('open-reader')]

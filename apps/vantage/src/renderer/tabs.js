@@ -40,8 +40,8 @@
     return searchUrl(s);
   }
 
-  function makeTab({ url = NEWTAB, title = '', favicon = '', pinned = false, container = null, sleeping = false } = {}) {
-    const t = { id: uid(), url, title, favicon, pinned, container, sleeping, loading: false, lastActive: Date.now(), blocked: 0, infobars: [], audible: false, muted: false };
+  function makeTab({ url = NEWTAB, title = '', favicon = '', pinned = false, container = null, sleeping = false, collapsed = false } = {}) {
+    const t = { id: uid(), url, title, favicon, pinned, container, sleeping, collapsed: !!collapsed && !pinned, loading: false, lastActive: Date.now(), blocked: 0, infobars: [], audible: false, muted: false };
     t.kind = isInternal(url) ? 'internal' : 'web';
     t.page = t.kind === 'internal' ? internalKind(url) : null;
     if (t.kind === 'internal') { t.title = PAGE_TITLES[t.page] || 'Vantage'; t.sleeping = false; }
@@ -460,6 +460,11 @@
     V.tabs.splice(t.pinned ? pins : pins, 0, t);
     renderTabs(); persist();
   }
+  function toggleCollapse(t, on = !t.collapsed) {
+    if (t.pinned) return;
+    t.collapsed = on;
+    renderTab(t); persist();
+  }
   function toggleMute(t = activeTab()) { if (!t?.wv) return; t.muted = !t.muted; t.wv.setAudioMuted(t.muted); renderTab(t); }
   function sleepTab(t) {
     if (!t.wv || V.panes.includes(t.id)) return;
@@ -486,7 +491,7 @@
     const p = V.panes.indexOf(t.id);
     const c = containerOf(t);
     const icon = t.loading ? '<span class="spin"></span>' : t.kind === 'internal' ? `<span class="fav int">${ic({ newtab: 'home', settings: 'settings', history: 'clock', bookmarks: 'star', downloads: 'download', library: 'library', vault: 'key' }[t.page] || 'globe', 14)}</span>` : faviconHTML(t);
-    return `<div class="tab ${t.pinned ? 'pinned' : ''} ${p === V.focus ? 'active' : ''} ${p >= 0 ? 'shown' : ''} ${t.sleeping ? 'sleeping' : ''} ${t.error ? 'error' : ''}" draggable="true" data-id="${t.id}" title="${esc(t.title || t.url)}" ${c ? `style="--cc:${esc(c.color)}"` : ''}>
+    return `<div class="tab ${t.pinned ? 'pinned' : ''} ${t.collapsed && !t.pinned ? 'collapsed' : ''} ${p === V.focus ? 'active' : ''} ${p >= 0 ? 'shown' : ''} ${t.sleeping ? 'sleeping' : ''} ${t.error ? 'error' : ''}" draggable="true" data-id="${t.id}" title="${esc(t.title || t.url)}" ${c ? `style="--cc:${esc(c.color)}"` : ''}>
       ${icon}
       ${t.pinned ? '' : `<span class="tt">${esc(t.title || hostOf(t.url) || 'New Tab')}</span>`}
       ${t.audible || t.muted ? `<button class="aud ${t.muted ? 'muted' : ''}" data-mute title="${t.muted ? 'Unmute' : 'Mute'}">${ic(t.muted ? 'mute' : 'volume', 13)}</button>` : ''}
@@ -514,7 +519,13 @@
   }
   function bindTab(el) {
     const t = tabById(el.dataset.id);
-    el.onmousedown = (e) => { if (e.button === 0 && !e.target.closest('[data-close],[data-mute]')) showTab(t.id); };
+    el.onmousedown = (e) => {
+      if (e.button !== 0 || e.target.closest('[data-close],[data-mute]')) return;
+      // a minimized tab opens back to full size when you click it
+      if (t.collapsed && !V.settings.tabsOnSide) { t.collapsed = false; persist(); }
+      showTab(t.id);
+    };
+    el.ondblclick = (e) => { if (!e.target.closest('[data-close],[data-mute]') && !t.pinned) toggleCollapse(t, true); };
     el.onauxclick = (e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } };
     el.oncontextmenu = (e) => { e.preventDefault(); tabMenu(t, e.clientX, e.clientY); };
     $('[data-close]', el)?.addEventListener('click', (e) => { e.stopPropagation(); closeTab(t.id); });
@@ -557,6 +568,9 @@
       { label: 'Reload', icon: 'refresh', onClick: () => { if (t.wv) t.wv.reload(); else mount(t); } },
       { label: 'Duplicate', icon: 'copy', onClick: () => duplicate(t) },
       { label: t.pinned ? 'Unpin' : 'Pin', icon: 'pin', onClick: () => togglePin(t) },
+      !t.pinned ? { label: t.collapsed ? 'Expand Tab' : 'Minimize Tab', hint: 'double-click', icon: t.collapsed ? 'expand' : 'minus', onClick: () => toggleCollapse(t) } : null,
+      { label: 'Minimize Other Tabs', icon: 'minus', onClick: () => { V.tabs.forEach(x => { if (x !== t && !x.pinned) x.collapsed = true; }); renderTabs(); persist(); } },
+      V.tabs.some(x => x.collapsed) ? { label: 'Expand All Tabs', icon: 'expand', onClick: () => { V.tabs.forEach(x => { x.collapsed = false; }); renderTabs(); persist(); } } : null,
       t.kind === 'web' ? { label: t.muted ? 'Unmute Site' : 'Mute Tab', icon: t.muted ? 'volume' : 'mute', onClick: () => toggleMute(t) } : null,
       '-',
       !shown ? { label: 'Open in Split View', icon: 'split', onClick: () => openInSplit(t.id) } : null,
@@ -803,7 +817,7 @@
     if (V.restoring) return;
     clearTimeout(saveT);
     saveT = setTimeout(() => {
-      const tabs = V.tabs.map(t => ({ url: t.url, title: t.title, favicon: t.favicon && t.favicon.length < 2000 ? t.favicon : '', pinned: t.pinned, container: t.container }));
+      const tabs = V.tabs.map(t => ({ url: t.url, title: t.title, favicon: t.favicon && t.favicon.length < 2000 ? t.favicon : '', pinned: t.pinned, container: t.container, collapsed: !!t.collapsed }));
       vantage.saveState({ tabs, panes: V.panes.map(id => V.tabs.findIndex(t => t.id === id)), focus: V.focus, layout: V.layout, split: V.split, focusMode: V.focusMode });
     }, 600);
   }
@@ -840,7 +854,7 @@
   function isShown(kind) { return V.panes.some(id => { const t = tabById(id); return t && t.kind === 'internal' && t.page === kind; }); }
 
   Object.assign(V, {
-    toURL, searchUrl, makeTab, tabById, activeTab, openTab, closeTab, showTab, navigate, reopenClosed, duplicate, togglePin, toggleMute, sleepTab, stepTab,
+    toggleCollapse, toURL, searchUrl, makeTab, tabById, activeTab, openTab, closeTab, showTab, navigate, reopenClosed, duplicate, togglePin, toggleMute, sleepTab, stepTab,
     setLayout, openInSplit, closePane, maximizePane, swapPanes, evenOut, setFocus, focusTab, applyLayout, renderTabs, renderTab, renderPaneHead,
     enterMini, exitMini, popOutMini, thumbSoon,
     infobar, dropInfobar, renderInfobars, persist, restore, openInternal, isShown, zoom, setSite, siteInfo, applySite, mount, partitionFor, layoutFor
