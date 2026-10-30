@@ -57,11 +57,11 @@ class SelfHub {
       }
       return dest;
     }
-    // Windows
-    await fsp.rm(`${dest}.new`, { recursive: true, force: true });
-    await fsp.cp(src, `${dest}.new`, { recursive: true });
-    await fsp.rm(dest, { recursive: true, force: true });
-    await fsp.rename(`${dest}.new`, dest);
+    // Windows: copy over any earlier install file by file (a folder something still has open can't be
+    // deleted or renamed, but its files can be replaced)
+    if (exists(dest)) await this.ctx.apps.stopProcessesIn(dest).catch(() => {});
+    await fsp.mkdir(dest, { recursive: true });
+    await fsp.cp(src, dest, { recursive: true, force: true });
     await legacy.unblock(dest);
     await this.registerWindows(dest, { shortcuts: true });
     await this.retireOldInstaller();

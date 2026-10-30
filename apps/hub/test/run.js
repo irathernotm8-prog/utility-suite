@@ -328,6 +328,16 @@ function makeSuite(root, suiteVersion, apps, { platform = 'linux', hub } = {}) {
     assert.strictEqual(wapps.detect(meta).path, path.join(local, 'Game Hub', 'App'));
     assert.strictEqual(wapps.defaultTarget(meta), path.join(local, 'Game Hub', 'App'));
   });
+
+  await test('Windows: when the app folder is held open, the update is copied in place', async () => {
+    const a = new Apps({ platform: 'linux', home, userData, env: {}, shell: {}, settings: () => settings }, library);
+    const t = path.join(tmp, 'inplace', 'Atoll'), src = path.join(tmp, 'inplace-new', 'Atoll');
+    fs.mkdirSync(path.join(t, 'old-dir'), { recursive: true }); fs.writeFileSync(path.join(t, 'Atoll.exe'), 'old'); fs.writeFileSync(path.join(t, 'stale.dll'), 'x');
+    fs.mkdirSync(path.join(src, 'resources'), { recursive: true }); fs.writeFileSync(path.join(src, 'Atoll.exe'), 'new'); fs.writeFileSync(path.join(src, 'resources', 'app.asar'), 'asar');
+    await a.updateInPlace(src, t);
+    assert.deepStrictEqual(fs.readdirSync(t).sort(), ['Atoll.exe', 'resources']);
+    assert.strictEqual(fs.readFileSync(path.join(t, 'Atoll.exe'), 'utf8'), 'new');
+  });
   server.close();
 
   fs.rmSync(tmp, { recursive: true, force: true });

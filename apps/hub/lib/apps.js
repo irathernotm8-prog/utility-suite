@@ -7,6 +7,13 @@ const path = require('path');
 const fs = require('./fsx');
 const fsp = require('./fsx').promises;
 const { run, exists, readJSON, writeJSON, extractZip, moveTree, waitFor, compareVersions, sleep } = require('./sys');
+
+// Windows sometimes holds a folder for a moment (antivirus scans, a process just exiting)
+async function retry(fn, times, wait = 1500) {
+  for (let i = 1; ; i++) {
+    try { return await fn(); } catch (e) { if (i >= times || !['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e; await sleep(wait); }
+  }
+}
 const legacy = require('./legacy-win');
 const asarFs = require('fs'); // inside Electron this one can read files inside app.asar
 
@@ -123,11 +130,12 @@ class Apps {
       }
     } else if (this.isWin) {
       const exe = path.basename(this.exePath(meta, where.path));
-      await run('taskkill', ['/IM', exe], { allowFail: true });
+      await run('taskkill', ['/T', '/IM', exe], { allowFail: true });
       if (!(await waitFor(async () => !(await this.isRunning(meta, where)), 8000))) {
         await run('taskkill', ['/F', '/T', '/IM', exe], { allowFail: true });
         await sleep(1000);
       }
+      await this.stopProcessesIn(where.path);
     }
   }
 
@@ -196,7 +204,17 @@ class Apps {
   async swapInto(src, target) {
     const backup = `${target}.old-${Date.now()}`;
     const hadOld = exists(target);
-    if (hadOld) await fsp.rename(target, backup);
+    if (hadOld) {
+      try {
+        await retry(() => fsp.rename(target, backup), this.isWin ? 4 : 1);
+      } catch (e) {
+        // Windows won't rename a folder that anything still has open, even a leftover helper
+        // process that merely started inside it. Updating the files in place still works then.
+        if (!this.isWin || !['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e;
+        await this.updateInPlace(src, target);
+        return target;
+      }
+    }
     try {
       await fsp.mkdir(path.dirname(target), { recursive: true });
       await moveTree(src, target, this.ctx.platform);
@@ -206,6 +224,37 @@ class Apps {
     }
     if (hadOld) await fsp.rm(backup, { recursive: true, force: true }).catch(() => {});
     return target;
+  }
+
+  // Copy the new version over the old one file by file, then drop files the new version doesn't have.
+  async updateInPlace(src, target) {
+    try {
+      await retry(() => fsp.cp(src, target, { recursive: true, force: true }), 3);
+    } catch (e) {
+      // something of the app's is still running from this folder: stop it and try once more
+      await this.stopProcessesIn(target);
+      try { await fsp.cp(src, target, { recursive: true, force: true }); } catch (e2) {
+        throw new Error(`Couldn't replace ${path.basename(e2.path || e.path || target)} because it's in use. Restart the computer, then update again.`);
+      }
+    }
+    const prune = async (s, t) => {
+      for (const ent of await fsp.readdir(t, { withFileTypes: true }).catch(() => [])) {
+        const sp = path.join(s, ent.name), tp = path.join(t, ent.name);
+        if (!exists(sp)) await fsp.rm(tp, { recursive: true, force: true }).catch(() => {});
+        else if (ent.isDirectory()) await prune(sp, tp);
+      }
+    };
+    await prune(src, target);
+  }
+
+  // Windows: end every process started from inside this folder (helpers, tray parts, crash handlers).
+  async stopProcessesIn(dir) {
+    if (!this.isWin) return;
+    const like = `${dir.replace(/'/g, "''")}\\*`;
+    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${like}' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
+      { allowFail: true });
+    await sleep(1500);
   }
 
   writeShortcuts(meta, target) {
