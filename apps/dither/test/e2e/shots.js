@@ -113,6 +113,27 @@ function seed(root) {
   await win.click('#edCrit'); await win.waitForSelector('.crit-h'); await shot('20-critique', 800);
   await win.click('.crit-it'); await shot('21-critique-focus', 500);
   await theme('light'); await shot('20-critique-light', 600); await theme('dark');
+  // Animate: an empty view, the engine sheet, a real H.264 import through the sandbox, a local run on a stand-in ComfyUI, the convert sheet
+  const comfy = await require('../fixtures/fake-comfy').start();
+  await win.evaluate((u) => call('settings:set', { comfyUrl: u, animateEngine: 'local' }).then((s) => (S.settings = s)), comfy.url);
+  await go('animate'); await win.waitForSelector('#anGo'); await shot('22-animate-empty', 1500);
+  await win.click('#anEngine'); await win.waitForSelector('#egClose'); await shot('23-engines', 1200); await win.click('#egClose');
+  const vdir = path.join(tmp, 'v'); fs.mkdirSync(vdir);
+  for (let i = 0; i < 36; i++) { const t = (i % 24) / 24, W = 320; const g = new FX.Canvas(W, W, ['#00ff00']); g.clear('#1fd640'); const cx = 150, bob = Math.sin(t * Math.PI * 2) * 8, by = 270;
+    g.fillRect(cx - 30, by - 10 - Math.max(0, bob), 24, 10, '#3b2a1a').fillRect(cx + 6, by - 10 - Math.max(0, -bob), 24, 10, '#3b2a1a').fillEllipse(cx, by - 70 + bob, 40, 60, '#b13e53').fillCircle(cx, by - 150 + bob, 28, '#e8b796').fillRect(cx - 14, by - 160 + bob, 10, 10, '#1a1c2c').fillRect(cx + 6, by - 160 + bob, 10, 10, '#1a1c2c');
+    fs.writeFileSync(path.join(vdir, `f${String(i).padStart(3, '0')}.png`), png.encode({ w: W, h: W, data: g.data })); }
+  const mp4 = path.join(tmp, 'Hero bob.mp4'); require('child_process').execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '24', '-i', path.join(vdir, 'f%03d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', mp4]);
+  await win.evaluate((f) => importClip(f), mp4); await win.waitForSelector('#cvKeep'); await win.waitForFunction(() => !/Working/.test(document.querySelector('#cvBi').textContent), null, { timeout: 30000 });
+  console.log('import (H.264 via sandbox):', await win.evaluate(() => document.querySelector('#cvBi').textContent));
+  await win.click('#cvL'); await win.waitForTimeout(400); await win.waitForFunction(() => !/Working/.test(document.querySelector('#cvBi').textContent));
+  await shot('24-convert', 1500);
+  await win.click('#cvKeep'); await win.waitForSelector('#tlFrames .tf'); await shot('25-clip-sprite-editor', 900);
+  await go('animate'); const slime = await win.evaluate(() => S.sprites.find((s) => s.name === 'Slime idle').id);
+  await win.selectOption('#anSprite', slime); await win.waitForTimeout(600); await win.click('#anPresets [data-p=idle]').catch(() => {});
+  await win.click('#anGo'); await win.waitForSelector('#cvKeep', { timeout: 60000 }); await win.waitForFunction(() => !/Working/.test(document.querySelector('#cvBi').textContent), null, { timeout: 30000 });
+  console.log('local Animate (stand-in ComfyUI):', comfy.seen.graphs.length, 'graph(s),', await win.evaluate(() => document.querySelector('#cvBi').textContent));
+  await win.keyboard.press('Escape'); await win.waitForTimeout(400); await shot('26-animate-clips', 1500);
+  await theme('light'); await shot('26-animate-clips-light', 900); await theme('dark'); comfy.close();
   await go('drafts');
   await win.evaluate(() => askClaude('Make 6 drafts of a coin pickup')); await shot('13-ask', 600); await win.keyboard.press('Escape');
   // the pixelize sheet on a soft AI-ish picture

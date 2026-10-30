@@ -1,7 +1,7 @@
 // Dither — main process: the window, settings, projects, the effect sandbox, the local image engine, the
 // Claude/Codex plugin bridge, and everything the window asks for.
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, nativeImage, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, nativeImage, clipboard, safeStorage } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -30,7 +30,7 @@ if (!process.env.DITHER_E2E && !app.requestSingleInstanceLock()) { app.quit(); p
 // ───────────────────────── settings
 const USER = app.getPath('userData');
 const SETTINGS = path.join(USER, 'settings.json');
-const DEFAULTS = { theme: 'system', projectsDir: '', activeProject: null, previewBg: 'checker', previewScale: 0, onionSkin: true, engineUrl: '', askProvider: 'auto', onboarded: false };
+const DEFAULTS = { animateEngine: '', cloudModel: 'kling-3', cloudCustomId: '', comfyUrl: '', falKeyEnc: '', theme: 'system', projectsDir: '', activeProject: null, previewBg: 'checker', previewScale: 0, onionSkin: true, engineUrl: '', askProvider: 'auto', onboarded: false };
 let settings = { ...DEFAULTS, ...readJSON(SETTINGS, {}) };
 const saveSettings = () => writeJSON(SETTINGS, settings);
 const projectsRoot = () => settings.projectsDir || process.env.DITHER_PROJECTS || path.join(app.getPath('documents'), 'Dither');
@@ -59,7 +59,11 @@ const render = (code, opts) => fxhost.render(code, opts);
 // ───────────────────────── the plugin bridge
 const changed = (kind, id) => send('changed', { kind, id, at: Date.now() });
 const activity = (msg, ref) => send('ai:activity', { msg, ref: ref || null, at: Date.now() });
-const handle = makeHandlers({ lib, active, setActive, render, webm: fxhost.webm, engine, decodeImage, changed, activity });
+// Animate: video models → clips → sprites. The fal.ai key is kept encrypted with the system keychain.
+const falKey = () => { const v = settings.falKeyEnc; if (!v) return ''; try { return v.startsWith('p:') ? Buffer.from(v.slice(2), 'base64').toString() : safeStorage.decryptString(Buffer.from(v, 'base64')); } catch { return ''; } };
+const setFalKey = (k) => { settings.falKeyEnc = !k ? '' : safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(k).toString('base64') : 'p:' + Buffer.from(k).toString('base64'); saveSettings(); };
+const animate = require('./animate').makeAnimate({ active, engine, frames: (b, m, o) => fxhost.frames(b, m, o), decodeImage, settings: () => settings, falKey, changed, progress: (e) => send('animate:progress', e), userData: USER });
+const handle = makeHandlers({ lib, active, setActive, render, webm: fxhost.webm, engine, decodeImage, changed, activity, animate });
 
 // ───────────────────────── window
 function createWindow() {
@@ -87,7 +91,7 @@ function appMenu() {
     ...(IS_MAC ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, { label: 'Settings…', accelerator: 'Cmd+,', click: go('settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     { label: 'File', submenu: [{ label: 'New sprite…', accelerator: 'CmdOrCtrl+N', click: go('new-sprite') }, { label: 'New effect', accelerator: 'CmdOrCtrl+Shift+N', click: go('new-effect') }, { label: 'New project…', click: go('new-project') }, { type: 'separator' }, { label: 'Pixelize a picture…', click: go('pixelize') }, { type: 'separator' }, IS_MAC ? { role: 'close' } : { role: 'quit' }] },
     { role: 'editMenu' },
-    { label: 'View', submenu: [{ label: 'Drafts', accelerator: 'CmdOrCtrl+1', click: go('drafts') }, { label: 'Effects', accelerator: 'CmdOrCtrl+2', click: go('effects') }, { label: 'Sprites', accelerator: 'CmdOrCtrl+3', click: go('sprites') }, { label: 'References', accelerator: 'CmdOrCtrl+4', click: go('refs') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: 'View', submenu: [{ label: 'Drafts', accelerator: 'CmdOrCtrl+1', click: go('drafts') }, { label: 'Effects', accelerator: 'CmdOrCtrl+2', click: go('effects') }, { label: 'Sprites', accelerator: 'CmdOrCtrl+3', click: go('sprites') }, { label: 'Animate', accelerator: 'CmdOrCtrl+4', click: go('animate') }, { label: 'References', accelerator: 'CmdOrCtrl+5', click: go('refs') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(t));
@@ -98,8 +102,8 @@ function h(ch, fn) { ipcMain.handle(ch, async (e, ...a) => { try { return { ok: 
 const P = () => active();
 
 h('app:info', () => ({ version: app.getVersion(), platform: process.platform, home: os.homedir(), userData: USER, projectsRoot: projectsRoot(), palettes: FX.PALETTES, ramps: FX.RAMPS, ops: SP.OPS }));
-h('settings:get', () => settings);
-h('settings:set', (patch) => { settings = { ...settings, ...patch }; saveSettings(); if ('theme' in patch) applyTheme(); if ('projectsDir' in patch) { lib.setRoot(projectsRoot()); settings.activeProject = null; send('project:switched', active().id); } if ('engineUrl' in patch) engine.setCustom(settings.engineUrl); return settings; });
+h('settings:get', () => { const { falKeyEnc, ...rest } = settings; return { ...rest, hasFalKey: !!falKeyEnc }; });
+h('settings:set', (patch) => { delete patch.falKeyEnc; settings = { ...settings, ...patch }; saveSettings(); if ('theme' in patch) applyTheme(); if ('projectsDir' in patch) { lib.setRoot(projectsRoot()); settings.activeProject = null; send('project:switched', active().id); } if ('engineUrl' in patch) engine.setCustom(settings.engineUrl); const { falKeyEnc, ...rest } = settings; return { ...rest, hasFalKey: !!falKeyEnc }; });
 
 // projects
 h('projects:list', () => ({ list: lib.list(), active: P().id }));
@@ -205,6 +209,22 @@ h('shell:reveal', (p) => { shell.showItemInFolder(p); return true; });
 h('clipboard:write', (t) => { clipboard.writeText(String(t)); return true; });
 h('clipboard:image', (data, w, hh, scale = 1) => { const img = scale > 1 ? sheets.scaleImage({ w, h: hh, data: new Uint8ClampedArray(data) }, scale) : { w, h: hh, data: new Uint8ClampedArray(data) }; clipboard.writeImage(nativeImage.createFromBuffer(png.encode(img))); return true; });
 h('image:dataUrl', (file) => { const ext = path.extname(file).slice(1).toLowerCase(); return `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${fs.readFileSync(file).toString('base64')}`; });
+
+// Animate
+h('animate:status', () => animate.status());
+h('animate:generate', (o) => animate.generate(o));
+h('animate:stop', () => animate.stop());
+h('animate:import', (file) => animate.importFile(file));
+h('animate:preview', (id, opts) => animate.toSprite(id, opts, { keep: false }));
+h('animate:keep', (id, opts, name) => animate.toSprite(id, opts, { keep: true, name }));
+h('animate:raw', (id, o) => animate.rawPreview(id, o));
+h('animate:source', (src) => { const r = animate.sourceImage(src); return { w: r.img.w, h: r.img.h, data: r.img.data }; });
+h('clips:list', () => animate.list());
+h('clips:remove', (id) => animate.remove(id));
+h('clips:rename', (id, name) => animate.rename(id, name));
+h('animate:setKey', (k) => { setFalKey(String(k || '').trim()); return !!falKey(); });
+h('animate:installWan', async (useFolder) => { let dir; if (useFolder) { const r = await dialog.showOpenDialog(win, { title: 'Your ComfyUI models folder', properties: ['openDirectory'] }); if (r.canceled) return null; dir = r.filePaths[0]; } return animate.installWan({ dir }, (e) => send('animate:download', e)); });
+h('animate:character', async (o) => { const g = await engine.generate({ prompt: o.prompt, background: 'green', lora: false, checkpoint: o.checkpoint, seed: o.seed }, (e) => send('animate:progress', { ...e, msg: e.msg || 'Drawing the character…' })); const f = P().uniqueFile(P().outDir('records'), `character ${g.seed}`, '.png'); fs.writeFileSync(f, g.png); return { file: f, seed: g.seed }; });
 
 // ───────────────────────── lifecycle
 app.on('second-instance', (e, argv) => { if (!argv.includes('--hidden')) showWindow(); });

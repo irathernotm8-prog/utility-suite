@@ -12,13 +12,14 @@ D.on('changed', (c) => {
     const kinds = new Set(pending); pending.clear(); await loadProject();
     if (S.view === 'lab' && kinds.has('effect') && !Lab.dirty) { if (Lab.id && effectById(Lab.id)?.current !== Lab.version) loadLabCode(); else drawLabNotes(); return; }
     if (S.view === 'lab' || S.view === 'editor' || $('#sheetHost').firstChild) return;
+    if (S.view === 'animate') { if (kinds.has('clip')) drawClips(); return; }
     if (['drafts', 'effects', 'sprites', 'refs'].includes(S.view)) render();
   }, 250);
 });
 D.on('ai:activity', (a) => { S.activity.unshift({ ...a, by: S.bridge.client }); S.activity = S.activity.slice(0, 20); renderAiCard(); toast(a.msg, `From ${byWho(S.bridge.client || 'Claude')}`, 'info', 3500); if (a.ref && a.ref.board) S.boardId = a.ref.board; });
 D.on('bridge:status', (b) => { S.bridge = b; $('#aiDot').classList.toggle('on', !!b.connected); renderAiCard(); });
 D.on('project:switched', async () => { Frames.clear(); await loadProject(); if (!['lab', 'editor'].includes(S.view)) render(); else go('drafts'); });
-D.on('nav', (v) => { if (v === 'new-sprite') { go('sprites'); newSprite(); } else if (v === 'new-effect') { go('effects'); newEffectMenu(); } else if (v === 'new-project') newProject(); else if (v === 'pixelize') go('make'); else go(v); });
+D.on('nav', (v) => { if (v === 'new-sprite') { go('sprites'); newSprite(); } else if (v === 'new-effect') { go('effects'); newEffectMenu(); } else if (v === 'new-project') newProject(); else if (v === 'pixelize') go('make'); else if (v === 'animate') go('animate'); else go(v); });
 setInterval(renderAiCard, 60e3);
 
 $$('#nav button').forEach((b) => b.onclick = () => go(b.dataset.view));

@@ -284,6 +284,79 @@ test('Plugin: draw_svg → shade_sprite → critique → view region → make_ra
   const fe = await call('critique', { kind: 'effect', id: (await call('create_effect', { name: 'x', code: LIB[0].code })).j.id }); assert.ok(fe.j.frames_checked > 1);
 });
 
+
+const C2S = require('../src/core/clip2sprite');
+const video = require('../src/video');
+const fakeComfy = require('./fixtures/fake-comfy');
+const { makeAnimate } = require('../src/animate');
+function greenClip(n = 36, W = 320) {
+  const out = []; for (let i = 0; i < n; i++) { const t = (i % 24) / 24; const g = new FX.Canvas(W, W, ['#00ff00']); g.clear('#1fd640'); const cx = 150 + i * 0.6, bob = Math.sin(t * Math.PI * 2) * 8, by = 260;
+    g.fillRect(cx - 30, by - 10, 24, 10, '#3b2a1a').fillRect(cx + 6, by - 10, 24, 10, '#3b2a1a').fillEllipse(cx, by - 70 + bob, 40, 60, '#3b5dc9').fillCircle(cx, by - 150 + bob, 28, '#e8b796').fillRect(cx - 14, by - 160 + bob, 10, 10, '#1a1c2c').fillRect(cx + 6, by - 160 + bob, 10, 10, '#1a1c2c');
+    out.push({ w: W, h: W, data: g.data }); }
+  return out;
+}
+
+test('Clip → sprite: keys the green screen, holds the feet, finds the loop, one palette, no green left', () => {
+  const raw = greenClip();
+  const k = C2S.key(raw[0]); assert.equal(k.data[3], 0); assert.equal(k.data[(150 * 320 + 150) * 4 + 3], 255);
+  const al = C2S.align(raw.map((f) => C2S.key(f)), 'feet'); const s0 = C2S.stats(al[0]), s30 = C2S.stats(al[30]); assert.ok(Math.abs(s0.feetX - s30.feetX) < 1.5, 'feet held: ' + (s0.feetX - s30.feetX));
+  assert.equal(C2S.findLoop(raw.map((f) => C2S.key(f))).end, 24);
+  const r = C2S.convert(raw, 24, { loop: true, count: 8, height: 48, colors: 8 });
+  assert.equal(r.h, 48); assert.equal(r.frames.length, 8); assert.ok(r.palette.length <= 8); assert.deepEqual(r.info.picked, [0, 3, 6, 9, 12, 15, 18, 21]); assert.equal(r.durations[0], 125);
+  let green = 0; const pal = new Set(); for (const f of r.frames) for (let i = 0; i < f.length; i += 4) if (f[i + 3]) { pal.add(FX.toHex([f[i], f[i + 1], f[i + 2]])); if (f[i + 1] > 180 && f[i] < 90 && f[i + 2] < 120) green++; }
+  assert.equal(green, 0); assert.ok(pal.size <= 8, 'shared palette ' + pal.size);
+  assert.equal(C2S.convert(raw, 24, { count: 4, height: 32, palette: 'sweetie16' }).palette.every((c) => FX.PALETTES.sweetie16.includes(c)), true);
+  const scr = C2S.onScreen({ w: 16, h: 16, data: new Uint8ClampedArray(16 * 16 * 4) }); assert.equal(scr.w, 640); assert.equal(scr.data[1], 255);
+  assert.throws(() => C2S.convert([{ w: 8, h: 8, data: new Uint8ClampedArray(256).map((_, i) => (i % 4 === 1 || i % 4 === 3 ? 255 : 0)) }], 24, {}), /Nothing left/);
+});
+
+test('Animate (local): Wan 2.2 graph to ComfyUI → frames → clip → sprite', async () => {
+  const fc = await fakeComfy.start(); video.setFetch((...a) => fetch(...a));
+  try {
+    const st = await video.localStatus(fc.url); assert.equal(st.ready, true);
+    const lib = new Library(path.join(tmp, 'anim')); const p = lib.create('Moves'); const changes = [];
+    const engine = { detectComfy: async () => ({ kind: 'comfy', url: fc.url }), kilnLoraFolders: () => [] };
+    const A = makeAnimate({ active: () => p, engine, frames: async () => { throw new Error('no video here'); }, decodeImage: (f) => png.decode(fs.readFileSync(f)), settings: () => ({}), falKey: () => '', changed: (k) => changes.push(k), progress: () => {}, userData: tmp });
+    const s = SP.create({ name: 'Knight', w: 24, h: 32, palette: 'pico8' }); SP.apply(s, [{ op: 'rect', x: 6, y: 4, w: 12, h: 24, color: 12, fill: true }, { op: 'rect', x: 8, y: 6, w: 8, h: 6, color: 15, fill: true }]); p.saveSprite(s);
+    const stat = await A.status(); assert.equal(stat.preferred, 'local'); assert.equal(stat.local.ready, true);
+    const clip = await A.generate({ source: { sprite: s.id }, preset: 'idle' });
+    assert.equal(clip.n, 40); assert.equal(clip.fps, 24); assert.equal(clip.loop, true); assert.ok(changes.includes('clip'));
+    const g = fc.seen.graphs[0]; const kinds = Object.values(g).map((n) => n.class_type);
+    for (const k of ['UNETLoader', 'ModelSamplingSD3', 'CLIPLoader', 'VAELoader', 'LoadImage', 'Wan22ImageToVideoLatent', 'KSampler', 'VAEDecode', 'SaveImage']) assert.ok(kinds.includes(k), k);
+    const lat = Object.values(g).find((n) => n.class_type === 'Wan22ImageToVideoLatent').inputs; assert.equal((lat.length - 1) % 4, 0); assert.equal(lat.width % 32, 0); assert.equal(lat.length, 49);
+    const pos = Object.values(g).filter((n) => n.class_type === 'CLIPTextEncode')[0].inputs.text; assert.ok(/does not move/.test(pos) && /Seamless loop/.test(pos), pos);
+    const prev = A.toSprite(clip.id, { height: 40, count: 6 }); assert.equal(prev.h, 40); assert.equal(prev.frames.length, 6);
+    const kept = A.toSprite(clip.id, { height: 40, count: 6 }, { keep: true }); const sp = p.getSprite(kept.sprite); assert.equal(sp.frames.length, 6); assert.deepEqual(p.getClip(clip.id).sprites, [kept.sprite]);
+    const raw = A.rawPreview(clip.id, { count: 10 }); assert.ok(raw.frames.length >= 10);
+    // MCP tools on the same clip
+    const handle = makeHandlers({ lib, active: () => p, setActive: () => {}, render: async (c, o) => FX.render(c, o), engine: { status: async () => ({}) }, decodeImage: () => null, changed: () => {}, activity: () => {}, animate: A });
+    const call = async (n, a) => { const r = await handle(n, a, 'Claude'); if (r.isError) throw new Error(r.content[0].text); return r; };
+    assert.ok(JSON.parse((await call('animate_status')).content[0].text).local.wan22_ready);
+    assert.equal(JSON.parse((await call('list_clips')).content[0].text)[0].id, clip.id);
+    const pv = await call('clip_to_sprite', { clip: clip.id, keep: false, height: 32 }); assert.ok(pv.content.some((c) => c.type === 'image'));
+    const vc = await call('view', { kind: 'clip', id: clip.id }); assert.ok(vc.content.some((c) => c.type === 'image'));
+    const an = await call('animate_character', { sprite: s.id, preset: 'walk' }); assert.ok(an.content.some((c) => c.type === 'image')); assert.equal(p.listClips().length, 2);
+    const off = await fakeComfy.start({ files: false }); try { const st2 = await video.localStatus(off.url); assert.equal(st2.ready, false); assert.ok(st2.missingGB > 15); } finally { off.close(); }
+  } finally { fc.close(); }
+});
+
+test('Animate (cloud): fal.ai queue — submit with the guard prompt, poll, download', async () => {
+  const calls = []; const vid = Buffer.from('fake-mp4');
+  video.setFetch(async (url, o = {}) => {
+    calls.push({ url, o }); const J = (v) => new Response(JSON.stringify(v), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (o.method === 'POST') return J({ request_id: 'r1', status_url: 'https://queue.fal.run/x/requests/r1/status', response_url: 'https://queue.fal.run/x/requests/r1' });
+    if (url.endsWith('/status')) return J(calls.filter((c) => c.url.endsWith('/status')).length < 2 ? { status: 'IN_QUEUE', queue_position: 2 } : { status: 'COMPLETED' });
+    if (url.endsWith('/r1')) return J({ video: { url: 'https://v.fal.media/clip.mp4', content_type: 'video/mp4' } });
+    return new Response(vid);
+  });
+  const r = await video.runCloud({ key: 'k-123', model: 'kling-3', image: png.encode({ w: 2, h: 2, data: new Uint8ClampedArray(16).fill(255) }), prompt: video.motionPrompt('walks in place', { loop: true }), seconds: 2 });
+  assert.equal(r.video.toString(), 'fake-mp4');
+  const sub = calls[0]; assert.ok(sub.url.endsWith('/fal-ai/kling-video/o3/standard/image-to-video')); assert.equal(sub.o.headers.Authorization, 'Key k-123');
+  const body = JSON.parse(sub.o.body); assert.ok(body.image_url.startsWith('data:image/png;base64,')); assert.ok(/camera does not move/.test(body.prompt));
+  await assert.rejects(video.runCloud({ key: '', image: Buffer.alloc(1), prompt: 'x' }), /fal\.ai key/);
+  video.setFetch((...a) => fetch(...a));
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) { const t = Date.now(); try { await fn(); console.log(`  ✓ ${name} (${Date.now() - t} ms)`); } catch (e) { failed++; console.log(`  ✗ ${name}\n    ${e.stack.split('\n').slice(0, 4).join('\n    ')}`); } }

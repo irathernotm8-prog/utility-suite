@@ -88,6 +88,16 @@ Placing thousands of pixels one by one gives flat, noisy art. Build detailed spr
 4. Detail and cleanup — draw_sprite with pixels rows and px for eyes, highlights, texture clusters, buckles; get_sprite with as:'rows' reads exact pixels; view with region zooms into an area with a pixel grid.
 5. Animate — duplicate the frame (edit_sprite) and move parts with shift/svg per frame, or draw key poses as SVG and shade_sprite with frames:'all' so lighting stays consistent.
 
+## Animating characters with a video model (Animate)
+For natural motion (walks, runs, attacks, idles with breathing), let a video model move the character, then bring it back to pixel art:
+1. animate_status — which engine is ready (local Wan 2.2 in the user's ComfyUI, or cloud via their fal.ai key).
+2. animate_character with a sprite (or a picture) and a preset (idle, walk, run, attack, cast, jump, hurt, death) or one short motion prompt. Keep it to ONE action, side view, in place. Dither places the character on a green screen and adds the guard: camera doesn't move, background stays, no new shadows, seamless loop for cycles.
+   It takes minutes; if it returns "running", check list_clips later.
+3. view kind:'clip' to look at the frames, then clip_to_sprite with keep:false to preview: height (sprite size), count (frames: 4–8 for walks, 2–4 for idles, 6–10 for attacks), colors, palette, align ('feet' for anything in place, 'x' for jumps).
+4. Keep it (clip_to_sprite keep:true), then critique and fix with draw_sprite; shade_sprite can re-light it to match other sprites.
+import_clip brings in any video or GIF the user has (3D renders, footage on green) the same way.
+Sources that work best: a clear full-body character on a flat background, readable at the source size; video models smooth pixel art, so a bigger, cleaner source (or a generated illustration) animates better and Dither re-pixelizes the result.
+
 Good sprite practice: block in the silhouette in one dark colour, then flats, then 2–3 shade steps per material with a consistent light direction (top-left by default), then a selective outline. Animate with key poses first, then in-betweens; keep volumes consistent between frames.
 
 ## Seeing your work

@@ -13,6 +13,11 @@ A pixel-art and pixel-animation studio built for working with Claude, Codex and 
   - **Critique:** a pixel-art review that boxes and numbers stray pixels, doubled corners, jaggy edges, pillow shading, near-duplicate colours, flat values, weak edge contrast and animation flicker. It gives a score, and clicking an issue takes you to it.
   - **Close-ups:** `view` with a `region` shows a zoomed area with a pixel grid.
   - **Ramps:** make a hue-shifted ramp from any colour.
+- **Animate (0.3).** Move a character with a video model, then turn the clip into pixel art — the approach behind Sorceress's Auto-Sprite.
+  - Pick a sprite or a picture (or **Draw a character** on a green screen with Kiln's image engine). Dither puts it on a flat green screen and sends it with a motion preset (idle, walk, run, attack, cast, jump, hurt, defeat) or your own words. A guard is always added: the camera doesn't move, the background stays, no new shadows, and loops end where they start.
+  - **On this computer:** Wan 2.2 TI2V 5B through the ComfyUI that Kiln runs, free and private. One click downloads the three model files (~18 GB) into Kiln's library. **Cloud:** your own fal.ai key (stored encrypted) with Kling 3.0 or Wan; the endpoint id is editable if fal renames it.
+  - **Make a sprite:** the green screen is keyed out (chroma distance, edge-only despill, the compressed rim and stray specks removed), the character is held in place by its feet (or sideways only), the loop point is found, frames are picked evenly, scaled down with a majority vote, mapped to one shared palette and de-flickered. Live preview with height, frames, colours, palette, hold, screen removal and outline; **Keep** makes a normal sprite you can Shade and Critique.
+  - **Import** any MP4, MOV, WebM, GIF or animated WebP (a 3D render, green-screen footage) and convert it the same way.
 - **References.** Drop in screenshots of things you like and note why. Claude can look at them with `view`.
 - **Starter effects.** Nine working effects to read, remix and learn the kit from: explosion, slash, lightning, campfire loop, heal, black hole, rain, pickup sparkle and hit impact.
 - **Generate & pixelize.** A local model, with no tokens and nothing leaving the computer. Dither uses the Stable Diffusion engine that Kiln runs (Forge, A1111, SD.Next or ComfyUI) with the free **Pixel Art XL** LoRA (one-click install into Kiln's library). **Pixel snap** then finds the hidden grid, takes one colour per cell, reduces the palette and clears the background. Pixelize does the same for any picture.
@@ -26,7 +31,7 @@ A pixel-art and pixel-animation studio built for working with Claude, Codex and 
 
 ## The plugin (Claude Desktop, Claude Code, Codex)
 
-Use **Connections** to add it with one click; each config file is backed up first. The MCP server is `mcp/dither-mcp.js`. It runs with Dither's own Electron as Node and forwards calls to the running app over a private local bridge (127.0.0.1 plus a token in `bridge.json`), starting Dither hidden if it isn't open. Tools: `dither_guide`, `dither_context`, `create_project`, `set_active_project`, `list_library`, `get_library_effect`, `try_effect`, `create_drafts`, `create_effect`, `update_effect`, `get_effect`, `list_effects`, `get_feedback`, `view`, `list_references`, `create_sprite`, `draw_sprite`, `draw_svg`, `shade_sprite`, `make_ramp`, `critique`, `get_sprite`, `edit_sprite`, `bake_effect`, `record`, `export`, `pixelize_image`, `generate_image`, `delete_item`.
+Use **Connections** to add it with one click; each config file is backed up first. The MCP server is `mcp/dither-mcp.js`. It runs with Dither's own Electron as Node and forwards calls to the running app over a private local bridge (127.0.0.1 plus a token in `bridge.json`), starting Dither hidden if it isn't open. Tools: `dither_guide`, `dither_context`, `create_project`, `set_active_project`, `list_library`, `get_library_effect`, `try_effect`, `create_drafts`, `create_effect`, `update_effect`, `get_effect`, `list_effects`, `get_feedback`, `view`, `list_references`, `create_sprite`, `draw_sprite`, `draw_svg`, `shade_sprite`, `make_ramp`, `critique`, `get_sprite`, `edit_sprite`, `bake_effect`, `record`, `export`, `pixelize_image`, `generate_image`, `animate_status`, `animate_character`, `import_clip`, `list_clips`, `clip_to_sprite`, `delete_item`.
 
 Every tool that makes pixels returns a **picture**, either a numbered contact sheet or a board of every draft, so the AI sees what it drew. `get_sprite` can return a frame as rows of palette slots, so the AI can read pixels exactly. The full contract Claude reads is in `src/core/guide.js` and `mcp/guide-instructions.js`.
 
@@ -41,8 +46,8 @@ Effect code never runs in the window or the main process. It runs in a hidden **
 ```bash
 npm install
 npm start
-npm test                                        # 16 Node checks: vectors, shading and the critic included, plus: PNG/GIF codecs, the kit, every starter effect, Pixel snap, sprites, sheets, the JS module, projects, the plugin handlers end to end, the MCP server over stdio
-xvfb-run node test/e2e/shots.js /tmp/shots      # (Linux) seeds a project, clicks through every screen in dark + light, draws in the editor, records a GIF + WebM, checks the sandbox stops endless loops and blocks the network, and drives the real MCP server → bridge → app
+npm test                                        # 19 Node checks: the clip → sprite pipeline and both Animate engines (a stand-in ComfyUI and a mocked fal.ai), vectors, shading, the critic, PNG/GIF codecs, the kit, every starter effect, Pixel snap, sprites, sheets, the JS module, projects, the plugin handlers end to end, the MCP server over stdio
+xvfb-run node test/e2e/shots.js /tmp/shots      # (Linux) seeds a project, clicks through every screen in dark + light, draws in the editor, records a GIF + WebM, checks the sandbox stops endless loops and blocks the network, imports a real H.264 clip, runs Animate on a stand-in ComfyUI, and drives the real MCP server → bridge → app
 python3 build/make-icon.py                      # the icon
 ```
 
@@ -59,17 +64,20 @@ python3 build/make-icon.py                      # the icon
 | `src/core/vector.js` | SVG subset → pixels: pixel-centre fills, pixel-perfect strokes, dithered gradients/opacity, material tags |
 | `src/core/shade.js` | Materials, hue-shifted ramps, normals from forms, lighting, contact shadows, selective outline, clean-up |
 | `src/core/critic.js` | The pixel-art critic and zoomed crops |
+| `src/core/clip2sprite.js` | Clip → sprite: green-screen keyer, alignment, loop finder, downsampling, shared palette, de-flicker |
+| `src/video.js` | Motion presets and the guard prompt, the Wan 2.2 ComfyUI graph, fal.ai queue (Kling 3.0 / Wan), resumable downloads |
+| `src/animate.js` | Animate: source on green, generate, import, preview/keep, Wan install into Kiln |
 | `src/core/png.js`, `gif.js` | PNG and animated GIF codecs (no dependencies) |
 | `src/core/exporters.js` | Files: sheet, GIF, frames, contact sheet, JS module |
 | `src/core/guide.js` | The guide the AI reads |
 | `src/mcp-handlers.js` | Every plugin tool, as plain functions (tested without Electron) |
 | `src/connectors.js` | Bridge + adding the plugin to Claude Desktop / Claude Code / Codex |
-| `src/fxhost.js`, `src/sandbox/` | The sandboxed render window + worker, WebM recording |
+| `src/fxhost.js`, `src/sandbox/` | The sandboxed render window + worker, WebM recording, video/GIF frame extraction |
 | `src/engine.js` | Local Stable Diffusion (A1111/Forge/ComfyUI), Pixel Art XL install into Kiln |
 | `src/ai.js` | Finding Claude Code / Codex and running Ask |
-| `src/renderer/` | The window: `drafts.js`, `effects.js` (list + lab), `sprites.js`, `editor.js`, `refs.js`, `make.js`, `more.js` (starter effects, connections, settings), `player.js` |
+| `src/renderer/` | The window: `drafts.js`, `effects.js` (list + lab), `sprites.js`, `editor.js`, `refs.js`, `animate.js`, `make.js`, `more.js` (starter effects, connections, settings), `player.js` |
 
 ## Data
 
-- Projects: `~/Documents/Dither/<Project>/` (change it in Settings). Each has `dither.json` (boards, references), `sprites/*.dsprite`, `effects/<id>/` (`effect.json`, then `v1.js`, `v2.js` and so on), `refs/`, `records/`, `exports/` and `.trash/`.
+- Projects: `~/Documents/Dither/<Project>/` (change it in Settings). Each has `dither.json` (boards, references), `sprites/*.dsprite`, `effects/<id>/` (`effect.json`, then `v1.js`, `v2.js` and so on), `refs/`, `clips/<id>/` (clip.json, frames, source.png), `records/`, `exports/` and `.trash/`.
 - App data: `settings.json`, `bridge.json` (the plugin's private connection), `mcp/` (the installed MCP script) and `ask/` (scratch space for Ask).

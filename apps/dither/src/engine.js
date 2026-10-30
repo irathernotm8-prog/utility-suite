@@ -28,6 +28,7 @@ async function detect() {
   for (const b of bases) { const r = await probe(b); if (r) { last = r; return r; } }
   last = null; return null;
 }
+async function detectComfy(extra) { for (const b of [extra, custom, ...PORTS.map((p) => `http://127.0.0.1:${p}`)].filter(Boolean)) { const r = await probe(b); if (r && r.kind === 'comfy') return r; } return null; }
 const isXL = (n) => /xl|pony|illustrious|noob|juggernaut|dreamshaper.?xl|realvis|animagine/i.test(n);
 async function status() {
   const e = await detect();
@@ -45,7 +46,7 @@ async function status() {
   } catch (err) { return { ...base, engine: { ...e, error: err.message } }; }
 }
 
-const POS = (p, bg) => `pixel art, ${p}, ${bg === 'white' ? 'plain white background' : 'plain flat background'}, game sprite, crisp pixels, clean outline, limited palette`;
+const POS = (p, bg, pixel = true) => (bg === 'green' ? `${pixel ? 'pixel art, ' : ''}${p}, full body, centered, standing, side view unless stated, solid flat bright green background (#00ff00), no shadow on the ground, game character${pixel ? ', crisp pixels' : ', clean shapes, flat colours'}` : `pixel art, ${p}, ${bg === 'white' ? 'plain white background' : 'plain flat background'}, game sprite, crisp pixels, clean outline, limited palette`);
 const NEG = 'blurry, soft, 3d render, realistic, photo, gradient, anti-aliasing, noise, dithering noise, jpeg artifacts, text, watermark, signature, frame, border';
 
 // generate({ prompt, checkpoint, seed, steps, cfg, width, height, loraWeight, init }) → PNG Buffer
@@ -53,10 +54,10 @@ async function generate(o, onProgress = () => {}) {
   const st = await status(); const e = st.engine;
   if (!e) throw new Error('No local image engine is running. Start Forge, A1111 or ComfyUI in Kiln (with its API on), then try again.');
   const ckpt = o.checkpoint || e.xl[0] || e.checkpoints[0]; if (!ckpt) throw new Error(`${e.name} has no checkpoints. Add an SDXL checkpoint in Kiln › Models.`);
-  const lora = (e.loras || []).find((n) => /pixel.?art.?xl/i.test(n));
+  const lora = o.lora === false ? null : (e.loras || []).find((n) => /pixel.?art.?xl/i.test(n));
   const seed = o.seed >= 0 ? Math.floor(o.seed) : Math.floor(Math.random() * 2 ** 31);
   const W = o.width || 1024, H = o.height || 1024, steps = o.steps || 28, cfg = o.cfg || 6, wgt = o.loraWeight ?? 1.0;
-  const prompt = POS(o.prompt, o.background), negative = [NEG, o.negative].filter(Boolean).join(', ');
+  const prompt = POS(o.prompt, o.background, o.lora !== false), negative = [NEG, o.negative].filter(Boolean).join(', ');
   onProgress({ msg: `Generating with ${e.name}${lora ? ' + Pixel Art XL' : ''}…` });
   if (e.kind === 'a1111') {
     const body = { prompt: prompt + (lora ? ` <lora:${lora.replace(/\.safetensors$/, '')}:${wgt}>` : ''), negative_prompt: negative, steps, cfg_scale: cfg, width: W, height: H, seed, sampler_name: o.sampler || 'DPM++ 2M', override_settings: { sd_model_checkpoint: ckpt }, override_settings_restore_afterwards: true, batch_size: 1, n_iter: 1 };
@@ -111,4 +112,4 @@ async function installLora(dirs, onProgress = () => {}) {
   return { installed: dirs.map((d) => path.join(d, LORA.file)) };
 }
 
-module.exports = { status, detect, generate, installLora, kilnLoraFolders, setCustom: (u) => { custom = String(u || '').trim(); }, LORA };
+module.exports = { status, detect, detectComfy, generate, installLora, kilnLoraFolders, setCustom: (u) => { custom = String(u || '').trim(); }, LORA };

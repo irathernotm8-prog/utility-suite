@@ -87,6 +87,23 @@ class Project {
   patchBoard(id, patch) { const b = this.getBoard(id); Object.assign(b, patch); this.saveMeta(); return b; }
   removeBoard(id) { const b = this.getBoard(id); this.meta.boards = this.meta.boards.filter((x) => x !== b); this.saveMeta(); }
 
+  // ───────── clips: video-model (or imported) animations kept as PNG frames, waiting to become sprites
+  listClips() {
+    const d = this.p('clips'); let ids = []; try { ids = fs.readdirSync(d).filter((f) => fs.existsSync(path.join(d, f, 'clip.json'))); } catch {}
+    return ids.map((id) => ({ ...readJSON(path.join(d, id, 'clip.json'), {}), id })).sort((a, b) => b.createdAt - a.createdAt);
+  }
+  getClip(id) { const m = readJSON(this.p('clips', id, 'clip.json'), null); if (!m) throw new Error(`No clip “${id}”`); return { ...m, id }; }
+  saveClip({ name, frames, fps, source, meta = {} }) {
+    const png = require('./png'); const id = `${slug(name || 'clip')}-${id6()}`; const dir = this.p('clips', id); fs.mkdirSync(dir, { recursive: true });
+    frames.forEach((f, i) => fs.writeFileSync(path.join(dir, `f${String(i).padStart(3, '0')}.png`), png.encode(f, { level: 6 })));
+    if (source) fs.writeFileSync(path.join(dir, 'source.png'), png.encode(source));
+    const m = { name: String(name || 'Clip').slice(0, 80), fps, w: frames[0].w, h: frames[0].h, n: frames.length, createdAt: Date.now(), sprites: [], ...meta };
+    writeJSON(path.join(dir, 'clip.json'), m); this.touch(); return { ...m, id };
+  }
+  patchClip(id, patch) { const f = this.p('clips', id, 'clip.json'); const m = readJSON(f, null); if (!m) throw new Error('No such clip'); Object.assign(m, patch); writeJSON(f, m); return { ...m, id }; }
+  clipFrames(id, { every = 1, max = 400 } = {}) { const png = require('./png'); const dir = this.p('clips', id); const files = fs.readdirSync(dir).filter((f) => /^f\d+\.png$/.test(f)).sort(); return files.filter((_, i) => i % every === 0).slice(0, max).map((f) => png.decode(fs.readFileSync(path.join(dir, f)))); }
+  removeClip(id) { this.trash(this.p('clips', id)); this.touch(); }
+
   // ───────── references
   addRef(file, note = '') {
     const ext = path.extname(file).toLowerCase(); if (!/\.(png|jpe?g|gif|webp|bmp)$/.test(ext)) throw new Error('References can be PNG, JPG, GIF, WebP or BMP pictures');
@@ -120,7 +137,7 @@ class Library {
   }
   create(name, { description = '' } = {}) {
     const base = safeName(name); let dir = path.join(this.root, base); for (let i = 2; fs.existsSync(dir); i++) dir = path.join(this.root, `${base} ${i}`);
-    fs.mkdirSync(dir, { recursive: true }); for (const s of ['sprites', 'effects', 'refs', 'records', 'exports']) fs.mkdirSync(path.join(dir, s), { recursive: true });
+    fs.mkdirSync(dir, { recursive: true }); for (const s of ['sprites', 'effects', 'clips', 'refs', 'records', 'exports']) fs.mkdirSync(path.join(dir, s), { recursive: true });
     writeJSON(path.join(dir, 'dither.json'), { dither: 1, id: 'p' + crypto.randomBytes(4).toString('hex'), name: path.basename(dir), description, createdAt: Date.now(), updatedAt: Date.now(), boards: [], refs: [] });
     return this.get(dir);
   }

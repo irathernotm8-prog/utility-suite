@@ -98,7 +98,7 @@ async function loadProject() {
   const drafts = effects.filter((e) => e.boardId && !e.feedback?.verdict).length;
   $('#draftCount').textContent = drafts || ''; $('#draftCount').classList.toggle('live', drafts > 0);
   $('#effectCount').textContent = effects.filter((e) => e.kept || !e.boardId).length || '';
-  $('#spriteCount').textContent = sprites.length || ''; $('#refCount').textContent = sum.refs.length || '';
+  $('#spriteCount').textContent = sprites.length || ''; call('clips:list').then((c) => { const el = $('#clipCount'); if (el) el.textContent = c.length || ''; }).catch(() => {}); $('#refCount').textContent = sum.refs.length || '';
 }
 const effectById = (id) => S.effects.find((e) => e.id === id);
 async function projectMenu(anchor) {

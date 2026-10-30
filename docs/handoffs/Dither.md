@@ -8,7 +8,7 @@ Dither is the Utility Package's pixel-art and pixel-animation studio, made for w
 cd ~/Downloads/Utility\ Package/apps/dither
 npm install
 npm start
-npm test                                     # 16 Node checks, no network
+npm test                                     # 19 Node checks, no network
 xvfb-run node test/e2e/shots.js /tmp/shots   # (Linux) every screen in dark + light, the editor, recording, the sandbox, the real MCP → bridge → app path
 ```
 
@@ -63,6 +63,19 @@ Pull before starting work. Stay inside `apps/dither`. `tools/`, `suite.json` and
 - Sprite ops `svg` and `shade` (so they work inside `draw_sprite`). Plugin tools: `draw_svg`, `shade_sprite`, `make_ramp`, `critique`, plus `view` with `region`. The guide has a "work in passes" section, and the connect instructions point Claude at it for anything 32px and up.
 - In the editor: **Shade** (materials and forms per flat colour, a light pad, transitions, outline mode and every-frame, with a live before/after) and **Critique** (a numbered panel with boxes on the canvas; click an issue to jump to it; marked stale after edits). **⋯ › Draw from SVG** and **Make a ramp**, and **Sprites › From SVG**. The window calls the same core code through `kit:*` IPC.
 - Verified here: 16 Node checks, and the e2e run opens Shade on an SVG wizard, applies it and runs Critique (screens 17–21).
+
+## 0.3.0 — Animate (video model → pixel sprite)
+
+- The flow: a character (sprite, picture, or drawn on green via `engine.generate` with `background: 'green'`) → `animate.sourceImage` puts it on a 640² green screen → a video model → frames saved as a clip (`clips/<id>/`) → `clip2sprite.convert` → a normal sprite (`s.from = { clip, opts }`).
+- **Engines** (`src/video.js`):
+  - Local: Wan 2.2 TI2V 5B in ComfyUI (Kiln's). Graph: UNETLoader → ModelSamplingSD3 (shift 8), CLIPLoader `wan`, VAELoader, `Wan22ImageToVideoLatent`, KSampler 20 steps cfg 5 uni_pc, SaveImage. 24 fps, length = 4k+1 frames, sides rounded to 32. Files: `wan2.2_ti2v_5B_fp16` (10 GB, diffusion_models), `umt5_xxl_fp8_e4m3fn_scaled` (6.7 GB, text_encoders), `wan2.2_vae` (1.4 GB, vae). The installer downloads once (resumable) into the first Kiln library and hard-links into the others; ComfyUI needs a restart to see them. Needs a ComfyUI new enough to have the Wan 2.2 node — `localStatus` reports it if missing.
+  - Cloud: fal.ai queue REST with the user's key (`safeStorage`-encrypted in settings as `falKeyEnc`; never returned to the window). `kling-3` → `fal-ai/kling-video/o3/standard/image-to-video`, `wan-i2v` → `fal-ai/wan-i2v`, or a custom endpoint id. Charged to the user's fal account.
+  - **Not tested against a real GPU or real fal here.** Tests use `test/fixtures/fake-comfy.js` and a mocked fetch. Check the first real run on the PC (and expect Wan on a Mac to be slow, minutes per second of video). If fal changes a model id or its input names, edit `CLOUD` in `src/video.js`.
+- **`src/core/clip2sprite.js`**: key (YCbCr chroma distance to the border colour, hard alpha, despill only within 2px of the screen, tinted rim pixels touching the screen dropped, small islands dropped) → align (`feet` | `x` | `none`) → `findLoop` (thumbnails anchored at bottom-centre; each candidate scored over a 4-frame window so a half-cycle in the opposite direction loses; prefers the latest local minimum near the best) → evenly picked frames → majority downsample → one shared palette → orphan clean-up → de-flicker → optional outline.
+- Frame extraction runs in the sandbox window (`fxhost.frames`): `<video>` seek + canvas for MP4/WebM (H.264 verified in the e2e run), `ImageDecoder` for GIF/WebP.
+- Plugin tools: `animate_status`, `animate_character` (waits up to `wait_seconds`, default 480, else returns `running`), `import_clip`, `list_clips`, `clip_to_sprite` (`keep:false` previews), `view` kind `clip`. The guide has an "Animating characters" section.
+- Window: **Animate** (Cmd+4; References moved to Cmd+5) with source, presets, length, engine, progress/stop, clip cards, drag-and-drop import, the **Make a sprite** sheet and the **Video engines** sheet.
+- Verified here: 19 Node checks; e2e screens 22–26 (empty view, engines, convert sheet of an imported H.264 clip, the kept sprite, clips after a local run on the stand-in ComfyUI, light theme).
 
 ## Rules specific to Dither
 

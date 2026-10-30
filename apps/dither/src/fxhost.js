@@ -28,5 +28,6 @@ async function job(kind, payload, timeoutMs = 15000) {
 }
 async function render(code, opts = {}) { const r = await job('render', { code, opts }, opts.timeoutMs || 10000); return { meta: r.meta, frames: r.frames.map((b) => new Uint8ClampedArray(b)) }; }
 async function webm(frames, meta, { scale = 6, bg = '#16141e', loops = 3 } = {}) { const r = await job('webm', { frames: frames.map((f) => f.buffer.slice(f.byteOffset, f.byteOffset + f.byteLength)), w: meta.w, h: meta.h, durations: meta.durations, scale, bg, loops }, 60000); return Buffer.from(r.data); }
+async function frames(bytes, mime, opts = {}) { const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength); const r = await job('frames', { bytes: ab, mime, opts }, 180000); return { fps: r.fps, frames: r.frames.map((f) => ({ w: f.w, h: f.h, data: new Uint8ClampedArray(f.data) })) }; }
 function stop() { try { win && win.destroy(); } catch {} win = null; }
-module.exports = { start, render, webm, stop };
+module.exports = { start, render, webm, frames, stop };

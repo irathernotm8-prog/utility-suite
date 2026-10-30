@@ -121,7 +121,8 @@ function makeHandlers(ctx) {
       if (kind === 'reference') { const r = proj.meta.refs.find((x) => x.id === id || x.title === id); if (!r) return err('No such reference. Use list_references.'); const img = ctx.decodeImage(proj.p('refs', r.file)); const s = Math.min(1, 1200 / Math.max(img.w, img.h)); return ok(text({ id: r.id, title: r.title, note: r.note }), image(s < 1 ? shrink(img, s) : img)); }
       if (kind === 'board') { const b = proj.getBoard(id || 'latest'); const rows = []; for (const eid of b.items) { try { const r = await renderEffect(proj, eid); rows.push({ label: `${r.e.name}${r.e.feedback?.verdict ? ' (' + r.e.feedback.verdict + ')' : ''}`, frames: r.frames, w: r.meta.w, h: r.meta.h }); } catch {} } return ok(text({ board: b.id, idea: b.idea }), rows.length ? image(sheets.boardSheet(rows)) : null); }
       if (kind === 'library') { return H.get_library_effect({ id }); }
-      return err('kind must be effect, sprite, reference, board or library');
+      if (kind === 'clip') { if (!ctx.animate) return err('No clips here'); const r = ctx.animate.rawPreview(id, { count: 12, max: 160 }); return ok(text({ clip: r.clip.id, name: r.clip.name, frames: r.clip.n, fps: r.clip.fps, loop: r.clip.loop, next: 'Turn it into pixel art with clip_to_sprite (keep:false to preview first).' }), image(sheets.contactSheet(r.frames, r.w, r.h, { title: `${r.clip.name}: video frames` }))); }
+      return err('kind must be effect, sprite, clip, reference, board or library');
     },
 
     list_references: ({ project }) => ok(text(P(project).meta.refs.map((r) => ({ id: r.id, title: r.title, note: r.note || undefined })))),
@@ -253,6 +254,31 @@ function makeHandlers(ctx) {
       SP.setCel(s, s.layers[0].id, s.frames[0].id, r.img.data); s.from = { generated: { prompt, seed: g.seed, checkpoint: g.checkpoint, lora: g.lora } };
       proj.saveSprite(s); const raw = proj.uniqueFile(proj.outDir('records'), `generated ${g.seed}`, '.png'); fs.writeFileSync(raw, g.png); ctx.changed('sprite', s.id);
       return ok(text({ sprite: s.id, size: `${s.w}×${s.h}`, colors: r.palette.length, seed: g.seed, checkpoint: g.checkpoint, pixel_art_lora: g.lora, raw_image: raw, note: 'Pixel-snapped from the model’s output. Clean it up with draw_sprite (outline, stray pixels, palette).' }), image(sheets.contactSheet([r.img.data], r.img.w, r.img.h, { title: s.name })));
+    },
+
+    animate_status: async () => { if (!ctx.animate) return err('Animate isn’t available here'); const s = await ctx.animate.status(); return ok(text({ preferred: s.preferred, busy: s.busy, local: { comfyui: s.local.comfy || 'not running (start ComfyUI in Kiln)', wan22_ready: !!s.local.ready, missing_files: (s.local.files || []).filter((f) => !f.found).map((f) => f.file), note: s.local.platformNote || undefined }, cloud: { fal_key: s.cloud.hasKey, model: s.cloud.model }, presets: Object.fromEntries(Object.entries(s.presets).map(([k, v]) => [k, v.text])) })); },
+
+    animate_character: async ({ sprite, frame, file, preset, prompt, seconds, engine, name, wait_seconds }) => {
+      if (!ctx.animate) return err('Animate isn’t available here'); if (!sprite && !file) return err('Pass sprite (id) or file (a picture of the character)');
+      ctx.activity(`Animating ${preset || 'a character'} with a video model…`);
+      const p = ctx.animate.generate({ source: sprite ? { sprite, frame: frame || 0 } : { file: home(file) }, preset, prompt, seconds, engine, name, by: ctx.client() });
+      const waited = await Promise.race([p.then((c) => ({ c }), (e) => ({ e })), new Promise((r) => setTimeout(() => r(null), Math.min(1500, Number(wait_seconds) || 480) * 1000))]);
+      if (!waited) { p.catch(() => {}); return ok(text({ status: 'running', note: 'Still animating (video models take minutes). Call list_clips in a little while; the clip shows up there and in Dither › Animate.' })); }
+      if (waited.e) return err(waited.e.message);
+      return H.view({ kind: 'clip', id: waited.c.id });
+    },
+
+    import_clip: async ({ path: file, name }) => { if (!ctx.animate) return err('Animate isn’t available here'); const c = await ctx.animate.importFile(home(file), { name, by: ctx.client() }); return H.view({ kind: 'clip', id: c.id }); },
+
+    list_clips: () => ok(text(P().listClips().map((c) => ({ id: c.id, name: c.name, frames: c.n, fps: c.fps, size: `${c.w}×${c.h}`, loop: c.loop, preset: c.preset || undefined, engine: c.engine || (c.imported ? 'imported' : undefined), sprites: c.sprites })))),
+
+    clip_to_sprite: async ({ clip, height, width, count, colors, palette, align, loop, outline, key_tolerance, start, keep, name }) => {
+      if (!ctx.animate) return err('Animate isn’t available here');
+      const opts = { height, width, count, colors, palette, align, loop, outline, start, key: key_tolerance != null ? { tolerance: key_tolerance } : undefined };
+      Object.keys(opts).forEach((k) => opts[k] === undefined && delete opts[k]);
+      if (keep === false) { const r = ctx.animate.toSprite(clip, opts, { keep: false }); return ok(text({ preview: true, size: `${r.w}×${r.h}`, frames: r.frames.length, colors: r.palette.length, info: r.info }), image(sheets.contactSheet(r.frames, r.w, r.h, { title: `${r.clip.name} (preview)`, durations: r.durations }))); }
+      const r = ctx.animate.toSprite(clip, opts, { keep: true, name }); const s = P().getSprite(r.sprite);
+      return ok(text({ sprite: r.sprite, size: `${r.w}×${r.h}`, frames: r.frames, info: r.info, next: 'Check it with view/critique; shade_sprite can re-light it, draw_sprite fixes details.' }), image(spriteImg(s)));
     },
 
     delete_item: ({ kind, id, project }) => {
