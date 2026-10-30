@@ -2,6 +2,7 @@
 
 What changed in each app, newest first. Lines with a note after the dash show up as "What's new" in Utility Hub.
 
+- 2026-10-30 19:12 — **Dither 0.2.0** — Detailed sprites: draw from SVG the pixel-art way, one-click Shade with materials, light and hue-shifted ramps, and a Critique that boxes stray pixels, jaggies and pillow shading — for you in the editor and for Claude through the plugin
 - 2026-10-30 14:54 — **Vantage 0.2.2** — Fixes the loop when signing in to other sites with Google: the trip to Google now goes through, a blocked sign-in no longer signs you out of Google, and Sign in with Google pop-ups and buttons work as they do in Chrome. Double-click a tab to minimize it to just its icon; click it to bring it back. Tabs are a little wider so names fit.
 - 2026-10-30 01:05 — **Utility Hub 1.2.3** — Windows: updating Utility Hub no longer opens command windows; the new version finishes the update itself
 - 2026-10-30 00:56 — **Utility Hub 1.2.2** — Windows: fixes "couldn't replace app.asar because it's in use" when updating apps

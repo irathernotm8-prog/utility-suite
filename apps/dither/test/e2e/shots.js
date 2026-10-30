@@ -13,6 +13,19 @@ const png = require('../../src/core/png');
 const sheets = require('../../src/core/sheets');
 const { LIB } = require('../../src/core/fxlib');
 
+const WIZARD = `<svg viewBox="0 0 64 64">
+<path d="M48 10 L50 10 L50 60 L48 60 Z" fill="#8a5a3a" data-material="wood" data-form="cylinder"/>
+<polygon points="49,2 54,8 49,14 44,8" fill="#41a6f6" data-material="crystal"/>
+<path d="M20 34 Q32 28 44 34 L48 58 Q32 62 16 58 Z" fill="#5d275d" data-material="cloth"/>
+<path d="M22 34 L42 34 L40 44 L24 44 Z" fill="#8f3f8f" data-material="cloth"/>
+<rect x="21" y="44" width="22" height="3" fill="#c8a040" data-material="gold" data-form="cylinder-h"/>
+<ellipse cx="32" cy="27" rx="7" ry="7" fill="#e8b796" data-material="skin"/>
+<path d="M25 28 Q32 46 39 28 Q36 33 32 33 Q28 33 25 28 Z" fill="#e6e6ee" data-material="hair"/>
+<path d="M18 23 Q32 18 46 23 L44 25 Q32 21 20 25 Z" fill="#3b2a6b" data-material="cloth"/>
+<path d="M22 22 L34 2 L42 21 Z" fill="#3b2a6b" data-material="cloth"/>
+<rect x="29" y="25" width="2" height="2" fill="#1a1c2c"/><rect x="34" y="25" width="2" height="2" fill="#1a1c2c"/>
+<ellipse cx="47" cy="40" rx="3" ry="3" fill="#e8b796" data-material="skin"/>
+</svg>`;
 const OUT = path.resolve(process.argv[2] || path.join(__dirname, 'shots'));
 const lib = (id) => LIB.find((l) => l.id === id).code;
 
@@ -39,6 +52,7 @@ function seed(root) {
   const rows = ['......0000......', '....00555500....', '...0555666650...', '..05c566666650..', '..0cc666666660..', '.05666666666660.', '.06606666606660.', '.06666666666670.', '.07666666666770.', '..077777777770..', '...0000000000...'];
   [0, 1, 2, 1].forEach((sq, f) => { const r = sq ? [rows[0], ...rows.slice(1 + sq)] : rows; SP.apply(s, [{ op: 'pixels', x: 0, y: 15 - r.length, rows: r }, { op: 'line', x1: 4, y1: 15, x2: 11, y2: 15, color: 15 }], { frame: f }); });
   p.saveSprite(s);
+  const wz = SP.create({ name: 'Wizard', w: 64, h: 64, palette: [], frames: 1 }); SP.apply(wz, [{ op: 'svg', svg: WIZARD }]); delete wz._warnings; p.saveSprite(wz);
   const ex = FX.render(lib('explosion')); const bs = SP.fromFrames({ name: 'Explosion (baked)', w: ex.meta.w, h: ex.meta.h, frames: ex.frames, durations: ex.meta.durations, palette: ex.meta.palette }); bs.from = { effect: 'explosion' }; p.saveSprite(bs);
   const coin = SP.create({ name: 'Coin spin', w: 12, h: 12, palette: 'pico8', frames: 6, fps: 10 });
   [5, 4, 2, 1, 2, 4].forEach((rx, f) => SP.apply(coin, [{ op: 'ellipse', x: 5.5, y: 5.5, rx: rx + 0.01, ry: 5, color: 9, fill: true }, { op: 'ellipse', x: 5.5, y: 5.5, rx: Math.max(0.5, rx - 1.5), ry: 3.5, color: 10, fill: true }, { op: 'outline', color: 4 }], { frame: f })); p.saveSprite(coin);
@@ -91,7 +105,15 @@ function seed(root) {
     await go('connections'); await shot('11-connections' + k, 1200);
     if (t === 'dark') { await go('settings'); await shot('12-settings', 600); }
   }
-  await theme('dark'); await go('drafts');
+  // the detail kit in the editor: Shade sheet, then Critique
+  await theme('dark'); const wid = await win.evaluate(() => S.sprites.find((s) => s.name === 'Wizard').id);
+  await go('editor', wid); await win.waitForSelector('#tlFrames .tf'); await shot('17-wizard-flats', 600);
+  await win.click('#edShade'); await win.waitForSelector('.sh-row'); await shot('18-shade-sheet', 1400);
+  await win.click('#shGo'); await win.waitForTimeout(800); await shot('19-wizard-shaded', 600);
+  await win.click('#edCrit'); await win.waitForSelector('.crit-h'); await shot('20-critique', 800);
+  await win.click('.crit-it'); await shot('21-critique-focus', 500);
+  await theme('light'); await shot('20-critique-light', 600); await theme('dark');
+  await go('drafts');
   await win.evaluate(() => askClaude('Make 6 drafts of a coin pickup')); await shot('13-ask', 600); await win.keyboard.press('Escape');
   // the pixelize sheet on a soft AI-ish picture
   const soft = path.join(tmp, 'soft-knight.png'); const c = new FX.Canvas(24, 24, 'sweetie16'); c.clear(12).fillCircle(12, 9, 5, 9).fillRect(8, 13, 9, 8, 3).fillRect(9, 21, 3, 2, 15).fillRect(13, 21, 3, 2, 15).outline(0); fs.writeFileSync(soft, png.encode(sheets.scaleImage(c.toImage(), 9)));

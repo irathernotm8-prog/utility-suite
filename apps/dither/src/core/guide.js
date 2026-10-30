@@ -76,6 +76,18 @@ Ops (JSON objects with "op"): ${OPS.join(', ')}.
 - flood {x,y,color} · dither {x,y,w,h,color,level} · outline {color,corners} · replace {from,to} · shift {dx,dy,wrap} · flip {axis:'x'|'y'} · clear {x?,y?,w?,h?} · text {text,x,y,color,scale}
 - Any op can carry "frame" (index from 0) and "layer" (id or name) to target another cel, and "mirror": 'x'|'y'|'both'.
 edit_sprite handles frames (add, duplicate, delete, move, durations), layers, tags, palette and resize.
+## Detailed sprites: work in passes
+Placing thousands of pixels one by one gives flat, noisy art. Build detailed sprites the way pixel artists do, and look after every pass (each tool returns a picture):
+1. Silhouette + flats — draw_svg. Write an SVG whose viewBox is the sprite's pixel size (viewBox="0 0 48 48" for a 48×48 sprite), one flat colour per material. Big shapes first, then features.
+   Supported: rect (rx), circle, ellipse, line, polyline, polygon, path (M L H V C S Q T A Z, relative too), g with transform (translate, scale, rotate, matrix, skew), fill, stroke, stroke-width, opacity/fill-opacity (rendered as dithering), fill-rule, linearGradient/radialGradient (rendered as a few flat bands with dithered seams; data-steps on the gradient sets the band count, data-dither 0–1 the seam width).
+   Pixel rules it follows: fills are sampled at pixel centres (no anti-aliasing), strokes of width ≤1.5 become pixel-perfect 1px lines (no doubled L corners), thicker strokes become solid shapes. Keep coordinates on whole or half pixels for crisp edges; a shape thinner than a pixel can vanish.
+   Tag each shape: data-material="skin|cloth|leather|metal|gold|wood|stone|foliage|hair|gel|plastic|crystal|fur|flat" and data-form="soft|sphere|cylinder|cylinder-h|bevel|facet|flat|flat-up|flat-left|…". Details you want left alone (eyes, a visor slit, a logo) get no material.
+2. Shading — shade_sprite. One light for the whole sprite (default top-left). Each material gets a hue-shifted ramp (shadows cool, highlights warm), form shadows from its shape, highlights on shiny materials, rim light, contact shadows where one shape sits over another, and a selective outline (darker where the form turns away, lighter on the lit side). Override per colour with { material, form, base, ramp: [dark…light], steps, hueShift }; set dither 0–1 for softer transitions (stone, fur, clouds).
+   make_ramp gives you the same ramps for hand work or effects.
+3. Critique — critique. Fix every major issue (jaggies, pillow shading, flat values) and most minor ones (stray pixels, doubled corners). Numbers match boxes on the picture.
+4. Detail and cleanup — draw_sprite with pixels rows and px for eyes, highlights, texture clusters, buckles; get_sprite with as:'rows' reads exact pixels; view with region zooms into an area with a pixel grid.
+5. Animate — duplicate the frame (edit_sprite) and move parts with shift/svg per frame, or draw key poses as SVG and shade_sprite with frames:'all' so lighting stays consistent.
+
 Good sprite practice: block in the silhouette in one dark colour, then flats, then 2–3 shade steps per material with a consistent light direction (top-left by default), then a selective outline. Animate with key poses first, then in-betweens; keep volumes consistent between frames.
 
 ## Seeing your work

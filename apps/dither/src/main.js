@@ -149,6 +149,15 @@ h('sprites:import', async (file, opts = {}) => {
 });
 h('pixelize:preview', (file, opts = {}) => { const img = decodeImage(file); const r = snap.snap(img, opts); return { w: r.img.w, h: r.img.h, data: r.img.data, grid: r.grid, palette: r.palette, source: { w: img.w, h: img.h } }; });
 
+// the detail kit: vectors, shading, critique (the window's editor uses the same code as Claude's tools)
+const vector = require('./core/vector'); const shadeKit = require('./core/shade'); const critic = require('./core/critic');
+h('kit:info', () => ({ materials: Object.keys(shadeKit.MATERIALS).filter((k) => !['steel', 'iron', 'silver', 'slime', 'glass', 'gem', 'rock', 'fabric', 'leaf', 'grass', 'flesh'].includes(k)), forms: ['soft', 'sphere', 'cylinder', 'cylinder-h', 'bevel', 'facet', 'flat', 'flat-up', 'flat-down', 'flat-left', 'flat-right'], lights: Object.keys(shadeKit.LIGHTS), defaults: Object.fromEntries(Object.entries(shadeKit.MATERIALS).map(([k, v]) => [k, v.form])) }));
+h('kit:svg', (svg, w, hh, opts = {}) => vector.render(svg, w, hh, opts));
+h('kit:shade', (cel, w, hh, opts = {}) => { const r = shadeKit.shade(new Uint8ClampedArray(cel), w, hh, opts); return { data: r.data, colors: r.colors, ramps: r.ramps, unmapped: r.unmapped, regions: r.regions }; });
+h('kit:ramp', (base, opts = {}) => shadeKit.makeRamp(base, opts));
+h('kit:critique', (frames, w, hh, opts = {}) => { const r = critic.critique(frames.map((f) => new Uint8ClampedArray(f)), w, hh, opts); return { summary: r.summary, issues: r.issues }; });
+h('sprites:fromSvg', async ({ svg, w, h: hh, name }) => (await viaTool('draw_svg', { svg, w: +w, h: +hh, name })).sprite);
+
 // references
 h('refs:add', (files) => { const out = []; for (const f of files) out.push(P().addRef(f)); changed('refs'); return out; });
 h('refs:patch', (id, patch) => { const r = P().patchRef(id, patch); changed('refs'); return r; });

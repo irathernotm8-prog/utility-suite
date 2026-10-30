@@ -13,6 +13,8 @@ const EX = require('./core/exporters');
 const snap = require('./core/pixelsnap');
 const { LIB } = require('./core/fxlib');
 const { guideText } = require('./core/guide');
+const SH = require('./core/shade');
+const CR = require('./core/critic');
 
 const text = (v) => ({ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v, null, 1) });
 const image = (img) => ({ type: 'image', data: png.encode(img).toString('base64'), mimeType: 'image/png' });
@@ -107,8 +109,13 @@ function makeHandlers(ctx) {
       return ok(text({ board: b.id, idea: b.idea, brief: b.brief || undefined, round: b.round, board_note: b.note || undefined, reviewed: `${reviewed} of ${rows.length}`, picks: rows.filter((r) => r.verdict === 'pick').map((r) => r.id), drafts: rows, hint: reviewed ? 'Refine the picks (and anything with notes) with update_effect; leave the rest. Mention which notes you addressed.' : 'The user hasn’t reviewed this board yet. Ask them to open Dither, pick favourites and leave notes.' }));
     },
 
-    view: async ({ kind, id, frame, scale, params, project, version }) => {
+    view: async ({ kind, id, frame, scale, params, project, version, region }) => {
       const proj = P(project);
+      if (region && (kind === 'effect' || kind === 'sprite')) {
+        const f = await framesOf(proj, kind, id); const fi = Math.max(0, Math.min(f.frames.length - 1, (frame || 1) - 1)); const c = CR.crop(f.frames[fi], f.meta.w, f.meta.h, region);
+        const sc = scale || Math.max(4, Math.min(24, Math.floor(480 / Math.max(c.w, c.h))));
+        return ok(text({ id, frame: fi + 1, region: { x: region.x | 0, y: region.y | 0, w: c.w, h: c.h }, scale: sc, note: 'Pixel grid at 1 square per pixel; coordinates are sprite pixels.' }), image(gridded(c, sc)));
+      }
       if (kind === 'effect') { const r = await renderEffect(proj, id, { version, params }); const fr = frame ? [r.frames[Math.max(0, Math.min(r.frames.length - 1, frame - 1))]] : r.frames; return ok(text({ id: r.e.id, name: r.e.name, version: r.e.version, ...summaryOf(r.meta, r.frames) }), image(sheets.contactSheet(fr, r.meta.w, r.meta.h, { title: `${r.e.name} v${r.e.version}`, scale, durations: frame ? null : r.meta.durations }))); }
       if (kind === 'sprite') { const s = proj.getSprite(id); return ok(text({ id: s.id, name: s.name, size: `${s.w}×${s.h}`, frames: s.frames.length, layers: s.layers.map((l) => l.name) }), image(spriteImg(s, frame ? [frame - 1] : null, scale))); }
       if (kind === 'reference') { const r = proj.meta.refs.find((x) => x.id === id || x.title === id); if (!r) return err('No such reference. Use list_references.'); const img = ctx.decodeImage(proj.p('refs', r.file)); const s = Math.min(1, 1200 / Math.max(img.w, img.h)); return ok(text({ id: r.id, title: r.title, note: r.note }), image(s < 1 ? shrink(img, s) : img)); }
@@ -129,9 +136,42 @@ function makeHandlers(ctx) {
       if (!Array.isArray(ops)) return err('ops must be an array of draw ops (see dither_guide)');
       const proj = P(project); const s = proj.getSprite(sprite);
       const touched = SP.apply(s, ops, { frame: frame || 0, layer });
-      proj.saveSprite(s); ctx.changed('sprite', s.id);
+      const warnings = s._warnings; delete s._warnings; proj.saveSprite(s); ctx.changed('sprite', s.id);
       const frames = [...new Set(touched.map((k) => s.frames.findIndex((f) => f.id === k.split('/')[1])))].sort((a, b) => a - b);
-      return ok(text({ id: s.id, changed_frames: frames.map((i) => i + 1), ops: ops.length }), look === false ? null : image(spriteImg(s, frames.length ? frames : [frame || 0])));
+      return ok(text({ id: s.id, changed_frames: frames.map((i) => i + 1), ops: ops.length, warnings }), look === false ? null : image(spriteImg(s, frames.length ? frames : [frame || 0])));
+    },
+
+    draw_svg: ({ sprite, svg, name, w, h, palette, frame, layer, mode, snap, project }) => {
+      if (!svg) return err('Pass svg: an <svg viewBox="0 0 W H"> using the sprite’s pixel coordinates');
+      const proj = P(project); let s;
+      if (sprite) s = proj.getSprite(sprite);
+      else { if (!w || !h) return err('Give the sprite to draw on, or w and h (pixels) for a new one'); s = SP.create({ name: name || 'Vector sprite', w, h, palette: palette || [], frames: 1 }); if (!palette) s.palette = []; }
+      SP.apply(s, [{ op: 'svg', svg, mode: mode || (sprite ? 'over' : 'replace'), snap: !!snap, frame: frame || 0, layer }]);
+      const warnings = s._warnings; delete s._warnings; proj.saveSprite(s); ctx.changed('sprite', s.id); if (!sprite) ctx.activity(`Drew “${s.name}” from vectors`, { sprite: s.id });
+      return ok(text({ sprite: s.id, size: `${s.w}×${s.h}`, materials_tagged: s.materials || {}, colors: s.palette.length, warnings, next: Object.keys(s.materials || {}).length ? 'Flats are down. Shade them with shade_sprite (materials come from your data-material tags), then critique.' : 'Tag shapes with data-material="metal|cloth|skin|…" (and data-form) or pass materials to shade_sprite.' }), image(spriteImg(s, [frame || 0])));
+    },
+
+    shade_sprite: ({ sprite, materials, light, dither, outline, steps, frames, layer, ao, rim, specular, project }) => {
+      const proj = P(project); const s = proj.getSprite(sprite);
+      const list = frames === 'all' || frames === undefined && s.frames.length > 1 ? s.frames.map((_, i) => i) : [].concat(frames ?? 0).map((f) => (typeof f === 'number' ? f : 0));
+      const before = SP.compose(s, list[0]);
+      SP.apply(s, list.map((f) => ({ op: 'shade', materials, light, dither, outline, steps, ao, rim, specular, frame: f, layer })));
+      const warnings = s._warnings ? [...new Set(s._warnings)] : undefined; delete s._warnings; proj.saveSprite(s); ctx.changed('sprite', s.id);
+      const after = SP.compose(s, list[0]); const pair = sheets.contactSheet([before, after], s.w, s.h, { title: `${s.name}: before / after`, cols: 2 });
+      return ok(text({ sprite: s.id, frames_shaded: list.map((i) => i + 1), light: light || 'top-left', palette_size: s.palette.length, warnings, next: 'Run critique to catch stray pixels, jaggies and pillow shading, then fix with draw_sprite.' }), image(pair));
+    },
+
+    make_ramp: ({ base, material, steps, hue_shift, contrast, add_to, project }) => {
+      if (!base) return err('Pass base: a colour like "#3b5dc9"'); const ramp = SH.makeRamp(base, { material, steps, hueShift: hue_shift, contrast });
+      if (add_to) { const proj = P(project); const s = proj.getSprite(add_to); SP.apply(s, []); for (const c of ramp) if (!s.palette.includes(c)) s.palette.push(c); proj.saveSprite(s); ctx.changed('sprite', s.id); }
+      const sw = sheets.blank(ramp.length * 24, 24); ramp.forEach((c, i) => { const rgb = FX.hex(c); for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) sw.data.set([rgb[0], rgb[1], rgb[2], 255], ((y * sw.w) + i * 24 + x) * 4); });
+      return ok(text({ ramp, dark_to_light: true, materials: Object.keys(SH.MATERIALS) }), image(sw));
+    },
+
+    critique: async ({ kind = 'sprite', id, frame, version, project }) => {
+      const proj = P(project); const f = await framesOf(proj, kind, id, version);
+      const r = CR.critique(f.frames, f.meta.w, f.meta.h, { frame: frame ? frame - 1 : undefined, title: `${f.name}: critique`, allowSparks: kind === 'effect' });
+      return ok(text({ ...r.summary, issues: r.issues.map(({ n, type, severity, x, y, w, h, frame: fr, message }) => ({ n, type, severity, at: x != null ? { x, y, w, h } : undefined, frame: fr, message })), how: 'Numbers match the boxes on the picture. Fix majors first; take another look with view (region) to see an area up close.' }), image(r.image));
     },
 
     get_sprite: ({ sprite, frame, layer, as, project }) => {
@@ -222,8 +262,8 @@ function makeHandlers(ctx) {
     },
   };
 
-  async function framesOf(proj, kind, id) {
-    if (kind === 'effect') { const r = await renderEffect(proj, id); return { name: r.e.name, frames: r.frames, meta: r.meta, code: r.e.code }; }
+  async function framesOf(proj, kind, id, version) {
+    if (kind === 'effect') { const r = await renderEffect(proj, id, { version }); return { name: r.e.name, frames: r.frames, meta: r.meta, code: r.e.code }; }
     if (kind === 'sprite') { const s = proj.getSprite(id); return { name: s.name, frames: SP.composeAll(s), meta: { w: s.w, h: s.h, n: s.frames.length, durations: s.frames.map((f) => f.duration), loop: true } }; }
     if (kind === 'library') { const l = LIB.find((x) => x.id === id); if (!l) throw new Error('No such library effect'); const r = await ctx.render(l.code); return { name: l.name, frames: r.frames, meta: r.meta, code: l.code }; }
     throw new Error('kind must be effect, sprite or library');
@@ -235,6 +275,12 @@ function makeHandlers(ctx) {
   };
 }
 
+// a zoomed crop with a faint pixel grid and every 8th line stronger, so coordinates can be read off
+function gridded(c, s) {
+  const img = sheets.blank(c.w * s + 1, c.h * s + 1, [16, 14, 22]); sheets.checker(img, 0, 0, c.w * s, c.h * s, s); sheets.put(img, c.data, c.w, c.h, 0, 0, s);
+  for (let y = 0; y <= c.h * s; y++) for (let x = 0; x <= c.w * s; x++) { const gx = x % s === 0, gy = y % s === 0; if (!gx && !gy) continue; const strong = (gx && (x / s) % 8 === 0) || (gy && (y / s) % 8 === 0); const k = (y * img.w + x) * 4; const a = strong ? 0.5 : 0.18; img.data[k] = img.data[k] * (1 - a) + 255 * a; img.data[k + 1] = img.data[k + 1] * (1 - a) + 255 * a; img.data[k + 2] = img.data[k + 2] * (1 - a) + 255 * a; img.data[k + 3] = 255; }
+  return img;
+}
 function shrink(img, s) { const w = Math.max(1, Math.round(img.w * s)), h = Math.max(1, Math.round(img.h * s)); const d = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (Math.min(img.h - 1, Math.floor(y / s)) * img.w + Math.min(img.w - 1, Math.floor(x / s))) * 4; d.set(img.data.subarray(i, i + 4), (y * w + x) * 4); } return { w, h, data: d }; }
 
 module.exports = { makeHandlers };

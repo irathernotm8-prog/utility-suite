@@ -88,8 +88,23 @@ const OPS = {
   flip: (g, s, o) => g.flip(o.horizontal !== false && o.axis !== 'y', o.axis === 'y' || !!o.vertical),
   clear: (g, s, o) => (o.w ? g.fillRect(o.x | 0, o.y | 0, o.w, o.h, null) : g.clear()),
   text: (g, s, o) => g.text(o.text, o.x, o.y, colorArg(s, o.color), o.scale || 1),
+  // vector → pixel: an SVG drawn onto this cel (over what's there, or replacing it)
+  svg: (g, s, o) => {
+    const r = require('./vector').render(o.svg, s.w, s.h, { palette: s.palette, snap: !!o.snap });
+    if (o.mode === 'replace') g.clear();
+    for (let i = 0; i < r.data.length; i += 4) if (r.data[i + 3]) { g.data[i] = r.data[i]; g.data[i + 1] = r.data[i + 1]; g.data[i + 2] = r.data[i + 2]; g.data[i + 3] = 255; }
+    s.materials = { ...(s.materials || {}), ...r.materials }; addColors(s, r.colors); if (r.warnings.length) (s._warnings ||= []).push(...r.warnings);
+  },
+  // the shading pass: flats → lit, hue-shifted ramps, highlights, rim, contact shadow, selective outline
+  shade: (g, s, o) => {
+    const materials = o.materials || s.materials; if (!materials || !Object.keys(materials).length) throw new Error('Say what each flat colour is made of: materials: { "#3b5dc9": "cloth", "#9aa4b0": { material: "metal", form: "sphere" } } (or draw with SVG data-material tags)');
+    const r = require('./shade').shade(g.data, s.w, s.h, { ...o, materials }); g.data.set(r.data); addColors(s, r.colors);
+    if (r.unmapped.length) (s._warnings ||= []).push(`Left as they were (no material): ${r.unmapped.slice(0, 12).join(', ')}`);
+    if (o.materials) s.materials = { ...(s.materials || {}), ...o.materials };
+  },
 };
 // apply(s, ops, { frame, layer }) — ops may target other frames/layers with their own "frame"/"layer" fields
+function addColors(s, list) { const have = new Set(s.palette.map((c) => c.toLowerCase())); for (const c of list || []) if (!have.has(c.toLowerCase()) && s.palette.length < 256) { s.palette.push(c); have.add(c.toLowerCase()); } }
 function apply(s, ops, { frame = 0, layer = null } = {}) {
   const touched = new Set();
   const cache = new Map();

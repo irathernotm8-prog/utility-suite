@@ -7,6 +7,12 @@ A pixel-art and pixel-animation studio built for working with Claude, Codex and 
 - **Drafts.** One board per idea. Claude makes 5–10 different takes (`create_drafts`), and they all play side by side. For each one you choose *Pick*, *Maybe* or *Pass* and can leave notes, optionally tied to a frame. Claude reads them back (`get_feedback`) and refines your picks (`update_effect`), marking the notes it addressed. **Next round** sends that request with one click.
 - **Effects.** Pixel VFX written as code with Dither's drawing kit: pixel-perfect lines, shapes, fills, ordered dithering, a glow that uses no blur, outlines, mirroring, a 3×5 font, seeded randomness, noise, easing, and palettes and ramps. Effects can hold a frame for impact and loop seamlessly. The **Lab** has a live preview at integer scale, a frame strip, onion skin, speed and background options, sliders generated from `params`, and a code editor that runs as you type. It keeps every version, notes, recordings and exports.
 - **Sprites.** A layered, multi-frame editor with pencil, eraser, fill, line, box, ellipse, a dither brush, colour picker, move and mirror drawing. It also has a palette, a timeline with per-frame timing and onion skin, undo and autosave. Claude draws on the same documents with ops; `pixels` rows of palette slots are the precise way to do it. **Bake** turns an effect's frames into an editable sprite.
+- **Detailed sprites, in passes (0.2).** These are the tools that make 32–128px art look finished rather than flat.
+  - **Draw from SVG:** vectors rasterized the way a pixel artist would. Fills land on pixel centres with no anti-aliasing, thin strokes become pixel-perfect 1px lines with no doubled corners, and gradients and opacity become a few flat bands with dithered seams. Shapes tagged with `data-material` and `data-form` are remembered for shading.
+  - **Shade:** one light lit through hue-shifted ramps (cool shadows, warm highlights), with form from the shape (soft, sphere, cylinder, bevel, facet or flat). It adds highlights on shiny materials, rim light, contact shadows and a selective outline, then tidies stray pixels. Material presets include skin, cloth, leather, metal, gold, wood, stone, foliage, hair, gel, plastic, crystal and fur.
+  - **Critique:** a pixel-art review that boxes and numbers stray pixels, doubled corners, jaggy edges, pillow shading, near-duplicate colours, flat values, weak edge contrast and animation flicker. It gives a score, and clicking an issue takes you to it.
+  - **Close-ups:** `view` with a `region` shows a zoomed area with a pixel grid.
+  - **Ramps:** make a hue-shifted ramp from any colour.
 - **References.** Drop in screenshots of things you like and note why. Claude can look at them with `view`.
 - **Starter effects.** Nine working effects to read, remix and learn the kit from: explosion, slash, lightning, campfire loop, heal, black hole, rain, pickup sparkle and hit impact.
 - **Generate & pixelize.** A local model, with no tokens and nothing leaving the computer. Dither uses the Stable Diffusion engine that Kiln runs (Forge, A1111, SD.Next or ComfyUI) with the free **Pixel Art XL** LoRA (one-click install into Kiln's library). **Pixel snap** then finds the hidden grid, takes one colour per cell, reduces the palette and clears the background. Pixelize does the same for any picture.
@@ -20,7 +26,7 @@ A pixel-art and pixel-animation studio built for working with Claude, Codex and 
 
 ## The plugin (Claude Desktop, Claude Code, Codex)
 
-Use **Connections** to add it with one click; each config file is backed up first. The MCP server is `mcp/dither-mcp.js`. It runs with Dither's own Electron as Node and forwards calls to the running app over a private local bridge (127.0.0.1 plus a token in `bridge.json`), starting Dither hidden if it isn't open. Tools: `dither_guide`, `dither_context`, `create_project`, `set_active_project`, `list_library`, `get_library_effect`, `try_effect`, `create_drafts`, `create_effect`, `update_effect`, `get_effect`, `list_effects`, `get_feedback`, `view`, `list_references`, `create_sprite`, `draw_sprite`, `get_sprite`, `edit_sprite`, `bake_effect`, `record`, `export`, `pixelize_image`, `generate_image`, `delete_item`.
+Use **Connections** to add it with one click; each config file is backed up first. The MCP server is `mcp/dither-mcp.js`. It runs with Dither's own Electron as Node and forwards calls to the running app over a private local bridge (127.0.0.1 plus a token in `bridge.json`), starting Dither hidden if it isn't open. Tools: `dither_guide`, `dither_context`, `create_project`, `set_active_project`, `list_library`, `get_library_effect`, `try_effect`, `create_drafts`, `create_effect`, `update_effect`, `get_effect`, `list_effects`, `get_feedback`, `view`, `list_references`, `create_sprite`, `draw_sprite`, `draw_svg`, `shade_sprite`, `make_ramp`, `critique`, `get_sprite`, `edit_sprite`, `bake_effect`, `record`, `export`, `pixelize_image`, `generate_image`, `delete_item`.
 
 Every tool that makes pixels returns a **picture**, either a numbered contact sheet or a board of every draft, so the AI sees what it drew. `get_sprite` can return a frame as rows of palette slots, so the AI can read pixels exactly. The full contract Claude reads is in `src/core/guide.js` and `mcp/guide-instructions.js`.
 
@@ -35,7 +41,7 @@ Effect code never runs in the window or the main process. It runs in a hidden **
 ```bash
 npm install
 npm start
-npm test                                        # 12 Node checks: PNG/GIF codecs, the kit, every starter effect, Pixel snap, sprites, sheets, the JS module, projects, the plugin handlers end to end, the MCP server over stdio
+npm test                                        # 16 Node checks: vectors, shading and the critic included, plus: PNG/GIF codecs, the kit, every starter effect, Pixel snap, sprites, sheets, the JS module, projects, the plugin handlers end to end, the MCP server over stdio
 xvfb-run node test/e2e/shots.js /tmp/shots      # (Linux) seeds a project, clicks through every screen in dark + light, draws in the editor, records a GIF + WebM, checks the sandbox stops endless loops and blocks the network, and drives the real MCP server → bridge → app
 python3 build/make-icon.py                      # the icon
 ```
@@ -50,6 +56,9 @@ python3 build/make-icon.py                      # the icon
 | `src/core/project.js` | Projects on disk, effects with versions and feedback, boards, references |
 | `src/core/pixelsnap.js` | Grid detection (edge phase coherence), per-cell colour, k-means/palette mapping, background removal, orphan clean-up |
 | `src/core/sheets.js` | Contact sheets, board sheets, sprite sheets + JSON |
+| `src/core/vector.js` | SVG subset → pixels: pixel-centre fills, pixel-perfect strokes, dithered gradients/opacity, material tags |
+| `src/core/shade.js` | Materials, hue-shifted ramps, normals from forms, lighting, contact shadows, selective outline, clean-up |
+| `src/core/critic.js` | The pixel-art critic and zoomed crops |
 | `src/core/png.js`, `gif.js` | PNG and animated GIF codecs (no dependencies) |
 | `src/core/exporters.js` | Files: sheet, GIF, frames, contact sheet, JS module |
 | `src/core/guide.js` | The guide the AI reads |

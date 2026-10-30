@@ -8,7 +8,7 @@ Dither is the Utility Package's pixel-art and pixel-animation studio, made for w
 cd ~/Downloads/Utility\ Package/apps/dither
 npm install
 npm start
-npm test                                     # 12 Node checks, no network
+npm test                                     # 16 Node checks, no network
 xvfb-run node test/e2e/shots.js /tmp/shots   # (Linux) every screen in dark + light, the editor, recording, the sandbox, the real MCP → bridge → app path
 ```
 
@@ -50,6 +50,19 @@ Pull before starting work. Stay inside `apps/dither`. `tools/`, `suite.json` and
   3. **Ask Claude**: this runs `claude -p --output-format stream-json --mcp-config <file> --strict-mcp-config --allowedTools mcp__dither`. On a Mac the app finds the CLI through the login shell's PATH (same approach as Cadence).
   4. **Local model**: with Kiln running Forge/A1111 (API on) or ComfyUI, Generate should find it on 7860/7861/8188. "Add it" downloads Pixel Art XL (~170 MB, Hugging Face) into each Kiln library's `Lora` folder (read from `<appData>/Kiln/kiln.json`, or `~/Downloads/Kiln/Kiln Files/Libraries/*/Lora`). It needs an SDXL checkpoint. The Windows PC's GPU is the better place to run it.
   5. **Picture import** uses `nativeImage` (BGRA → RGBA) except for PNGs, which use Dither's own decoder.
+
+## 0.2.0 — detailed sprites (vectors, shading, critique)
+
+- **`src/core/vector.js`** rasterizes an SVG subset the pixel-art way. Supported: rect, circle, ellipse, line, polyline, polygon, path (all commands), g/transform, fill/stroke/opacity, fill-rule, and linear and radial gradients (as banded dithering; `data-steps` and `data-dither` tune it). Fills are sampled at pixel centres, and strokes ≤1.5px are Bresenham lines with the L-corner pixel removed. `data-material` and `data-form` tags come back as `materials` and are stored on the sprite (`s.materials`).
+- **`src/core/shade.js`**:
+  - Regions are connected areas of one flat colour that has a material. Normals come from the form: a distance-field inflate for soft, bevel and facet, analytic for sphere, cylinder and flat.
+  - Lighting is Lambert, calibrated so a surface facing the viewer lands on the base colour. Blinn specular adds glints and rim light is added at the edges. A contact shadow drops one step where another shape sits toward the light.
+  - Ramps from `makeRamp` shift hue cool in the shadows and warm in the highlights. Transitions use Bayer dithering.
+  - The selective outline is darker where the form turns away and lighter on the lit side. A majority clean-up then removes lone pixels, keeping deliberate glints.
+- **`src/core/critic.js`**: checks for stray pixels, L-corner doubles in 1px lines, zigzags on the silhouette, pillow shading (lightness tracks distance-to-edge but not the light, checked per solid shape), near-duplicate colours (ΔE < 4.5), flat values, edge contrast, frame-to-frame volume pops and flicker. The score is 100 − 8 per major − 2 per minor.
+- Sprite ops `svg` and `shade` (so they work inside `draw_sprite`). Plugin tools: `draw_svg`, `shade_sprite`, `make_ramp`, `critique`, plus `view` with `region`. The guide has a "work in passes" section, and the connect instructions point Claude at it for anything 32px and up.
+- In the editor: **Shade** (materials and forms per flat colour, a light pad, transitions, outline mode and every-frame, with a live before/after) and **Critique** (a numbered panel with boxes on the canvas; click an issue to jump to it; marked stale after edits). **⋯ › Draw from SVG** and **Make a ramp**, and **Sprites › From SVG**. The window calls the same core code through `kit:*` IPC.
+- Verified here: 16 Node checks, and the e2e run opens Shade on an SVG wizard, applies it and runs Critique (screens 17–21).
 
 ## Rules specific to Dither
 

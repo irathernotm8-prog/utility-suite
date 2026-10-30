@@ -212,6 +212,78 @@ test('MCP server speaks JSON-RPC over stdio and forwards calls to the app bridge
   assert.equal(by[3].content[0].text, 'pong:dither_context'); assert.equal(seen.find((s) => s.name).client, 'claude-code');
 });
 
+
+const VEC = require('../src/core/vector');
+const SHD = require('../src/core/shade');
+const CRT = require('../src/core/critic');
+const KNIGHT = `<svg viewBox="0 0 48 48">
+<rect x="17" y="38" width="5" height="7" fill="#5a4a3a" data-material="leather"/><rect x="26" y="38" width="5" height="7" fill="#5a4a3a" data-material="leather"/>
+<path d="M15 24 Q24 18 33 24 L35 40 H13 Z" fill="#3b5dc9" data-material="cloth"/>
+<circle cx="24" cy="15" r="8" fill="#9aa4b0" data-material="metal" data-form="sphere"/><rect x="19" y="14" width="10" height="3" fill="#1a1c2c"/>
+<path d="M36 6 L38 6 L38 30 L36 30 Z" fill="#c0c8d0" data-material="metal" data-form="cylinder"/></svg>`;
+
+test('Vectors: fills on pixel centres, pixel-perfect thin strokes, transforms, dithered gradients and opacity', () => {
+  const r = VEC.render('<svg viewBox="0 0 16 16"><rect x="2" y="2" width="4" height="3" fill="#ff0000"/></svg>', 16, 16);
+  let n = 0; for (let i = 3; i < r.data.length; i += 4) n += r.data[i] ? 1 : 0; assert.equal(n, 12); assert.equal(r.data[(2 * 16 + 2) * 4], 255); assert.equal(r.data[(5 * 16 + 2) * 4 + 3], 0);
+  // a diagonal-ish 1px stroke has no L-shaped doubles
+  const line = VEC.render('<svg viewBox="0 0 32 32"><path d="M2 2 C10 30 22 2 30 28" stroke="#fff" fill="none"/></svg>', 32, 32);
+  const on = (x, y) => x >= 0 && y >= 0 && x < 32 && y < 32 && line.data[(y * 32 + x) * 4 + 3] > 0; let doubles = 0;
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (on(x, y)) for (const [ax, ay, bx, by] of [[-1, 0, 0, -1], [1, 0, 0, -1], [-1, 0, 0, 1], [1, 0, 0, 1]]) if (on(x + ax, y + ay) && on(x + bx, y + by) && !on(x + ax + bx, y + ay + by) && [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => on(x + dx, y + dy)).length === 2) doubles++;
+  assert.equal(doubles, 0, 'pixel-perfect stroke');
+  const t = VEC.render('<svg viewBox="0 0 8 8"><g transform="translate(4 0)"><rect width="2" height="2" fill="#00f"/></g><circle cx="2" cy="6" r="2" fill="#0f0" opacity="0.5"/></svg>', 8, 8);
+  assert.equal(t.data[(0 * 8 + 4) * 4 + 2], 255); let half = 0; for (let y = 4; y < 8; y++) for (let x = 0; x < 4; x++) half += t.data[(y * 8 + x) * 4 + 3] ? 1 : 0; assert.ok(half > 2 && half < 10, 'opacity dithers ' + half);
+  const g = VEC.render('<svg viewBox="0 0 8 32"><defs><linearGradient id="a" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><rect width="8" height="32" fill="url(#a)"/></svg>', 8, 32);
+  assert.ok(g.colors.length >= 3 && g.colors.length <= 8, 'gradient becomes a few bands: ' + g.colors.length);
+  const k = VEC.render(KNIGHT, 48, 48); assert.equal(k.materials['#9aa4b0'].form, 'sphere'); assert.equal(k.materials['#3b5dc9'].material, 'cloth'); assert.deepEqual(k.warnings, []);
+  assert.ok(VEC.render('<svg viewBox="0 0 100 100"><rect x="500" y="500" width="5" height="5"/></svg>', 8, 8).warnings.length);
+});
+
+test('Shading: ramps hue-shift, light direction decides the dark side, outline is selective, details stay', () => {
+  const ramp = SHD.makeRamp('#3b5dc9', { steps: 5 }); assert.equal(ramp.length, 5); assert.equal(ramp[2], '#3b5dc9');
+  const lum = (h) => { const c = FX.hex(h); return c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11; }; for (let i = 1; i < 5; i++) assert.ok(lum(ramp[i]) > lum(ramp[i - 1]), 'ramp goes dark → light');
+  const flat = VEC.render(KNIGHT, 48, 48);
+  const sh = SHD.shade(flat.data, 48, 48, { materials: flat.materials, light: 'top-left' });
+  const at = (x, y) => lum(FX.toHex([sh.data[(y * 48 + x) * 4], sh.data[(y * 48 + x) * 4 + 1], sh.data[(y * 48 + x) * 4 + 2]]));
+  assert.ok(at(19, 10) > at(29, 20), 'helmet: top-left lit, bottom-right in shadow');
+  const sr = SHD.shade(flat.data, 48, 48, { materials: flat.materials, light: 'right' }); const atR = (x, y) => lum(FX.toHex([sr.data[(y * 48 + x) * 4], sr.data[(y * 48 + x) * 4 + 1], sr.data[(y * 48 + x) * 4 + 2]]));
+  assert.ok(atR(29, 15) > atR(18, 15), 'light from the right flips it');
+  assert.equal(sh.data[(15 * 48 + 22) * 4], 0x1a, 'the visor (no material) is left alone'); assert.deepEqual(sh.unmapped, ['#1a1c2c']);
+  assert.ok(sh.outline > 20); assert.ok(sh.colors.length > 12 && sh.colors.length < 48);
+  const none = SHD.shade(flat.data, 48, 48, { materials: flat.materials, outline: 'none' }); assert.equal(none.outline, 0);
+});
+
+test('Critic: finds strays, doubles, jaggies and pillow shading, and passes clean art', () => {
+  const g = new FX.Canvas(32, 32, 'pico8'); for (let r = 12; r >= 0; r -= 3) g.fillCircle(16, 16, r, [1, 2, 8, 14, 15][Math.min(4, (12 - r) / 3 | 0)]);
+  g.px(3, 3, 7).px(4, 3, 7).px(4, 4, 7).px(5, 5, 7).px(6, 5, 7).px(6, 6, 7);
+  const c = CRT.critique([g.data], 32, 32); const types = c.issues.map((i) => i.type);
+  assert.ok(types.includes('pillow') && types.includes('double') && types.includes('stray'), types.join(','));
+  assert.ok(c.image.w > 32 * 4 && c.summary.score < 100);
+  const z = new FX.Canvas(16, 16, 'pico8'); z.fillRect(4, 2, 4, 1, 7).fillRect(3, 3, 4, 1, 7).fillRect(4, 4, 4, 1, 7).fillRect(3, 5, 4, 1, 7).fillRect(4, 6, 4, 1, 7).fillRect(4, 7, 4, 8, 7);
+  assert.ok(CRT.critique([z.data], 16, 16).issues.some((i) => i.type === 'jaggy'), 'zigzag edge');
+  const clean = new FX.Canvas(16, 16, 'pico8'); clean.fillRect(3, 3, 10, 10, 12).fillRect(3, 3, 10, 4, 6).fillRect(3, 9, 10, 4, 1);
+  assert.equal(CRT.critique([clean.data], 16, 16).issues.filter((i) => i.severity === 'major').length, 0);
+  const anim = [new FX.Canvas(8, 8).fillRect(2, 2, 4, 4, 7).data, new FX.Canvas(8, 8).fillRect(2, 2, 4, 4, 7).px(0, 0, 8).data, new FX.Canvas(8, 8).fillRect(2, 2, 4, 4, 7).data];
+  assert.ok(CRT.critique(anim, 8, 8).summary.frames_checked === 3);
+  const cr = CRT.crop(clean.data, 16, 16, { x: 2, y: 2, w: 4, h: 3 }); assert.equal(cr.w, 4); assert.equal(cr.data[0 + 3], 0); assert.equal(cr.data[(1 * 4 + 1) * 4 + 3], 255);
+});
+
+test('Plugin: draw_svg → shade_sprite → critique → view region → make_ramp, plus svg/shade as sprite ops', async () => {
+  const lib = new Library(path.join(tmp, 'kit')); let active = null;
+  const handle = makeHandlers({ lib, active: () => lib.get(active), setActive: (id) => (active = id), render: async (code, o) => FX.render(code, o), engine: { status: async () => ({}) }, decodeImage: () => null, changed: () => {}, activity: () => {} });
+  const call = async (n, a) => { const r = await handle(n, a, 'Claude'); if (r.isError) throw new Error(n + ': ' + r.content[0].text); return { j: JSON.parse(r.content.find((c) => c.type === 'text').text), img: r.content.find((c) => c.type === 'image') }; };
+  await call('create_project', { name: 'Knights' });
+  const d = await call('draw_svg', { svg: KNIGHT, w: 48, h: 48, name: 'Knight' }); assert.ok(d.img); assert.equal(Object.keys(d.j.materials_tagged).length, 4);
+  const sh = await call('shade_sprite', { sprite: d.j.sprite, light: 'top-left' }); assert.ok(sh.img); assert.deepEqual(sh.j.frames_shaded, [1]); assert.ok(sh.j.warnings[0].includes('#1a1c2c'));
+  const cr = await call('critique', { kind: 'sprite', id: d.j.sprite }); assert.ok(typeof cr.j.score === 'number' && cr.img && Array.isArray(cr.j.issues));
+  const v = await call('view', { kind: 'sprite', id: d.j.sprite, region: { x: 16, y: 7, w: 16, h: 16 } }); assert.equal(v.j.region.w, 16); assert.ok(v.img);
+  const rp = await call('make_ramp', { base: '#c0392b', material: 'metal', add_to: d.j.sprite }); assert.equal(rp.j.ramp.length, 5);
+  const s2 = await call('create_sprite', { name: 'Gem', w: 16, h: 16, frames: 2 });
+  const ops = await call('draw_sprite', { sprite: s2.j.id, ops: [{ op: 'svg', svg: '<svg viewBox="0 0 16 16"><polygon points="8,1 15,8 8,15 1,8" fill="#41a6f6"/></svg>' }, { op: 'shade', materials: { '#41a6f6': 'crystal' } }] });
+  assert.deepEqual(ops.j.changed_frames, [1]);
+  const sp = lib.get(active).getSprite(s2.j.id); assert.ok(sp.palette.length > 16, 'shading colours join the palette');
+  const fe = await call('critique', { kind: 'effect', id: (await call('create_effect', { name: 'x', code: LIB[0].code })).j.id }); assert.ok(fe.j.frames_checked > 1);
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) { const t = Date.now(); try { await fn(); console.log(`  ✓ ${name} (${Date.now() - t} ms)`); } catch (e) { failed++; console.log(`  ✗ ${name}\n    ${e.stack.split('\n').slice(0, 4).join('\n    ')}`); } }
