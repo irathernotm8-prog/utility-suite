@@ -8,7 +8,7 @@ const FX = require('./fxruntime');
 const uid = (p = '') => p + crypto.randomBytes(5).toString('hex');
 
 function create({ name = 'Sprite', w = 32, h = 32, palette = 'pico8', frames = 1, fps = 12, background = null } = {}) {
-  w = Math.max(1, Math.min(512, w | 0)); h = Math.max(1, Math.min(512, h | 0));
+  w = Math.max(1, Math.min(2048, w | 0)); h = Math.max(1, Math.min(2048, h | 0));
   const layer = { id: uid('l'), name: 'Layer 1', visible: true, opacity: 1 };
   const s = { dither: 1, kind: 'sprite', id: uid('s'), name, w, h, palette: FX.resolvePalette(palette), fps, layers: [layer], frames: [], cels: {}, tags: [], background, createdAt: Date.now(), updatedAt: Date.now() };
   for (let i = 0; i < Math.max(1, frames | 0); i++) s.frames.push({ id: uid('f'), duration: Math.round(1000 / fps) });
@@ -53,7 +53,7 @@ function shiftTags(s, at, d) { for (const t of s.tags || []) { if (t.from >= at)
 function addLayer(s, { name, at = s.layers.length } = {}) { const l = { id: uid('l'), name: name || `Layer ${s.layers.length + 1}`, visible: true, opacity: 1 }; s.layers.splice(at, 0, l); return l; }
 function removeLayer(s, id) { if (s.layers.length <= 1) throw new Error('A sprite needs at least one layer'); s.layers = s.layers.filter((l) => l.id !== id); for (const k of Object.keys(s.cels)) if (k.startsWith(id + '/')) delete s.cels[k]; }
 function resize(s, w, h, { anchor = 'center' } = {}) {
-  w = Math.max(1, Math.min(512, w | 0)); h = Math.max(1, Math.min(512, h | 0));
+  w = Math.max(1, Math.min(2048, w | 0)); h = Math.max(1, Math.min(2048, h | 0));
   const dx = anchor === 'center' ? Math.floor((w - s.w) / 2) : 0, dy = anchor === 'center' ? Math.floor((h - s.h) / 2) : anchor === 'bottom' ? h - s.h : 0;
   for (const [k, v] of Object.entries(s.cels)) { const c = v instanceof Uint8ClampedArray ? v : unpackCel(v, s.w, s.h); const n = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const a = (y * s.w + x) * 4, b = (Y * w + X) * 4; n[b] = c[a]; n[b + 1] = c[a + 1]; n[b + 2] = c[a + 2]; n[b + 3] = c[a + 3]; } s.cels[k] = n; }
   s.w = w; s.h = h;
@@ -102,31 +102,51 @@ const OPS = {
     if (r.unmapped.length) (s._warnings ||= []).push(`Left as they were (no material): ${r.unmapped.slice(0, 12).join(', ')}`);
     if (o.materials) s.materials = { ...(s.materials || {}), ...o.materials };
   },
+  // detail tools (0.4)
+  texture: (g, s, o) => { const r = require('./detail').texture(g.data, s.w, s.h, { kind: o.kind, colors: o.colors, scale: o.scale, seed: o.seed, strength: o.strength, material: o.material, area: o.w ? { x: o.x | 0, y: o.y | 0, w: o.w, h: o.h } : undefined }); g.data.set(r.data); addColors(s, r.colors); },
+  smooth: (g, s, o) => { const r = require('./detail').smooth(g.data, s.w, s.h, { background: o.background, minRun: o.minRun, palette: o.snap ? s.palette : null }); g.data.set(r.data); addColors(s, r.colors); s._stats = { ...(s._stats || {}), smoothed: ((s._stats || {}).smoothed || 0) + r.changed }; },
+  cleanup: (g, s, o) => { const r = require('./detail').cleanup(g.data, s.w, s.h, { strays: o.strays }); g.data.set(r.data); s._stats = { ...(s._stats || {}), fixed: ((s._stats || {}).fixed || 0) + r.fixed }; },
+  relight: (g, s, o) => { const r = require('./detail').relight(g.data, s.w, s.h, { light: o.light, ambient: o.ambient, strength: o.strength, bulge: o.bulge, detail: o.detail }); g.data.set(r.data); addColors(s, r.colors); },
 };
 // apply(s, ops, { frame, layer }) — ops may target other frames/layers with their own "frame"/"layer" fields
 function addColors(s, list) { const have = new Set(s.palette.map((c) => c.toLowerCase())); for (const c of list || []) if (!have.has(c.toLowerCase()) && s.palette.length < 256) { s.palette.push(c); have.add(c.toLowerCase()); } }
-function apply(s, ops, { frame = 0, layer = null } = {}) {
+// region: { x, y, w, h } | 'B3' | 'B3:C4' — ops use coordinates inside that box and can't touch anything outside it
+// (for big canvases: work tile by tile). An op can carry its own "region" too.
+function apply(s, ops, { frame = 0, layer = null, region = null } = {}) {
   const touched = new Set();
   const cache = new Map();
+  const RS = require('./resample');
   const resolveFrame = (v) => { const i = v === undefined ? frame : v; const idx = typeof i === 'number' ? i : s.frames.findIndex((f) => f.id === i); if (!s.frames[idx]) throw new Error(`No frame ${i} (sprite has ${s.frames.length}, counted from 0)`); return s.frames[idx]; };
   const resolveLayer = (v) => { const id = v === undefined || v === null ? layer || s.layers[s.layers.length - 1].id : v; const l = s.layers.find((x) => x.id === id || x.name === id) || (typeof id === 'number' ? s.layers[id] : null); if (!l) throw new Error(`No layer “${id}”`); return l; };
   ops.forEach((o, n) => {
     const fn = OPS[o.op]; if (!fn) throw new Error(`Op ${n + 1}: unknown op “${o.op}”. Ops: ${Object.keys(OPS).join(', ')}`);
     const f = resolveFrame(o.frame), l = resolveLayer(o.layer); const k = celKey(l.id, f.id);
     if (!cache.has(k)) cache.set(k, canvasFor(s, l.id, f.id));
-    const g = cache.get(k); if (o.mirror) g.symmetry(o.mirror === 'x' || o.mirror === 'both', o.mirror === 'y' || o.mirror === 'both'); else g.symmetry(false, false);
-    try { fn(g, s, o); } catch (e) { throw new Error(`Op ${n + 1} (${o.op}): ${e.message}`); }
+    const full = cache.get(k), rg = o.region || region; let g = full, sv = s, r = null;
+    if (rg) {                                                            // crop the box, draw in its own coordinates, paste back
+      r = RS.parseRegion(rg, s.w, s.h); if (r.w <= 0 || r.h <= 0) throw new Error(`Op ${n + 1}: the region is outside the ${s.w}×${s.h} canvas`);
+      g = new FX.Canvas(r.w, r.h, s.palette); for (let j = 0; j < r.h; j++) g.data.set(full.data.subarray(((r.y + j) * s.w + r.x) * 4, ((r.y + j) * s.w + r.x + r.w) * 4), j * r.w * 4);
+      sv = Object.create(s); sv.w = r.w; sv.h = r.h;
+    }
+    if (o.mirror) g.symmetry(o.mirror === 'x' || o.mirror === 'both', o.mirror === 'y' || o.mirror === 'both'); else g.symmetry(false, false);
+    try { fn(g, sv, o); } catch (e) { throw new Error(`Op ${n + 1} (${o.op}): ${e.message}`); }
+    if (r) { for (const p of ['materials', '_warnings', '_stats']) if (Object.prototype.hasOwnProperty.call(sv, p)) s[p] = sv[p]; for (let j = 0; j < r.h; j++) full.data.set(g.data.subarray(j * r.w * 4, (j + 1) * r.w * 4), ((r.y + j) * s.w + r.x) * 4); }
     touched.add(k);
   });
   for (const k of touched) { const [lid, fid] = k.split('/'); setCel(s, lid, fid, cache.get(k).data); }
   return [...touched];
 }
-
-// an effect's rendered frames become an editable sprite
+// a scaled copy of the whole sprite (every layer and frame): mode 'detail' keeps eyes/outlines/highlights, 'majority', 'nearest'
+function scaled(s, w, h, { mode = 'detail', name } = {}) {
+  const RS = require('./resample'); const n = create({ name: name || `${s.name} ${w}×${h}`, w, h, palette: s.palette.slice(), frames: 1 });
+  n.layers = s.layers.map((l) => ({ ...l })); n.frames = s.frames.map((f) => ({ ...f })); n.tags = JSON.parse(JSON.stringify(s.tags || [])); n.materials = s.materials ? { ...s.materials } : undefined; n.cels = {};
+  for (const l of s.layers) for (const f of s.frames) { const c = getCel(s, l.id, f.id); if (!c) continue; setCel(n, l.id, f.id, RS.downscale({ w: s.w, h: s.h, data: c }, w, h, { mode }).data); }
+  return n;
+}
 function fromFrames({ name, w, h, frames, durations = [], palette }) {
   const s = create({ name, w, h, palette: palette || 'pico8', frames: frames.length, fps: 12 });
   frames.forEach((d, i) => { s.frames[i].duration = Math.round(durations[i] || 83); setCel(s, s.layers[0].id, s.frames[i].id, new Uint8ClampedArray(d)); });
   return s;
 }
 
-module.exports = { create, getCel, setCel, compose, composeAll, addFrame, removeFrame, moveFrame, addLayer, removeLayer, resize, apply, serialize, hydrate, fromFrames, packCel, unpackCel, OPS: Object.keys(OPS), uid };
+module.exports = { scaled, create, getCel, setCel, compose, composeAll, addFrame, removeFrame, moveFrame, addLayer, removeLayer, resize, apply, serialize, hydrate, fromFrames, packCel, unpackCel, OPS: Object.keys(OPS), uid };

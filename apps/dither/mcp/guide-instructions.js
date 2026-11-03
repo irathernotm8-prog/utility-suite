@@ -12,6 +12,7 @@ How to work (this matters more than any single prompt):
 3. Tell the user the drafts are on the board in Dither. They play them side by side, pick favourites and leave notes. Call get_feedback to read their picks and notes, then refine only what they chose with update_effect. Repeat; quality comes from rounds of review.
 4. Always look at your own output (every render returns a contact sheet image). Check readability at 1×, silhouette, timing, anticipation → impact → follow-through, and that nothing is blurry or anti-aliased.
 5. When the user is happy: record (GIF/sheet/video for review) and export (sprite sheet + JSON for engines, or a standalone JS module for web games and sites).
+Effects have a toolkit (particles, trails, shockwaves, bolts, seamless flames, Fluid smoke, palette cycling, flash, dissolve, shake) — use it instead of hand-rolled loops, and read starter effects like portal, meteor-impact or poison-cloud. Big canvases (up to 2048px) are worked tile by tile with region; tiles and parallax scenes have make_tileset, paint_scene and edit_scene.
 Use the user's references (list_references / view_reference) when they've added some. Use the active project unless the user names another.`;
 
 module.exports = { INSTRUCTIONS };

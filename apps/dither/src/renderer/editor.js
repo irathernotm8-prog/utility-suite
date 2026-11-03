@@ -3,9 +3,9 @@
 // the plugin, so changes from either side show up in the other.
 'use strict';
 
-const E = { s: null, fi: 0, li: null, tool: 'pencil', c1: null, c2: null, zoom: 12, ox: 0, oy: 0, grid: true, onion: true, mirror: false, fillShapes: false, brush: 1, level: 0.5, undo: [], redo: [], saveT: null, drag: null, hover: null, previewP: null, cv: null };
-const TOOLS = [['pencil', 'Pencil', 'B'], ['eraser', 'Eraser', 'E'], ['fill', 'Fill', 'G'], ['line', 'Line', 'L'], ['rect', 'Box', 'R'], ['ellipse', 'Ellipse', 'O'], ['dither', 'Dither brush', 'D'], ['picker', 'Pick colour', 'I'], ['move', 'Move', 'V']];
-const TOOL_ICON = { pencil: 'pencil', eraser: 'eraser', fill: 'bucket', line: 'line', rect: 'square', ellipse: 'ellipse', dither: 'dither', picker: 'picker', move: 'move' };
+const E = { tex: { kind: 'stone', scale: 4, size: 8 }, tiled: false, s: null, fi: 0, li: null, tool: 'pencil', c1: null, c2: null, zoom: 12, ox: 0, oy: 0, grid: true, onion: true, mirror: false, fillShapes: false, brush: 1, level: 0.5, undo: [], redo: [], saveT: null, drag: null, hover: null, previewP: null, cv: null };
+const TOOLS = [['pencil', 'Pencil', 'B'], ['eraser', 'Eraser', 'E'], ['fill', 'Fill', 'G'], ['line', 'Line', 'L'], ['rect', 'Box', 'R'], ['ellipse', 'Ellipse', 'O'], ['dither', 'Dither brush', 'D'], ['picker', 'Pick colour', 'I'], ['move', 'Move', 'V'], ['texture', 'Texture brush', 'T']];
+const TOOL_ICON = { pencil: 'pencil', eraser: 'eraser', fill: 'bucket', line: 'line', rect: 'square', ellipse: 'ellipse', dither: 'dither', picker: 'picker', move: 'move', texture: 'texture' };
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const hexOf = (d, i) => '#' + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('');
 const rgbOf = (h) => { const n = parseInt(h.slice(1, 7), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -27,7 +27,8 @@ VIEWS.editor = {
     if (!E.c1) { E.c1 = E.s.palette[Math.min(E.s.palette.length - 1, 7)] || '#ffffff'; E.c2 = E.s.palette[0] || '#000000'; }
     $('#edName').value = E.s.name; fitTitles(); $('#edSize').textContent = `${E.s.w}×${E.s.h}`;
     E.cv = $('#edCanvas canvas'); E.previewP = new Player($('#edPreview canvas'), { pad: 8, max: 8, bg: 'checker' });
-    drawTools(); drawOpts(); drawPalette(); drawLayers(); drawTimeline(); fitZoom(); paint(); updatePreview(true); wireEditor();
+    E.tileGrid = Math.max(E.s.w, E.s.h) > 256 ? (Math.max(E.s.w, E.s.h) <= 768 ? 128 : 256) : 0; E.dirty = true; E.onionKey = null;
+    drawTools(); fitZoom(); drawOpts(); drawPalette(); drawLayers(); drawTimeline(); paint(); updatePreview(true); wireEditor();
     E.ro = new ResizeObserver(() => paint()); E.ro.observe($('#edCanvas'));
   },
   leave() { if (E.saveT) { clearTimeout(E.saveT); saveSprite(); } if (E.ro) E.ro.disconnect(); window.removeEventListener('keydown', edKeys); },
@@ -43,7 +44,8 @@ function compose(fi, { skipHidden = true } = {}) {
   for (const l of E.s.layers) { if (skipHidden && !l.visible) continue; const c = E.s.cels[key(l.id, f.id)]; if (!c) continue; for (let i = 0; i < c.length; i += 4) if (c[i + 3]) { out[i] = c[i]; out[i + 1] = c[i + 1]; out[i + 2] = c[i + 2]; out[i + 3] = 255; } }
   return out;
 }
-function setPx(c, x, y, rgb) { if (x < 0 || y < 0 || x >= E.s.w || y >= E.s.h) return; const i = (y * E.s.w + x) * 4; if (!rgb) { c[i + 3] = 0; c[i] = c[i + 1] = c[i + 2] = 0; return; } c[i] = rgb[0]; c[i + 1] = rgb[1]; c[i + 2] = rgb[2]; c[i + 3] = 255; }
+function markDirty(x0, y0, x1, y1) { const d = E.dirty; if (d === true) return; if (!d) E.dirty = [x0, y0, x1, y1]; else { d[0] = Math.min(d[0], x0); d[1] = Math.min(d[1], y0); d[2] = Math.max(d[2], x1); d[3] = Math.max(d[3], y1); } }
+function setPx(c, x, y, rgb) { if (x < 0 || y < 0 || x >= E.s.w || y >= E.s.h) return; markDirty(x, y, x, y); const i = (y * E.s.w + x) * 4; if (!rgb) { c[i + 3] = 0; c[i] = c[i + 1] = c[i + 2] = 0; return; } c[i] = rgb[0]; c[i + 1] = rgb[1]; c[i + 2] = rgb[2]; c[i + 3] = 255; }
 function plot(c, x, y, rgb, { brush = E.brush, dither = false } = {}) {
   const r = Math.floor((brush - 1) / 2); const pts = [];
   for (let dy = -r; dy < brush - r; dy++) for (let dx = -r; dx < brush - r; dx++) pts.push([x + dx, y + dy]);
@@ -72,31 +74,57 @@ function flood(c, x, y, rgb) {
 
 // ───────── undo
 function snapCel() { const c = cel(); return { kind: 'cel', k: key(E.li, frame().id), before: c.slice() }; }
-function pushUndo(u) { E.undo.push(u); if (E.undo.length > 120) E.undo.shift(); E.redo = []; }
+function pushUndo(u) { if (u.kind === 'cel' && u.before.length) u = diffCel(u); if (!u) return; E.undo.push(u); let bytes = 0; for (let i = E.undo.length - 1; i >= 0; i--) { bytes += undoBytes(E.undo[i]); if (bytes > 400e6 || E.undo.length - i > 120) { E.undo.splice(0, i + 1); break; } } E.redo = []; }
+// a cel undo keeps only the box that changed (big canvases would otherwise copy megabytes per stroke)
+function diffCel(u) { const cur = E.s.cels[u.k] || new Uint8ClampedArray(E.s.w * E.s.h * 4), b = u.before, w = E.s.w, h = E.s.h; let x0 = w, y0 = h, x1 = -1, y1 = -1; const a32 = new Uint32Array(b.buffer, b.byteOffset, w * h), c32 = new Uint32Array(cur.buffer, cur.byteOffset, w * h); for (let y = 0; y < h; y++) { const r = y * w; for (let x = 0; x < w; x++) if (a32[r + x] !== c32[r + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; } } if (x1 < 0) return null; return { kind: 'box', k: u.k, x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, before: cropCel(b, x0, y0, x1 - x0 + 1, y1 - y0 + 1) }; }
+function cropCel(c, x, y, w, h) { const o = new Uint8ClampedArray(w * h * 4); for (let j = 0; j < h; j++) o.set(c.subarray(((y + j) * E.s.w + x) * 4, ((y + j) * E.s.w + x + w) * 4), j * w * 4); return o; }
+function pasteCel(c, box, data) { for (let j = 0; j < box.h; j++) c.set(data.subarray(j * box.w * 4, (j + 1) * box.w * 4), ((box.y + j) * E.s.w + box.x) * 4); }
+function undoBytes(u) { if (u.kind === 'doc') return Object.values(u.before.cels).reduce((a, c) => a + c.length, 0); return u.before ? u.before.length : 0; }
 function snapDoc() { return { kind: 'doc', before: cloneDoc() }; }
 function cloneDoc() { const cels = {}; for (const [k, v] of Object.entries(E.s.cels)) cels[k] = v.slice(); return { ...JSON.parse(JSON.stringify({ ...E.s, cels: {} })), cels }; }
 function undo(dir = -1) {
   const from = dir < 0 ? E.undo : E.redo, to = dir < 0 ? E.redo : E.undo; const u = from.pop(); if (!u) return;
-  if (u.kind === 'cel') { const cur = E.s.cels[u.k] ? E.s.cels[u.k].slice() : new Uint8ClampedArray(E.s.w * E.s.h * 4); E.s.cels[u.k] = u.before; to.push({ kind: 'cel', k: u.k, before: cur }); }
+  if (u.kind === 'box') { let c = E.s.cels[u.k]; if (!c) c = E.s.cels[u.k] = new Uint8ClampedArray(E.s.w * E.s.h * 4); const cur = cropCel(c, u.x, u.y, u.w, u.h); pasteCel(c, u, u.before); to.push({ ...u, before: cur }); }
+  else if (u.kind === 'cel') { const cur = E.s.cels[u.k] ? E.s.cels[u.k].slice() : new Uint8ClampedArray(E.s.w * E.s.h * 4); E.s.cels[u.k] = u.before; to.push({ kind: 'cel', k: u.k, before: cur }); }
   else { const cur = cloneDoc(); E.s = u.before; to.push({ kind: 'doc', before: cur }); E.fi = Math.min(E.fi, E.s.frames.length - 1); if (!E.s.layers.some((l) => l.id === E.li)) E.li = E.s.layers[E.s.layers.length - 1].id; drawLayers(); drawPalette(); }
   changedDoc(true);
 }
 
 // ───────── painting the canvas
-function fitZoom() { const box = $('#edCanvas').getBoundingClientRect(); E.zoom = Math.max(1, Math.min(48, Math.floor(Math.min((box.width - 60) / E.s.w, (box.height - 40) / E.s.h)))); E.ox = Math.round((box.width - E.s.w * E.zoom) / 2); E.oy = Math.round((box.height - E.s.h * E.zoom) / 2); }
+const ZOOMS = [0.125, 0.25, 0.5, 1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48];
+function fitZoom() { const box = $('#edCanvas').getBoundingClientRect(); const f = Math.min((box.width - 60) / E.s.w, (box.height - 40) / E.s.h); E.zoom = f >= 1 ? Math.min(48, Math.floor(f)) : ZOOMS.filter((z) => z <= f).pop() || 0.125; E.ox = Math.round((box.width - E.s.w * E.zoom) / 2); E.oy = Math.round((box.height - E.s.h * E.zoom) / 2); }
 const tmpCv = document.createElement('canvas');
 function toCanvas(data) { tmpCv.width = E.s.w; tmpCv.height = E.s.h; tmpCv.getContext('2d').putImageData(new ImageData(data, E.s.w, E.s.h), 0, 0); return tmpCv; }
+// big canvases: the composite of the current frame lives in its own canvas and only the box that changed is redrawn;
+// the checkerboard is a pattern and the grid only covers what's on screen
+const compCv = document.createElement('canvas'), onionCv = document.createElement('canvas'), prevCv = document.createElement('canvas');
+function composeRect(fi, x0, y0, w, h) {
+  const out = new Uint8ClampedArray(w * h * 4); const f = E.s.frames[fi]; if (!f) return out; const W = E.s.w;
+  for (const l of E.s.layers) { if (!l.visible) continue; const c = E.s.cels[key(l.id, f.id)]; if (!c) continue; for (let j = 0; j < h; j++) { let si = ((y0 + j) * W + x0) * 4, di = j * w * 4; for (let i = 0; i < w; i++, si += 4, di += 4) if (c[si + 3]) { out[di] = c[si]; out[di + 1] = c[si + 1]; out[di + 2] = c[si + 2]; out[di + 3] = 255; } } }
+  return out;
+}
+function invalidate() { E.dirty = true; E.onionKey = null; }
+function refreshComp() {
+  const key2 = `${E.s.id}/${E.s.w}x${E.s.h}/${E.fi}`; if (E.compKey !== key2) { E.compKey = key2; E.dirty = true; }
+  if (compCv.width !== E.s.w || compCv.height !== E.s.h) { compCv.width = E.s.w; compCv.height = E.s.h; E.dirty = true; }
+  const d = E.dirty; if (!d) return; const x = d === true ? 0 : Math.max(0, d[0]), y = d === true ? 0 : Math.max(0, d[1]), w = d === true ? E.s.w : Math.min(E.s.w, d[2] + 1) - x, h = d === true ? E.s.h : Math.min(E.s.h, d[3] + 1) - y;
+  if (w > 0 && h > 0) compCv.getContext('2d').putImageData(new ImageData(composeRect(E.fi, x, y, w, h), w, h), x, y); E.dirty = null;
+}
 function paint() {
   const host = $('#edCanvas'); if (!host || !E.s) return; const cv = E.cv; const dpr = devicePixelRatio || 1; const box = host.getBoundingClientRect();
   if (cv.width !== Math.round(box.width * dpr) || cv.height !== Math.round(box.height * dpr)) { cv.width = Math.round(box.width * dpr); cv.height = Math.round(box.height * dpr); cv.style.width = box.width + 'px'; cv.style.height = box.height + 'px'; }
   const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.imageSmoothingEnabled = false; c.clearRect(0, 0, box.width, box.height);
   const z = E.zoom, W = E.s.w * z, H = E.s.h * z, X = E.ox, Y = E.oy;
   const st = getComputedStyle(document.documentElement); const ca = st.getPropertyValue('--check-a').trim(), cb = st.getPropertyValue('--check-b').trim();
-  c.fillStyle = ca; c.fillRect(X, Y, W, H); c.fillStyle = cb; const sz = Math.max(4, z); for (let y = 0; y < E.s.h * z; y += sz) for (let x = (Math.floor(y / sz) % 2) * sz; x < W; x += sz * 2) c.fillRect(X + x, Y + y, Math.min(sz, W - x), Math.min(sz, H - y));
-  if (E.onion && E.s.frames.length > 1) { const prev = (E.fi - 1 + E.s.frames.length) % E.s.frames.length; c.globalAlpha = 0.25; c.drawImage(toCanvas(compose(prev)), X, Y, W, H); c.globalAlpha = 1; }
-  const comp = compose(E.fi); if (E.drag && E.drag.preview) { const p = E.drag.preview; for (let i = 0; i < p.length; i += 4) if (p[i + 3]) { comp[i] = p[i]; comp[i + 1] = p[i + 1]; comp[i + 2] = p[i + 2]; comp[i + 3] = 255; } }
-  c.drawImage(toCanvas(comp), X, Y, W, H);
-  if (E.grid && z >= 6) { c.strokeStyle = 'rgba(140,135,160,.16)'; c.lineWidth = 1; c.beginPath(); for (let x = 1; x < E.s.w; x++) { c.moveTo(X + x * z + 0.5, Y); c.lineTo(X + x * z + 0.5, Y + H); } for (let y = 1; y < E.s.h; y++) { c.moveTo(X, Y + y * z + 0.5); c.lineTo(X + W, Y + y * z + 0.5); } c.stroke(); }
+  const sz = Math.max(4, Math.min(16, z)); const pk = `${ca}${cb}${sz}`; if (E.patKey !== pk) { const t = document.createElement('canvas'); t.width = t.height = sz * 2; const tc = t.getContext('2d'); tc.fillStyle = ca; tc.fillRect(0, 0, sz * 2, sz * 2); tc.fillStyle = cb; tc.fillRect(sz, 0, sz, sz); tc.fillRect(0, sz, sz, sz); E.pat = c.createPattern(t, 'repeat'); E.patKey = pk; }
+  const vx0 = Math.max(X, 0), vy0 = Math.max(Y, 0), vx1 = Math.min(X + W, box.width), vy1 = Math.min(Y + H, box.height);
+  c.save(); c.translate(X, Y); c.fillStyle = E.pat; c.fillRect(vx0 - X, vy0 - Y, Math.max(0, vx1 - vx0), Math.max(0, vy1 - vy0)); c.restore();
+  if (E.tiled) { refreshComp(); c.globalAlpha = 0.35; for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) c.drawImage(compCv, X + dx * W, Y + dy * H, W, H); c.globalAlpha = 1; }
+  if (E.onion && E.s.frames.length > 1) { const prev = (E.fi - 1 + E.s.frames.length) % E.s.frames.length; const ok = `${E.s.id}/${prev}/${E.s.w}x${E.s.h}`; if (E.onionKey !== ok) { onionCv.width = E.s.w; onionCv.height = E.s.h; onionCv.getContext('2d').putImageData(new ImageData(composeRect(prev, 0, 0, E.s.w, E.s.h), E.s.w, E.s.h), 0, 0); E.onionKey = ok; } c.globalAlpha = 0.25; c.drawImage(onionCv, X, Y, W, H); c.globalAlpha = 1; }
+  refreshComp(); c.drawImage(compCv, X, Y, W, H);
+  if (E.drag && E.drag.preview) { const p = E.drag.preview, b = E.drag.pbox; if (b) { prevCv.width = b[2]; prevCv.height = b[3]; const d = new Uint8ClampedArray(b[2] * b[3] * 4); for (let j = 0; j < b[3]; j++) d.set(p.subarray(((b[1] + j) * E.s.w + b[0]) * 4, ((b[1] + j) * E.s.w + b[0] + b[2]) * 4), j * b[2] * 4); prevCv.getContext('2d').putImageData(new ImageData(d, b[2], b[3]), 0, 0); c.drawImage(prevCv, X + b[0] * z, Y + b[1] * z, b[2] * z, b[3] * z); } }
+  if (E.grid && z >= 6) { c.strokeStyle = 'rgba(140,135,160,.16)'; c.lineWidth = 1; c.beginPath(); const gx0 = Math.max(1, Math.floor((vx0 - X) / z)), gx1 = Math.min(E.s.w - 1, Math.ceil((vx1 - X) / z)), gy0 = Math.max(1, Math.floor((vy0 - Y) / z)), gy1 = Math.min(E.s.h - 1, Math.ceil((vy1 - Y) / z)); for (let x = gx0; x <= gx1; x++) { c.moveTo(X + x * z + 0.5, vy0); c.lineTo(X + x * z + 0.5, vy1); } for (let y = gy0; y <= gy1; y++) { c.moveTo(vx0, Y + y * z + 0.5); c.lineTo(vx1, Y + y * z + 0.5); } c.stroke(); }
+  if (E.tileGrid && E.tileGrid * z >= 8) { c.strokeStyle = 'rgba(255,111,125,.35)'; c.beginPath(); for (let x = E.tileGrid; x < E.s.w; x += E.tileGrid) { c.moveTo(X + x * z + 0.5, vy0); c.lineTo(X + x * z + 0.5, vy1); } for (let y = E.tileGrid; y < E.s.h; y += E.tileGrid) { c.moveTo(vx0, Y + y * z + 0.5); c.lineTo(vx1, Y + y * z + 0.5); } c.stroke(); }
   if (E.mirror) { c.strokeStyle = 'rgba(255,111,125,.55)'; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(X + W / 2 + 0.5, Y); c.lineTo(X + W / 2 + 0.5, Y + H); c.stroke(); c.setLineDash([]); }
   c.strokeStyle = 'rgba(140,135,160,.35)'; c.strokeRect(X - 0.5, Y - 0.5, W + 1, H + 1);
   if (E.crit) for (const it of E.crit.issues) { if (it.x == null || (it.frame && it.frame !== E.fi + 1 && E.crit.frames > 1)) continue; const col = it.severity === 'major' ? '255,64,120' : '255,200,64'; const on = E.crit.focus === it.n; c.strokeStyle = `rgba(${col},${on ? 1 : 0.85})`; c.lineWidth = on ? 3 : 2; c.strokeRect(X + it.x * z - 2, Y + it.y * z - 2, (it.w || 1) * z + 4, (it.h || 1) * z + 4); c.fillStyle = `rgb(${col})`; c.font = '700 10px -apple-system, Segoe UI, sans-serif'; const t = String(it.n), tw = c.measureText(t).width + 6; c.fillRect(X + it.x * z - 2, Y + it.y * z - 15, tw, 13); c.fillStyle = '#1a0a14'; c.fillText(t, X + it.x * z + 1, Y + it.y * z - 5); c.lineWidth = 1; }
@@ -114,35 +142,41 @@ function onDown(e) {
   if (tool === 'fill') { flood(c, x, y, rgb); pushUndo(u); changedDoc(); return; }
   if (tool === 'pencil' || tool === 'eraser' || tool === 'dither') { const col = tool === 'eraser' ? null : rgb; plot(c, x, y, col, { dither: tool === 'dither' }); E.drag = { tool, u, last: [x, y], col }; paint(); return; }
   if (tool === 'move') { E.drag = { tool, u, start: [x, y], base: c.slice() }; return; }
-  E.drag = { tool, u, start: [x, y], rgb, preview: new Uint8ClampedArray(E.s.w * E.s.h * 4) }; shape(E.drag.preview, tool, x, y, x, y, rgb || [0, 0, 0]); paint();
+  if (tool === 'texture') { const d = E.drag = { tool, u, pts: [[x, y]], tex: null }; call('kit:texture', c.slice(), E.s.w, E.s.h, { kind: E.tex.kind, scale: E.tex.scale, seed: 7 }).then((r) => { d.tex = new Uint8ClampedArray(r.data); d.used = new Set(); let prev = null; for (const p of d.pts) { stampTex(d, prev || p, p); prev = p; } d.last = prev; paint(); if (!E.drag) finishTex(d); }).catch(fail); return; }
+  E.drag = { tool, u, start: [x, y], rgb, preview: new Uint8ClampedArray(E.s.w * E.s.h * 4), pbox: shapeBox([x, y], [x, y]) }; const sd = E.dirty; shape(E.drag.preview, tool, x, y, x, y, rgb || [0, 0, 0]); E.dirty = sd; paint();
 }
 function onMove(e) {
   const [x, y] = cellAt(e); const d = E.drag;
   if (!d) { const h = x >= 0 && y >= 0 && x < E.s.w && y < E.s.h ? [x, y] : null; if (String(h) !== String(E.hover)) { E.hover = h; paint(); } $('#edPos').textContent = h ? `${x}, ${y}` : ''; return; }
   if (d.pan) { E.ox = d.ox + e.clientX - d.x; E.oy = d.oy + e.clientY - d.y; paint(); return; }
   if (d.tool === 'pencil' || d.tool === 'eraser' || d.tool === 'dither') { lineTo(cel(), d.last[0], d.last[1], x, y, d.col, { dither: d.tool === 'dither' }); d.last = [x, y]; paint(); return; }
-  if (d.tool === 'move') { const c = cel(); const dx = x - d.start[0], dy = y - d.start[1]; c.fill(0); for (let yy = 0; yy < E.s.h; yy++) for (let xx = 0; xx < E.s.w; xx++) { const X = xx + dx, Y = yy + dy; if (X < 0 || Y < 0 || X >= E.s.w || Y >= E.s.h) continue; const a = (yy * E.s.w + xx) * 4, b = (Y * E.s.w + X) * 4; c[b] = d.base[a]; c[b + 1] = d.base[a + 1]; c[b + 2] = d.base[a + 2]; c[b + 3] = d.base[a + 3]; } paint(); return; }
+  if (d.tool === 'texture') { if (d.tex) { stampTex(d, d.last || [x, y], [x, y]); d.last = [x, y]; paint(); } else d.pts.push([x, y]); return; }
+  if (d.tool === 'move') { const c = cel(); const dx = x - d.start[0], dy = y - d.start[1]; c.fill(0); for (let yy = 0; yy < E.s.h; yy++) for (let xx = 0; xx < E.s.w; xx++) { const X = xx + dx, Y = yy + dy; if (X < 0 || Y < 0 || X >= E.s.w || Y >= E.s.h) continue; const a = (yy * E.s.w + xx) * 4, b = (Y * E.s.w + X) * 4; c[b] = d.base[a]; c[b + 1] = d.base[a + 1]; c[b + 2] = d.base[a + 2]; c[b + 3] = d.base[a + 3]; } E.dirty = true; paint(); return; }
   let [x1, y1] = [x, y]; if (e.shiftKey && d.tool !== 'line') { const s = Math.max(Math.abs(x - d.start[0]), Math.abs(y - d.start[1])); x1 = d.start[0] + Math.sign(x - d.start[0] || 1) * s; y1 = d.start[1] + Math.sign(y - d.start[1] || 1) * s; }
-  d.end = [x1, y1]; d.preview.fill(0); shape(d.preview, d.tool, d.start[0], d.start[1], x1, y1, d.rgb || [0, 0, 0]); paint();
+  d.end = [x1, y1]; const ob = d.pbox; d.pbox = shapeBox(d.start, [x1, y1]); if (ob) for (let j = ob[1]; j < ob[1] + ob[3]; j++) d.preview.fill(0, (j * E.s.w + ob[0]) * 4, (j * E.s.w + ob[0] + ob[2]) * 4); const sd = E.dirty; shape(d.preview, d.tool, d.start[0], d.start[1], x1, y1, d.rgb || [0, 0, 0]); E.dirty = sd; paint();
 }
+function shapeBox(a, b) { const r = E.brush + 1, x0 = Math.max(0, Math.min(a[0], b[0]) - r), y0 = Math.max(0, Math.min(a[1], b[1]) - r), x1 = Math.min(E.s.w - 1, Math.max(a[0], b[0]) + r), y1 = Math.min(E.s.h - 1, Math.max(a[1], b[1]) + r); return [x0, y0, Math.max(1, x1 - x0 + 1), Math.max(1, y1 - y0 + 1)]; }
+function stampTex(d, a, b) { const c = cel(), r = Math.floor(E.tex.size / 2), w = E.s.w, steps = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / Math.max(1, r / 2))); for (let k = 0; k <= steps; k++) { const cx = Math.round(a[0] + (b[0] - a[0]) * k / steps), cy = Math.round(a[1] + (b[1] - a[1]) * k / steps); for (let y = cy - r; y < cy + r; y++) for (let x = cx - r; x < cx + r; x++) { if (x < 0 || y < 0 || x >= w || y >= E.s.h || (x - cx + 0.5) ** 2 + (y - cy + 0.5) ** 2 > r * r) continue; const i = (y * w + x) * 4; if (!c[i + 3]) continue; if (c[i] !== d.tex[i] || c[i + 1] !== d.tex[i + 1] || c[i + 2] !== d.tex[i + 2]) d.used.add(hexOf(d.tex, i)); c[i] = d.tex[i]; c[i + 1] = d.tex[i + 1]; c[i + 2] = d.tex[i + 2]; markDirty(x, y, x, y); } } }
+function finishTex(d) { for (const col of d.used || []) if (!E.s.palette.includes(col) && E.s.palette.length < 256) E.s.palette.push(col); pushUndo(d.u); drawPalette(); changedDoc(); }
 function onUp() {
   const d = E.drag; E.drag = null; if (!d || d.pan) return;
+  if (d.tool === 'texture') { if (d.tex) finishTex(d); return; }
   if (['line', 'rect', 'ellipse'].includes(d.tool)) { const [x1, y1] = d.end || d.start; shape(cel(), d.tool, d.start[0], d.start[1], x1, y1, d.rgb); }
   pushUndo(d.u); changedDoc();
 }
 
 // ───────── after any change: repaint, thumbnails, preview, autosave
-function changedDoc(structural) { if (E.crit && !E.crit.stale) { E.crit.stale = true; drawCrit(); } paint(); if (structural) drawTimeline(); else drawThumb(E.fi); updatePreview(); setEdState('Editing…'); clearTimeout(E.saveT); E.saveT = setTimeout(saveSprite, 600); }
+function changedDoc(structural) { invalidate(); if (E.crit && !E.crit.stale) { E.crit.stale = true; drawCrit(); } paint(); if (structural) drawTimeline(); else drawThumb(E.fi); updatePreview(); setEdState('Editing…'); clearTimeout(E.saveT); E.saveT = setTimeout(saveSprite, 600); }
 async function saveSprite() { E.saveT = null; if (!E.s) return; try { E.s.updatedAt = Date.now(); E.savedAt = Date.now(); await call('sprites:save', E.s); setEdState('Saved'); } catch (e) { setEdState('Not saved'); fail(e); } }
 function setEdState(t) { const el = $('#edState'); if (el) el.textContent = t; }
-let pvT = null; function updatePreview(now) { clearTimeout(pvT); pvT = setTimeout(() => { if (!E.previewP || !E.s) return; E.previewP.set(E.s.frames.map((_, i) => compose(i)), { w: E.s.w, h: E.s.h, durations: E.s.frames.map((f) => f.duration), loop: true }); $('#pvInfo').textContent = `${E.s.frames.length} fr · ${E.s.frames.reduce((a, f) => a + f.duration, 0)} ms`; }, now ? 0 : 150); }
+let pvT = null; function updatePreview(now) { clearTimeout(pvT); pvT = setTimeout(() => { if (!E.previewP || !E.s) return; const sm = smallSize(160); E.previewP.set(E.s.frames.map((_, i) => composeSmall(i, sm)), { w: sm.w, h: sm.h, durations: E.s.frames.map((f) => f.duration), loop: true }); $('#pvInfo').textContent = `${E.s.frames.length} fr · ${E.s.frames.reduce((a, f) => a + f.duration, 0)} ms`; }, now ? 0 : 150); }
 
 // ───────── panels
 function drawTools() {
-  $('#edTools').innerHTML = TOOLS.map(([k, l, s]) => `<button class="tool ${E.tool === k ? 'on' : ''}" data-tool="${k}" title="${l} (${s})">${icon(TOOL_ICON[k], 18)}</button>`).join('') + `<div class="tool-sep"></div><button class="tool ${E.mirror ? 'on' : ''}" id="tMirror" title="Mirror drawing (M)">${icon('mirror', 18)}</button><button class="tool ${E.grid ? 'on' : ''}" id="tGridE" title="Pixel grid">${icon('grid', 18)}</button><div class="tool-sep"></div><button class="tool" id="tZin" title="Zoom in (+)">${icon('zoomIn', 18)}</button><button class="tool" id="tZout" title="Zoom out (−)">${icon('zoomOut', 18)}</button><button class="tool tiny-t" id="tFit" title="Fit (0)">fit</button>`;
+  $('#edTools').innerHTML = TOOLS.map(([k, l, s]) => `<button class="tool ${E.tool === k ? 'on' : ''}" data-tool="${k}" title="${l} (${s})">${icon(TOOL_ICON[k], 18)}</button>`).join('') + `<div class="tool-sep"></div><button class="tool ${E.mirror ? 'on' : ''}" id="tMirror" title="Mirror drawing (M)">${icon('mirror', 18)}</button><button class="tool ${E.grid ? 'on' : ''}" id="tGridE" title="Pixel grid">${icon('grid', 18)}</button><button class="tool ${E.tiled ? 'on' : ''}" id="tTiled" title="Tile preview: show the sprite repeated around itself (for seamless tiles)">${icon('repeat', 18)}</button><div class="tool-sep"></div><button class="tool" id="tZin" title="Zoom in (+)">${icon('zoomIn', 18)}</button><button class="tool" id="tZout" title="Zoom out (−)">${icon('zoomOut', 18)}</button><button class="tool tiny-t" id="tFit" title="Fit (0)">fit</button>`;
   $$('[data-tool]').forEach((b) => b.onclick = () => setTool(b.dataset.tool));
-  $('#tMirror').onclick = () => { E.mirror = !E.mirror; drawTools(); paint(); }; $('#tGridE').onclick = () => { E.grid = !E.grid; drawTools(); paint(); };
-  $('#tZin').onclick = () => zoomBy(1); $('#tZout').onclick = () => zoomBy(-1); $('#tFit').onclick = () => { fitZoom(); paint(); };
+  $('#tMirror').onclick = () => { E.mirror = !E.mirror; drawTools(); paint(); }; $('#tGridE').onclick = () => { E.grid = !E.grid; drawTools(); paint(); }; $('#tTiled').onclick = () => { E.tiled = !E.tiled; drawTools(); paint(); };
+  $('#tZin').onclick = () => zoomBy(1); $('#tZout').onclick = () => zoomBy(-1); $('#tFit').onclick = () => { fitZoom(); drawOpts(); paint(); };
 }
 function setTool(t) { E.tool = t; drawTools(); drawOpts(); }
 function drawOpts() {
@@ -151,13 +185,14 @@ function drawOpts() {
     ${brushT ? `<span class="eo-l">Size</span><div class="seg sm">${[1, 2, 3, 4].map((n) => `<button data-b="${n}" class="${E.brush === n ? 'on' : ''}">${n}</button>`).join('')}</div>` : ''}
     ${E.tool === 'dither' ? `<span class="eo-l">Density</span><input type="range" id="eoLvl" min="0.0625" max="1" step="0.0625" value="${E.level}"><span class="tnum small" id="eoLvlV">${Math.round(E.level * 16)}/16</span>` : ''}
     ${shapeT ? `<label class="chk"><input type="checkbox" id="eoFill" ${E.fillShapes ? 'checked' : ''}> Filled</label><span class="muted tiny">Shift for square/circle</span>` : ''}
-    ${E.tool === 'move' ? `<span class="muted tiny">Drag to move this layer’s pixels</span>` : ''}${E.tool === 'picker' ? `<span class="muted tiny">Alt-click picks with any tool</span>` : ''}
-    <span class="grow"></span><span class="muted tiny tnum" id="edPos"></span><span class="muted tiny tnum">${E.zoom}×</span>`;
+    ${E.tool === 'texture' ? `<span class="eo-l">Pattern</span><select class="select sm" id="eoTex">${Object.keys(TEXKINDS).map((k) => `<option value="${k}" ${E.tex.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select><span class="eo-l">Scale</span><input type="range" id="eoTexS" min="2" max="12" step="1" value="${E.tex.scale}"><span class="eo-l">Brush</span><div class="seg sm">${[4, 8, 16, 32].map((n) => `<button data-tb="${n}" class="${E.tex.size === n ? 'on' : ''}">${n}</button>`).join('')}</div><span class="muted tiny">Paints the pattern in each colour’s own ramp</span>` : ''}${E.tool === 'move' ? `<span class="muted tiny">Drag to move this layer’s pixels</span>` : ''}${E.tool === 'picker' ? `<span class="muted tiny">Alt-click picks with any tool</span>` : ''}
+    <span class="grow"></span><span class="muted tiny tnum" id="edPos"></span><span class="muted tiny tnum">${E.zoom < 1 ? Math.round(E.zoom * 100) + '%' : E.zoom + '×'}</span>`;
   $$('#edOpts [data-b]').forEach((b) => b.onclick = () => { E.brush = +b.dataset.b; drawOpts(); });
   const lv = $('#eoLvl'); if (lv) lv.oninput = () => { E.level = +lv.value; $('#eoLvlV').textContent = `${Math.round(E.level * 16)}/16`; };
   const fl = $('#eoFill'); if (fl) fl.onchange = () => { E.fillShapes = fl.checked; };
+  const tk = $('#eoTex'); if (tk) { tk.onchange = () => { E.tex.kind = tk.value; }; $('#eoTexS').oninput = (e) => { E.tex.scale = +e.target.value; }; $$('#edOpts [data-tb]').forEach((b) => (b.onclick = () => { E.tex.size = +b.dataset.tb; drawOpts(); })); }
 }
-function zoomBy(d, at) { const box = $('#edCanvas').getBoundingClientRect(); const old = E.zoom; const steps = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48]; let i = steps.findIndex((s) => s >= old); if (i < 0) i = steps.length - 1; E.zoom = steps[Math.max(0, Math.min(steps.length - 1, i + d))]; const px = at ? at[0] : box.width / 2, py = at ? at[1] : box.height / 2; E.ox = Math.round(px - (px - E.ox) * E.zoom / old); E.oy = Math.round(py - (py - E.oy) * E.zoom / old); drawOpts(); paint(); }
+function zoomBy(d, at) { const box = $('#edCanvas').getBoundingClientRect(); const old = E.zoom; const steps = ZOOMS; let i = steps.findIndex((s) => s >= old); if (i < 0) i = steps.length - 1; E.zoom = steps[Math.max(0, Math.min(steps.length - 1, i + d))]; const px = at ? at[0] : box.width / 2, py = at ? at[1] : box.height / 2; E.ox = Math.round(px - (px - E.ox) * E.zoom / old); E.oy = Math.round(py - (py - E.oy) * E.zoom / old); drawOpts(); paint(); }
 function drawPalette() {
   $('#cc1').style.background = E.c1; $('#cc2').style.background = E.c2 || 'transparent'; $('#cc2').classList.toggle('clear', !E.c2); $('#ccHex').textContent = E.c1;
   $('#edPal').innerHTML = E.s.palette.map((c, i) => `<button class="sw ${c.toLowerCase() === (E.c1 || '').toLowerCase() ? 'on' : ''}${c.toLowerCase() === (E.c2 || '').toLowerCase() ? ' on2' : ''}" data-i="${i}" style="background:${c}" title="${i.toString(36)} · ${c}"></button>`).join('') + `<button class="sw add" id="palAdd" title="Add a colour">${icon('plus', 12)}</button><input type="color" id="palPick" hidden>`;
@@ -175,11 +210,14 @@ function drawLayers() {
 }
 async function renameLayer(l) { const n = await promptBox({ title: 'Rename layer', value: l.name, ok: 'Rename' }); if (n) { l.name = n; drawLayers(); changedDoc(); } }
 function drawTimeline() {
-  const s = Math.max(1, Math.floor(46 / Math.max(E.s.w, E.s.h)));
-  $('#tlFrames').innerHTML = E.s.frames.map((f, i) => `<button class="tf ${i === E.fi ? 'on' : ''}" data-i="${i}"><canvas width="${E.s.w}" height="${E.s.h}" style="width:${E.s.w * s}px;height:${E.s.h * s}px"></canvas><span class="tnum">${i + 1}<em>${f.duration}ms</em></span></button>`).join('');
+  const sm = smallSize(92); const s = Math.max(1, Math.floor(46 / Math.max(sm.w, sm.h))), dw = Math.min(64, sm.w * s), dh = Math.round(dw * sm.h / sm.w);
+  $('#tlFrames').innerHTML = E.s.frames.map((f, i) => `<button class="tf ${i === E.fi ? 'on' : ''}" data-i="${i}"><canvas width="${sm.w}" height="${sm.h}" style="width:${dw}px;height:${dh}px"></canvas><span class="tnum">${i + 1}<em>${f.duration}ms</em></span></button>`).join('');
   $$('#tlFrames .tf').forEach((b, i) => { drawThumb(i); b.onclick = () => { E.fi = i; $$('#tlFrames .tf').forEach((x, k) => x.classList.toggle('on', k === i)); paint(); }; b.ondblclick = () => setDuration(i); });
 }
-function drawThumb(i) { const b = $$('#tlFrames .tf')[i]; if (!b) return; const c = $('canvas', b).getContext('2d'); c.clearRect(0, 0, E.s.w, E.s.h); c.putImageData(new ImageData(compose(i), E.s.w, E.s.h), 0, 0); }
+function drawThumb(i) { const b = $$('#tlFrames .tf')[i]; if (!b) return; const sm = smallSize(92); const c = $('canvas', b).getContext('2d'); c.clearRect(0, 0, sm.w, sm.h); c.putImageData(new ImageData(composeSmall(i, sm), sm.w, sm.h), 0, 0); }
+// thumbnails and the preview of a big sprite are nearest-neighbour shrunk copies
+function smallSize(max) { const k = Math.max(1, Math.ceil(Math.max(E.s.w, E.s.h) / max)); return { k, w: Math.ceil(E.s.w / k), h: Math.ceil(E.s.h / k) }; }
+function composeSmall(i, sm) { const full = compose(i); if (sm.k === 1) return full; const o = new Uint8ClampedArray(sm.w * sm.h * 4); for (let y = 0; y < sm.h; y++) for (let x = 0; x < sm.w; x++) { const si = (Math.min(E.s.h - 1, y * sm.k) * E.s.w + Math.min(E.s.w - 1, x * sm.k)) * 4; o.set(full.subarray(si, si + 4), (y * sm.w + x) * 4); } return o; }
 async function setDuration(i) { const v = await promptBox({ title: `Frame ${i + 1} duration`, label: 'Milliseconds', value: String(E.s.frames[i].duration), type: 'number', ok: 'Set' }); if (v && +v > 0) { E.s.frames[i].duration = Math.round(+v); changedDoc(true); } }
 function newFrame(dup) { pushUndo(snapDoc()); const f = { id: 'f' + Math.random().toString(16).slice(2, 12), duration: frame().duration }; E.s.frames.splice(E.fi + 1, 0, f); if (dup) for (const l of E.s.layers) { const c = E.s.cels[key(l.id, frame().id)]; if (c) E.s.cels[key(l.id, f.id)] = c.slice(); } E.fi++; changedDoc(true); }
 
@@ -202,11 +240,11 @@ function wireEditor() {
   $('#edShade').onclick = shadeSheet; $('#edCrit').onclick = runCritique;
   $('#edAsk').onclick = () => askClaude(`Look at my sprite “${E.s.name}” (id ${E.s.id}) with view, then `);
   $('#edExport').onclick = (e) => { saveSprite(); exportMenu(e.currentTarget, 'sprite', E.s.id, E.s.name); };
-  $('#edMore').onclick = (e) => menu(e.currentTarget, [{ label: 'Draw from SVG…', icon: 'code', run: svgSheet }, { label: 'Make a ramp from the left colour', icon: 'palette', run: rampFromColor }, '-', { label: 'Resize canvas…', icon: 'square', run: resizeSprite }, { label: 'Outline this layer (left colour)', icon: 'sprites', run: () => { const u = snapCel(); const c = cel(); const w = E.s.w, h = E.s.h, src = c.slice(); const rgb = rgbOf(E.c1); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (src[(y * w + x) * 4 + 3]) continue; if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const X = x + dx, Y = y + dy; return X >= 0 && Y >= 0 && X < w && Y < h && src[(Y * w + X) * 4 + 3]; })) setPx(c, x, y, rgb); } pushUndo(u); changedDoc(); } }, { label: 'Flip this frame horizontally', icon: 'mirror', run: () => { pushUndo(snapDoc()); for (const l of E.s.layers) { const c = E.s.cels[key(l.id, frame().id)]; if (!c) continue; const s0 = c.slice(); for (let y = 0; y < E.s.h; y++) for (let x = 0; x < E.s.w; x++) { const a = (y * E.s.w + x) * 4, b = (y * E.s.w + E.s.w - 1 - x) * 4; c[b] = s0[a]; c[b + 1] = s0[a + 1]; c[b + 2] = s0[a + 2]; c[b + 3] = s0[a + 3]; } } changedDoc(true); } }, { label: 'Clear this layer’s frame', icon: 'eraser', run: () => { const u = snapCel(); cel().fill(0); pushUndo(u); changedDoc(); } }, '-', { label: 'Record GIF + sheet', icon: 'record', run: async () => { await saveSprite(); filesDone(await call('record', { kind: 'sprite', id: E.s.id }).catch(fail), 'Recorded'); } }, { label: 'Copy this frame as an image (8×)', icon: 'copy', run: () => { call('clipboard:image', compose(E.fi), E.s.w, E.s.h, 8); toast('Copied'); } }], { width: 280, align: 'right' });
+  $('#edMore').onclick = (e) => menu(e.currentTarget, [{ label: 'Draw from SVG…', icon: 'code', run: svgSheet }, { label: 'Make a ramp from the left colour', icon: 'palette', run: rampFromColor }, '-', { label: 'Polish edges (this frame)', icon: 'wand', run: polishFrame }, { label: 'Normal map & light…', icon: 'bulb', run: lightSheet }, { label: 'Check tile seams', icon: 'repeat', run: checkSeams }, { label: 'Make a smaller copy…', icon: 'shrink', run: smallerCopy }, '-', { label: 'Resize canvas…', icon: 'square', run: resizeSprite }, { label: 'Outline this layer (left colour)', icon: 'sprites', run: () => { const u = snapCel(); const c = cel(); const w = E.s.w, h = E.s.h, src = c.slice(); const rgb = rgbOf(E.c1); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (src[(y * w + x) * 4 + 3]) continue; if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const X = x + dx, Y = y + dy; return X >= 0 && Y >= 0 && X < w && Y < h && src[(Y * w + X) * 4 + 3]; })) setPx(c, x, y, rgb); } pushUndo(u); changedDoc(); } }, { label: 'Flip this frame horizontally', icon: 'mirror', run: () => { pushUndo(snapDoc()); for (const l of E.s.layers) { const c = E.s.cels[key(l.id, frame().id)]; if (!c) continue; const s0 = c.slice(); for (let y = 0; y < E.s.h; y++) for (let x = 0; x < E.s.w; x++) { const a = (y * E.s.w + x) * 4, b = (y * E.s.w + E.s.w - 1 - x) * 4; c[b] = s0[a]; c[b + 1] = s0[a + 1]; c[b + 2] = s0[a + 2]; c[b + 3] = s0[a + 3]; } } changedDoc(true); } }, { label: 'Clear this layer’s frame', icon: 'eraser', run: () => { const u = snapCel(); cel().fill(0); pushUndo(u); changedDoc(); } }, '-', { label: 'Record GIF + sheet', icon: 'record', run: async () => { await saveSprite(); filesDone(await call('record', { kind: 'sprite', id: E.s.id }).catch(fail), 'Recorded'); } }, { label: 'Copy this frame as an image (8×)', icon: 'copy', run: () => { call('clipboard:image', compose(E.fi), E.s.w, E.s.h, 8); toast('Copied'); } }], { width: 280, align: 'right' });
   window.addEventListener('keydown', edKeys); window.addEventListener('keyup', edKeyUp);
 }
 function swapColors() { const t = E.c1; E.c1 = E.c2 || E.c1; E.c2 = t; drawPalette(); }
-async function resizeSprite() { const r = await promptBox({ title: 'Resize canvas', fields: [{ key: 'w', label: 'Width', type: 'number', value: E.s.w }, { key: 'h', label: 'Height', type: 'number', value: E.s.h }, { key: 'a', label: 'Keep pixels anchored', value: 'center', options: [{ value: 'center', label: 'Centre' }, { value: 'top-left', label: 'Top left' }, { value: 'bottom', label: 'Bottom (feet stay on the ground)' }] }], ok: 'Resize' }); if (!r) return; const w = Math.max(1, Math.min(512, +r.w | 0)), h = Math.max(1, Math.min(512, +r.h | 0)); pushUndo(snapDoc()); const dx = r.a === 'center' ? Math.floor((w - E.s.w) / 2) : 0, dy = r.a === 'center' ? Math.floor((h - E.s.h) / 2) : r.a === 'bottom' ? h - E.s.h : 0; for (const [k, c] of Object.entries(E.s.cels)) { const n = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < E.s.h; y++) for (let x = 0; x < E.s.w; x++) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; n.set(c.subarray((y * E.s.w + x) * 4, (y * E.s.w + x) * 4 + 4), (Y * w + X) * 4); } E.s.cels[k] = n; } E.s.w = w; E.s.h = h; $('#edSize').textContent = `${w}×${h}`; fitZoom(); changedDoc(true); }
+async function resizeSprite() { const r = await promptBox({ title: 'Resize canvas', fields: [{ key: 'w', label: 'Width', type: 'number', value: E.s.w }, { key: 'h', label: 'Height', type: 'number', value: E.s.h }, { key: 'a', label: 'Keep pixels anchored', value: 'center', options: [{ value: 'center', label: 'Centre' }, { value: 'top-left', label: 'Top left' }, { value: 'bottom', label: 'Bottom (feet stay on the ground)' }] }], ok: 'Resize' }); if (!r) return; const w = Math.max(1, Math.min(2048, +r.w | 0)), h = Math.max(1, Math.min(2048, +r.h | 0)); pushUndo(snapDoc()); const dx = r.a === 'center' ? Math.floor((w - E.s.w) / 2) : 0, dy = r.a === 'center' ? Math.floor((h - E.s.h) / 2) : r.a === 'bottom' ? h - E.s.h : 0; for (const [k, c] of Object.entries(E.s.cels)) { const n = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < E.s.h; y++) for (let x = 0; x < E.s.w; x++) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; n.set(c.subarray((y * E.s.w + x) * 4, (y * E.s.w + x) * 4 + 4), (Y * w + X) * 4); } E.s.cels[k] = n; } E.s.w = w; E.s.h = h; $('#edSize').textContent = `${w}×${h}`; fitZoom(); changedDoc(true); }
 function edKeyUp(e) { if (e.key === ' ') E.space = false; }
 function edKeys(e) {
   if (S.view !== 'editor' || $('#sheetHost').firstChild || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
@@ -217,13 +255,14 @@ function edKeys(e) {
   const t = TOOLS.find((x) => x[2].toLowerCase() === k); if (t) { setTool(t[0]); return; }
   if (k === 'x') swapColors(); else if (k === 'm') { E.mirror = !E.mirror; drawTools(); paint(); } else if (k === 'n') newFrame(true);
   else if (k === ',' || k === 'arrowleft') { E.fi = (E.fi - 1 + E.s.frames.length) % E.s.frames.length; drawTimeline(); paint(); } else if (k === '.' || k === 'arrowright') { E.fi = (E.fi + 1) % E.s.frames.length; drawTimeline(); paint(); }
-  else if (k === '=' || k === '+') zoomBy(1); else if (k === '-') zoomBy(-1); else if (k === '0') { fitZoom(); paint(); } else if (k === '[') { E.brush = Math.max(1, E.brush - 1); drawOpts(); } else if (k === ']') { E.brush = Math.min(4, E.brush + 1); drawOpts(); }
+  else if (k === '=' || k === '+') zoomBy(1); else if (k === '-') zoomBy(-1); else if (k === '0') { fitZoom(); drawOpts(); paint(); } else if (k === '[') { E.brush = Math.max(1, E.brush - 1); drawOpts(); } else if (k === ']') { E.brush = Math.min(4, E.brush + 1); drawOpts(); }
 }
 // when Claude edits the sprite that's open, reload it (unless you're mid-stroke)
 async function editorReloadIfExternal(id) { if (S.view !== 'editor' || !E.s || E.s.id !== id || E.drag || (E.savedAt && Date.now() - E.savedAt < 1500)) return; const s = await call('sprites:get', id); pushUndo(snapDoc()); E.s = s; E.fi = Math.min(E.fi, s.frames.length - 1); if (!s.layers.some((l) => l.id === E.li)) E.li = s.layers[s.layers.length - 1].id; drawLayers(); drawPalette(); drawTimeline(); paint(); updatePreview(true); $('#edSize').textContent = `${s.w}×${s.h}`; toast('Updated by Claude', s.name, 'info', 2500); }
 
 // ───────── the detail kit in the editor: Shade, Critique, Draw from SVG, ramps
 let KIT = null; const kit = async () => (KIT ||= await call('kit:info'));
+const TEXKINDS = { stone: 1, bricks: 1, scales: 1, bark: 1, wood: 1, weave: 1, grass: 1, metal: 1, sand: 1, noise: 1 };
 function flatColors(c) { const m = new Map(); for (let i = 0; i < c.length; i += 4) if (c[i + 3]) { const k = hexOf(c, i); m.set(k, (m.get(k) || 0) + 1); } return [...m.entries()].sort((a, b) => b[1] - a[1]); }
 async function shadeSheet() {
   const K = await kit(); const c = cel(); const flats = flatColors(c).filter(([, n]) => n >= 2).slice(0, 18);
@@ -285,3 +324,36 @@ async function svgSheet() {
   };
 }
 async function rampFromColor() { const ramp = await call('kit:ramp', E.c1, { steps: 5 }); pushUndo(snapDoc()); for (const c of ramp) if (!E.s.palette.includes(c)) E.s.palette.push(c); drawPalette(); changedDoc(); toast('Ramp added', ramp.join(' ')); }
+
+// ───────── 0.4 detail tools in the editor
+async function polishFrame() {
+  const u = snapCel(); const c = cel(); try { const a = await call('kit:cleanup', c.slice(), E.s.w, E.s.h, {}); const b = await call('kit:smooth', a.data, E.s.w, E.s.h, {}); c.set(new Uint8ClampedArray(b.data)); for (const col of b.colors) if (!E.s.palette.includes(col) && E.s.palette.length < 256) E.s.palette.push(col); pushUndo(u); drawPalette(); changedDoc(); toast('Edges polished', `${plural(a.fixed, 'corner')} cleaned, ${plural(b.changed, 'pixel')} smoothed in inside corners. Undo if it’s too soft.`); } catch (e) { fail(e); }
+}
+async function checkSeams() {
+  const comp = compose(E.fi); const r = await call('kit:seams', comp, E.s.w, E.s.h); E.tiled = true; drawTools(); paint();
+  if (r.check.seamless) { toast('Tiles cleanly', 'No visible seams left/right or top/bottom. Tile preview is on.'); return; }
+  const bad = [!r.check.left_right.ok && 'left/right', !r.check.top_bottom.ok && 'top/bottom'].filter(Boolean).join(' and ');
+  const go2 = await confirmBox({ title: 'Seams found', text: `The ${bad} edges don’t meet. Wrap the tile by half so the seams sit in the middle where you can paint over them? (Tile preview is on so you can see it repeat.)`, ok: 'Wrap by half' });
+  if (go2) { pushUndo(snapDoc()); for (const l of E.s.layers) { const c = E.s.cels[key(l.id, frame().id)]; if (!c) continue; const w = E.s.w, h = E.s.h, s0 = c.slice(), ox = Math.floor(w / 2), oy = Math.floor(h / 2); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const a = (y * w + x) * 4, b = (((y + oy) % h) * w + ((x + ox) % w)) * 4; c[b] = s0[a]; c[b + 1] = s0[a + 1]; c[b + 2] = s0[a + 2]; c[b + 3] = s0[a + 3]; } } changedDoc(true); }
+}
+async function smallerCopy() {
+  const r = await promptBox({ title: 'Make a smaller copy', text: 'Every layer and frame, redrawn so eyes, outlines and highlights survive. Small versions always want a hand pass afterwards.', fields: [{ key: 'w', label: 'Width (height follows)', type: 'number', value: String(Math.max(8, Math.round(E.s.w / 2))) }, { key: 'mode', label: 'How', value: 'detail', options: [{ value: 'detail', label: 'Keep details (eyes, outlines, highlights)' }, { value: 'majority', label: 'Majority colour per block' }, { value: 'nearest', label: 'Nearest pixel' }] }], ok: 'Make copy' });
+  if (!r || !(+r.w > 0)) return; await saveSprite(); try { const j = await call('tool', 'scale_sprite', { sprite: E.s.id, w: Math.min(E.s.w, +r.w), mode: r.mode }); await loadProject(); toast('Smaller copy made', `${j.size} from ${j.from}`); go('editor', j.sprite); } catch (e) { fail(e); }
+}
+async function lightSheet() {
+  const LP = ['top-left', 'top', 'top-right', 'left', 'front', 'right', 'bottom-left', null, 'bottom-right']; const st = { light: 'right', bulge: 1 };
+  const el = openSheet(`<div class="sheet-head">${icon('bulb', 20)}<div class="grow"><h3>Normal map &amp; light</h3><div class="muted small">A normal map built from the silhouette and values, for 2D lights in Godot or Unity — and a preview of the sprite lit from anywhere.</div></div></div>
+    <div class="sheet-body"><div class="sh-prev three"><div><div class="label">Sprite</div><div class="sh-box"><canvas id="lmA"></canvas></div></div><div><div class="label">Normal map</div><div class="sh-box"><canvas id="lmN"></canvas></div></div><div><div class="label">Lit</div><div class="sh-box"><canvas id="lmL"></canvas></div></div></div>
+      <div class="sh-ctrls"><div><div class="label">Light</div><div class="light-pad">${LP.map((l) => (l ? `<button data-l="${l}" class="${st.light === l ? 'on' : ''}" title="${l}">${l === 'front' ? '●' : '☀'}</button>` : '<span></span>')).join('')}</div></div>
+      <div class="field" style="min-width:220px"><label>Roundness <b id="lmBv">1</b></label><input type="range" id="lmB" min="0.2" max="2" step="0.1" value="1"></div></div></div>
+    <div class="sheet-foot"><button class="btn" id="lmExp">${icon('export', 15)}Export normal map sheet</button><span class="grow"></span><button class="btn" id="lmClose">Close</button><button class="btn primary" id="lmApply">${icon('check', 15)}Relight every frame</button></div>`, { width: 860 });
+  const pv = (id, d) => new Player($(id, el), { pad: 6, max: 6, bg: 'checker' }).set([d], { w: E.s.w, h: E.s.h, durations: [100] });
+  const comp = compose(E.fi); pv('#lmA', comp);
+  const run = async () => { const r = await call('kit:normal', comp, E.s.w, E.s.h, { bulge: st.bulge, lights: [st.light] }); pv('#lmN', new Uint8ClampedArray(r.data)); pv('#lmL', new Uint8ClampedArray(r.lit[0])); };
+  $$('.light-pad [data-l]', el).forEach((b) => (b.onclick = () => { st.light = b.dataset.l; $$('.light-pad button', el).forEach((x) => x.classList.toggle('on', x === b)); run(); }));
+  $('#lmB', el).oninput = (e) => { st.bulge = +e.target.value; $('#lmBv', el).textContent = st.bulge; run(); };
+  $('#lmClose', el).onclick = closeSheet;
+  $('#lmExp', el).onclick = async () => { await saveSprite(); try { const j = await call('tool', 'normal_map', { sprite: E.s.id, export: true, bulge: st.bulge, light: st.light }); filesDone({ files: j.exported }, 'Normal map exported'); } catch (e) { fail(e); } };
+  $('#lmApply', el).onclick = async () => { pushUndo(snapDoc()); for (const f of E.s.frames) for (const l of E.s.layers) { const c = E.s.cels[key(l.id, f.id)]; if (!c) continue; const r = await call('kit:relight', c.slice(), E.s.w, E.s.h, { light: st.light, bulge: st.bulge }); c.set(new Uint8ClampedArray(r.data)); for (const col of r.colors) if (!E.s.palette.includes(col) && E.s.palette.length < 256) E.s.palette.push(col); } closeSheet(); drawPalette(); changedDoc(true); toast('Relit', `Lit from ${st.light}. Undo to go back.`); };
+  run();
+}

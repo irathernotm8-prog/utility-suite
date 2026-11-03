@@ -287,6 +287,93 @@ test('Plugin: draw_svg → shade_sprite → critique → view region → make_ra
 
 const C2S = require('../src/core/clip2sprite');
 const video = require('../src/video');
+test('Effects toolkit: particles/flames loop seamlessly, bolts/shockwaves/cycle/flash/dissolve/Fluid work, 30 starters', () => {
+  assert.ok(LIB.length >= 29, 'starter count ' + LIB.length);
+  const g = new FX.Canvas(48, 48, 'pico8'); const spec = { x: 24, y: 40, emit: 'stream', count: 20, angle: [-2, -1], speed: [10, 30], colors: 'fire', seed: 3 };
+  const at = (t) => { g.clear(); g.particles(spec, t); return g.data.slice(); };
+  assert.deepEqual(Buffer.from(at(0).buffer), Buffer.from(at(1).buffer), 'a stream at t=0 and t=1 is the same frame');
+  assert.notDeepEqual(Buffer.from(at(0).buffer), Buffer.from(at(0.5).buffer));
+  const fl = (t) => { g.clear(); g.flames(10, 10, 20, 30, t); return g.data.slice(); };
+  assert.deepEqual(Buffer.from(fl(0).buffer), Buffer.from(fl(1).buffer), 'flames loop'); assert.ok(fl(0.3).some((v, i) => i % 4 === 3 && v));
+  g.clear(); g.bolt(2, 2, 45, 45, { seed: 4, branches: 2 }); assert.ok(g.lastBolt.length > 16 && g.filled(2, 2) && g.filled(45, 45));
+  g.clear(); g.shockwave(24, 24, 10, { thickness: 2, colors: [7, 8] }); assert.ok(g.filled(34, 24) && !g.filled(24, 24));
+  g.clear(); g.fillRect(0, 0, 4, 1, 1); g.cycle([1, 2, 3], 1); assert.equal(g.get(0, 0), FX.PALETTES.pico8[2]);
+  g.flash(7, 1); assert.equal(g.get(0, 0), FX.PALETTES.pico8[7]);
+  g.clear(); g.fillRect(0, 0, 48, 48, 8); g.dissolve(0.5, { edge: [10] }); let n = 0; for (let i = 3; i < g.data.length; i += 4) if (g.data[i]) n++; assert.ok(n > 300 && n < 2000, 'dissolve ' + n);
+  const f = new FX.Fluid(32, 32, { scale: 2 }); f.warm(20, (x) => x.add(16, 28, 4, { density: 0.6, heat: 0.6 })); g.clear(); g.fluid(f, 'smoke'); let top = 99; for (let y = 0; y < 48; y++) for (let x = 0; x < 32; x++) if (g.filled(x, y)) top = Math.min(top, y); assert.ok(top < 22, 'smoke rises ' + top);
+  const r = FX.render(`effect({ size:[16,16], frames:4, draw(g,{shake,f}){ const [dx,dy]=shake(3); g.px(8+dx,8+dy,7); } })`); assert.equal(r.frames.length, 4);
+  const big = FX.render(`effect({ size:[600,40], frames:1, draw(g){ g.px(599,0,7); } })`); assert.equal(big.meta.w, 600);
+});
+
+test('Big canvases: 2048 sprites, region ops in tile coordinates, overview + tile grid, detail-keeping downscale', () => {
+  const RS = require('../src/core/resample');
+  const s = SP.create({ name: 'Mural', w: 2048, h: 1024, palette: 'pico8' }); assert.equal(s.w, 2048);
+  assert.equal(RS.tileSize(2048, 1024), 256); const t = RS.tiles(2048, 1024); assert.equal(t.length, 32); assert.equal(t[0].name, 'A1'); assert.equal(t[t.length - 1].name, 'H4');
+  assert.deepEqual(RS.parseRegion('B2', 2048, 1024), { x: 256, y: 256, w: 256, h: 256, name: 'B2' }); assert.deepEqual(RS.parseRegion('B2:C3', 2048, 1024).w, 512);
+  SP.apply(s, [{ op: 'rect', x: 0, y: 0, w: 300, h: 300, color: 8, fill: true }, { op: 'px', x: 10, y: 10, color: 7, region: { x: 500, y: 500, w: 20, h: 20 } }], { region: 'B2' });
+  const c = SP.compose(s, 0); const px = (x, y) => c[(y * 2048 + x) * 4 + 3] ? FX.toHex([c[(y * 2048 + x) * 4], c[(y * 2048 + x) * 4 + 1], c[(y * 2048 + x) * 4 + 2]]) : null;
+  assert.equal(px(256, 256), FX.PALETTES.pico8[8]); assert.equal(px(511, 511), FX.PALETTES.pico8[8]); assert.equal(px(512, 256), null, 'clipped to the tile'); assert.equal(px(255, 255), null);
+  assert.equal(px(510, 510), FX.PALETTES.pico8[7], 'an op region overrides the call region');
+  const o = RS.overview({ w: 2048, h: 1024, data: c }); assert.ok(o.w <= 768 && o.tile === 256);
+  // downscale keeps a 1px dark eye in a big flat face; nearest/majority lose it
+  const face = new FX.Canvas(64, 64, 'pico8'); face.fillCircle(32, 32, 28, 15).fillRect(20, 24, 4, 4, 0).fillRect(40, 24, 4, 4, 0).outline(0);
+  const img = { w: 64, h: 64, data: face.data }; const d = RS.downscale(img, 16, 16); const m = RS.downscale(img, 16, 16, { mode: 'majority' });
+  const dark = (r) => { let n = 0; for (let i = 0; i < r.data.length; i += 4) if (r.data[i + 3] && r.data[i] < 40 && r.data[i + 1] < 40) n++; return n; };
+  assert.ok(dark(d) > dark(m), `detail keeps more dark pixels (${dark(d)} vs ${dark(m)})`);
+  const sm = SP.scaled(SP.fromFrames({ name: 'F', w: 64, h: 64, frames: [face.data, face.data] }), 32, 32); assert.equal(sm.w, 32); assert.equal(sm.frames.length, 2);
+});
+
+test('Detail tools: textures stay on each colour’s ramp, normal maps face out, smooth and cleanup fix corners', () => {
+  const DT = require('../src/core/detail');
+  const g = new FX.Canvas(32, 32, 'pico8'); g.fillRect(0, 0, 32, 32, '#8a7a6a');
+  for (const k of Object.keys(DT.TEXTURES)) { const r = DT.texture(g.data, 32, 32, { kind: k }); assert.ok(r.colors.length >= 1 && r.colors.length <= 4, k + ' ' + r.colors.length); }
+  const b = new FX.Canvas(32, 32, 'pico8'); b.fillCircle(16, 16, 12, 12); const nm = DT.normalMap(b.data, 32, 32);
+  const n = (x, y) => [nm.data[(y * 32 + x) * 4], nm.data[(y * 32 + x) * 4 + 1], nm.data[(y * 32 + x) * 4 + 2]];
+  assert.ok(n(5, 16)[0] < 110 && n(27, 16)[0] > 146, 'left edge points left, right edge right'); assert.ok(n(16, 5)[1] > 146, 'top points up (green up)'); assert.ok(n(16, 16)[2] > 230, 'centre faces the viewer');
+  const lit = DT.relight(b.data, 32, 32, { light: 'left' }); const L = (x, y) => lit.data[(y * 32 + x) * 4] + lit.data[(y * 32 + x) * 4 + 1] + lit.data[(y * 32 + x) * 4 + 2]; assert.ok(L(6, 16) > L(26, 16), 'lit from the left');
+  // stair-step between two colours gets one in-between pixel per inside corner
+  const st = new FX.Canvas(16, 16, 'pico8'); st.fillRect(0, 0, 16, 16, 7); for (let i = 0; i < 4; i++) st.fillRect(0, i * 3, (i + 1) * 3, 3, 0); const sm = DT.smooth(st.data, 16, 16); assert.ok(sm.changed >= 3 && sm.colors.length === 1);
+  // an L corner in a 1px diagonal is removed; a straight line is left alone
+  const l = new FX.Canvas(16, 16, 'pico8'); l.px(2, 2, 7).px(3, 2, 7).px(3, 3, 7).px(4, 4, 7).line(8, 10, 14, 10, 7); const cl = DT.cleanup(l.data, 16, 16);
+  assert.equal(cl.fixed, 1); assert.equal(cl.data[(2 * 16 + 3) * 4 + 3], 0); assert.ok(cl.data[(10 * 16 + 10) * 4 + 3]);
+});
+
+test('Tiles & scenes: 47/16 autotile sets, terrain grids, seams, parallax render, Tiled + Godot exports, plugin tools', async () => {
+  const TL = require('../src/core/tiles'); assert.equal(TL.BLOB.length, 47);
+  const T = 8, mk = (f) => { const c = new FX.Canvas(T, T, 'pico8'); f(c); return { w: T, h: T, data: c.data }; };
+  const pieces = { fill: mk((c) => c.fillRect(0, 0, 8, 8, 11)), top: mk((c) => c.fillRect(0, 2, 8, 6, 11).line(0, 2, 7, 2, 10)), left: mk((c) => c.fillRect(2, 0, 6, 8, 11).line(2, 0, 2, 7, 3)), outer: mk((c) => c.fillRect(2, 2, 6, 6, 11).px(2, 2, null)), inner: mk((c) => c.fillRect(0, 0, 8, 8, 11).fillRect(0, 0, 2, 2, null)) };
+  const ts = TL.autotile(pieces); assert.equal(ts.count, 47); assert.equal(ts.sheet.w, 64);
+  const full = ts.index[255]; assert.ok(full !== undefined); const m = TL.mapIndices(ts, ['###', '###', '###'], { edges: 'open' }); assert.equal(m.cells[1][1], full); assert.equal(m.cells[0][0], ts.index[TL.canon(TL.B.E | TL.B.SE | TL.B.S)]);
+  const s16 = TL.autotile(pieces, { kind: 'sides16' }); assert.equal(s16.count, 16);
+  const tile = mk((c) => c.fillRect(0, 0, 8, 8, 11)); assert.ok(TL.seamCheck(tile).seamless); const bad = mk((c) => c.fillRect(0, 0, 8, 8, 11).fillRect(7, 0, 1, 8, 0)); assert.ok(!TL.seamCheck(bad).seamless);
+  const tsx = TL.tiledTsx(ts, { name: 'Grass', image: 'grass.png' }); assert.ok(/<wangset name="Terrain" type="mixed"/.test(tsx) && (tsx.match(/<wangtile /g) || []).length === 47);
+  const tres = TL.godotTres(ts, { image: 'grass.png' }); assert.ok(/terrain_set_0\/mode = 0/.test(tres) && /terrains_peering_bit\/top_left_corner = 0/.test(tres));
+  // through the plugin
+  const lib = new Library(path.join(tmp, 'tiles')); let active = null;
+  const handle = makeHandlers({ lib, active: () => lib.get(active), setActive: (id) => (active = id), render: async (code, o) => FX.render(code, o), engine: { status: async () => ({}) }, decodeImage: () => null, changed: () => {}, activity: () => {} });
+  const call = async (n, a) => { const r = await handle(n, a, 'Claude'); if (r.isError) throw new Error(n + ': ' + r.content[0].text); return { j: JSON.parse(r.content.find((c) => c.type === 'text').text), img: r.content.find((c) => c.type === 'image') }; };
+  await call('create_project', { name: 'Platformer' });
+  const p = await call('create_sprite', { name: 'Grass pieces', w: 8, h: 8, frames: 5 }); const sp = active && lib.get(active).getSprite(p.j.id);
+  ['fill', 'top', 'left', 'outer', 'inner'].forEach((k, i) => SP.setCel(sp, sp.layers[0].id, sp.frames[i].id, pieces[k].data)); lib.get(active).saveSprite(sp);
+  const mt = await call('make_tileset', { name: 'Grass', sprite: p.j.id }); assert.equal(mt.j.tiles, 47); assert.ok(mt.img);
+  const ct = await call('check_tile', { sprite: p.j.id }); assert.ok(ct.img && 'seamless' in ct.j);
+  const sky = await call('create_sprite', { name: 'Hills', w: 64, h: 32 }); await call('draw_sprite', { sprite: sky.j.id, ops: [{ op: 'ellipse', x: 32, y: 32, rx: 30, ry: 14, color: 3, fill: true }], look: false });
+  const sc = await call('create_scene', { name: 'Level 1', w: 96, h: 64, length: 256 });
+  await call('edit_scene', { scene: sc.j.scene, action: 'add_layer', sprite: sky.j.id, y: 20, depth: 0.3, repeat: 'x' });
+  const ps = await call('paint_scene', { scene: sc.j.scene, tileset: mt.j.tileset, rows: ['............', '...####.....', '############'], y: 40 }); assert.equal(ps.j.cells, '12×3'); assert.ok(ps.img);
+  const v = await call('view', { kind: 'scene', id: sc.j.scene, params: { camera: 100 } }); assert.equal(v.j.layers.length, 2);
+  const big = await call('create_sprite', { name: 'Backdrop', w: 1024, h: 512 }); const vb = await call('view', { kind: 'sprite', id: big.j.id }); assert.ok(/A1…D2/.test(vb.j.tiles), vb.j.tiles);
+  const dr = await call('draw_sprite', { sprite: big.j.id, region: 'B2', ops: [{ op: 'texture', kind: 'stone' }, { op: 'rect', x: 0, y: 0, w: 256, h: 256, color: 5, fill: true }, { op: 'texture', kind: 'stone' }] }); assert.equal(dr.j.region.x, 256);
+  const gs = await call('get_sprite', { sprite: big.j.id, frame: 0, region: { x: 250, y: 256, w: 8, h: 2 } }); assert.equal(gs.j.rows[0].slice(0, 6), '......');
+  const ss = await call('scale_sprite', { sprite: big.j.id, factor: 0.25 }); assert.equal(ss.j.size, '256×128');
+  const ex1 = await call('export', { kind: 'tileset', id: mt.j.tileset, format: 'godot' }); assert.ok(ex1.j.files.some((f) => f.endsWith('.tres')));
+  const ex2 = await call('export', { kind: 'scene', id: sc.j.scene, format: 'tiled' }); assert.ok(ex2.j.files.some((f) => f.endsWith('.tmj')) && ex2.j.files.some((f) => f.endsWith('scene.json')));
+  const rec = await call('record', { kind: 'scene', id: sc.j.scene, formats: ['gif'] }); assert.ok(rec.j.files[0].endsWith('.gif'));
+  const pol = await call('polish_sprite', { sprite: sky.j.id }); assert.ok('corners_cleaned' in pol.j);
+  const nm = await call('normal_map', { sprite: sky.j.id, export: true }); assert.ok(nm.j.exported.length === 2);
+  const tx = await call('texture_sprite', { sprite: sky.j.id, kind: 'grass' }); assert.ok(tx.img);
+});
+
 const fakeComfy = require('./fixtures/fake-comfy');
 const { makeAnimate } = require('../src/animate');
 function greenClip(n = 36, W = 320) {

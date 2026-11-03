@@ -59,6 +59,23 @@ function seed(root) {
   // a reference picture
   const ref = path.join(root, 'poe2-lightning.png'); const r = FX.render(lib('lightning')); fs.writeFileSync(ref, png.encode(sheets.scaleImage({ w: r.meta.w, h: r.meta.h, data: sheets.onBackground(r.frames[1], r.meta.w, r.meta.h, '#0b0f2e') }, 6)));
   p.addRef(ref, 'The white core and the cyan rim — keep the core 1px wide.'); p.patchRef(p.meta.refs[0].id, { title: 'Path of Exile 2 — arc' });
+  // 0.4: a tileset built from five pieces, a big backdrop drawn as SVG and textured, and a parallax scene
+  const TL = require('../../src/core/tiles'), DT = require('../../src/core/detail');
+  const T = 16, G = '#38b764', Lt = '#a7f070', Dk = '#257179', Dirt = '#8a5a3a';
+  const piece = (f) => { const c = new FX.Canvas(T, T, ['#000']); f(c); return { w: T, h: T, data: DT.texture(c.data, T, T, { kind: 'grass', scale: 3, colors: [G] }).data }; };
+  const P5 = { fill: piece((c) => c.fillRect(0, 0, T, T, G)), top: piece((c) => { c.fillRect(0, 4, T, T - 4, G); c.line(0, 4, T - 1, 4, Lt); c.fillRect(0, 5, T, 1, Lt); }), left: piece((c) => { c.fillRect(4, 0, T - 4, T, G); c.line(4, 0, 4, T - 1, Dk); }),
+    outer: piece((c) => { c.fillRect(6, 6, T - 6, T - 6, G).fillRect(4, 8, 2, T - 8, G).fillRect(8, 4, T - 8, 2, G).fillCircle(8, 8, 3.2, G); c.line(8, 4, T - 1, 4, Lt).line(4, 8, 4, T - 1, Dk).px(5, 6, Dk).px(6, 5, Lt).px(5, 7, Dk).px(7, 5, Lt).px(6, 6, G); }),
+    inner: piece((c) => { c.fillRect(0, 0, T, T, G).fillRect(0, 0, 4, 4, null).line(0, 4, 3, 4, Lt).line(4, 0, 4, 3, Dk); }) };
+  const pieces = SP.create({ name: 'Grass pieces', w: T, h: T, palette: [G, Lt, Dk, Dirt], frames: 5 }); ['fill', 'top', 'left', 'outer', 'inner'].forEach((k, i) => SP.setCel(pieces, pieces.layers[0].id, pieces.frames[i].id, P5[k].data)); p.saveSprite(pieces);
+  const ts = TL.autotile(P5); const tset = SP.create({ name: 'Grass', w: ts.sheet.w, h: ts.sheet.h, palette: [G, Lt, Dk], frames: 1 }); SP.setCel(tset, tset.layers[0].id, tset.frames[0].id, ts.sheet.data); tset.tileset = { tile: T, kind: ts.kind, cols: ts.cols, masks: ts.masks, count: ts.count, terrain: 'Grass' }; p.saveSprite(tset);
+  const skySvg = `<svg viewBox="0 0 640 180"><rect width="640" height="180" fill="#29366f"/><rect y="70" width="640" height="110" fill="#3b5dc9"/><rect y="120" width="640" height="60" fill="#41a6f6"/><circle cx="470" cy="60" r="26" fill="#ffcd75"/><circle cx="470" cy="60" r="20" fill="#f4f4f4"/></svg>`;
+  const sky = SP.create({ name: 'Sky', w: 640, h: 180, palette: [], frames: 1 }); SP.apply(sky, [{ op: 'svg', svg: skySvg, mode: 'replace' }]); delete sky._warnings; p.saveSprite(sky);
+  const hillsSvg = `<svg viewBox="0 0 320 90"><path d="M0 90 L0 50 Q40 20 80 46 Q120 70 160 40 Q200 12 240 42 Q280 66 320 50 L320 90 Z" fill="#257179"/><path d="M0 90 L0 70 Q50 52 100 68 Q150 82 200 64 Q260 46 320 70 L320 90 Z" fill="#38b764"/></svg>`;
+  const hills = SP.create({ name: 'Hills', w: 320, h: 90, palette: [], frames: 1 }); SP.apply(hills, [{ op: 'svg', svg: hillsSvg, mode: 'replace' }, { op: 'texture', kind: 'grass', scale: 4, colors: ['#38b764'] }]); delete hills._warnings; p.saveSprite(hills);
+  const castleSvg = `<svg viewBox="0 0 512 384"><rect x="96" y="120" width="320" height="240" fill="#8b9bb4"/><rect x="64" y="64" width="96" height="296" fill="#94b0c2"/><rect x="352" y="64" width="96" height="296" fill="#94b0c2"/><path d="M64 64 L112 8 L160 64 Z" fill="#b13e53"/><path d="M352 64 L400 8 L448 64 Z" fill="#b13e53"/><rect x="216" y="248" width="80" height="112" rx="38" fill="#333c57"/><rect x="112" y="150" width="24" height="40" fill="#1a1c2c"/><rect x="376" y="150" width="24" height="40" fill="#1a1c2c"/><rect x="0" y="352" width="512" height="32" fill="#38b764"/></svg>`;
+  const castle = SP.create({ name: 'Castle backdrop', w: 512, h: 384, palette: [], frames: 1 }); SP.apply(castle, [{ op: 'svg', svg: castleSvg, mode: 'replace' }, { op: 'texture', kind: 'bricks', scale: 5, colors: ['#8b9bb4', '#94b0c2'] }, { op: 'texture', kind: 'grass', colors: ['#38b764'] }, { op: 'outline', color: '#1a1c2c' }]); delete castle._warnings; p.saveSprite(castle);
+  const terr = Array.from({ length: 12 }, (_, y) => (y < 7 ? '.'.repeat(60) : y === 7 ? '.'.repeat(14) + '######' + '.'.repeat(16) + '#####' + '.'.repeat(19) : y === 8 ? '####' + '.'.repeat(8) + '##########' + '.'.repeat(10) + '###########' + '.'.repeat(4) + '#'.repeat(13) : '#'.repeat(60)));
+  p.saveScene({ name: 'Level 1 — Meadow', w: 320, h: 180, background: '#29366f', length: 960, layers: [{ id: 'sl1', kind: 'sprite', name: 'Sky', sprite: sky.id, x: 0, y: 0, depth: 0, repeat: 'x' }, { id: 'sl2', kind: 'sprite', name: 'Hills', sprite: hills.id, x: 0, y: 92, depth: 0.35, repeat: 'x' }, { id: 'sl3', kind: 'tiles', name: 'Grass', tileset: tset.id, tile: T, x: 0, y: -12, depth: 1, rows: terr }, { id: 'sl4', kind: 'sprite', name: 'Slime', sprite: s.id, x: 120, y: 100, depth: 1, animate: true }] });
   L.create('Football Hub site');
   return { L, p, board: b, ids };
 }
@@ -134,6 +151,24 @@ function seed(root) {
   console.log('local Animate (stand-in ComfyUI):', comfy.seen.graphs.length, 'graph(s),', await win.evaluate(() => document.querySelector('#cvBi').textContent));
   await win.keyboard.press('Escape'); await win.waitForTimeout(400); await shot('26-animate-clips', 1500);
   await theme('light'); await shot('26-animate-clips-light', 900); await theme('dark'); comfy.close();
+  // 0.4: tiles & scenes, a big canvas in the editor, the texture brush, normal map sheet, more starter effects
+  await go('tiles'); await win.waitForSelector('[data-scene] canvas'); await shot('27-tiles', 1800);
+  const scId = await win.evaluate(() => TS.scenes[0].id); await go('scene', scId); await win.waitForSelector('#scCv'); await shot('28-scene', 1500);
+  await win.click('#scLayers .ly:nth-child(2)'); await win.waitForSelector('#lpPaint'); await win.click('#lpPaint'); await win.waitForTimeout(500);
+  const gb = await win.$('#scGrid'); const bb = await gb.boundingBox(); await win.mouse.move(bb.x + bb.width * 0.62, bb.y + bb.height * 0.45); await win.mouse.down(); await win.mouse.move(bb.x + bb.width * 0.8, bb.y + bb.height * 0.45, { steps: 8 }); await win.mouse.up();
+  await shot('29-scene-paint', 1500);
+  await win.evaluate(() => { TS.cam = 400; paintScene(); }); await shot('29b-scene-pan', 1200);
+  await theme('light'); await shot('28-scene-light', 900); await theme('dark');
+  await go('tiles'); await win.click('#tsNewSet'); await win.waitForSelector('#tnGo'); await shot('30-new-tileset', 700); await win.keyboard.press('Escape');
+  const cid = await win.evaluate(() => S.sprites.find((s) => s.name === 'Castle backdrop').id); await go('editor', cid); await win.waitForSelector('#tlFrames .tf'); await shot('31-big-canvas', 1200);
+  const t0 = Date.now(); await win.evaluate(() => { setTool('pencil'); }); const cvb = await (await win.$('#edCanvas canvas')).boundingBox(); await win.mouse.move(cvb.x + cvb.width * 0.3, cvb.y + cvb.height * 0.3); await win.mouse.down(); for (let i = 0; i < 30; i++) await win.mouse.move(cvb.x + cvb.width * (0.3 + i * 0.01), cvb.y + cvb.height * (0.3 + i * 0.006)); await win.mouse.up(); console.log('big canvas: 30 pencil moves in', Date.now() - t0, 'ms');
+  console.log('big canvas undo keeps a box:', await win.evaluate(() => { const u = E.undo[E.undo.length - 1]; return u && u.kind === 'box' ? `${u.w}×${u.h}` : u && u.kind; }));
+  await win.evaluate(() => setTool('texture')); await win.waitForSelector('#eoTex'); await win.selectOption('#eoTex', 'scales'); await win.click('#edOpts [data-tb="32"]');
+  await win.mouse.move(cvb.x + cvb.width * 0.45, cvb.y + cvb.height * 0.62); await win.mouse.down(); await win.waitForTimeout(400); for (let i = 0; i < 12; i++) await win.mouse.move(cvb.x + cvb.width * (0.45 + i * 0.006), cvb.y + cvb.height * 0.62); await win.mouse.up(); await win.waitForTimeout(300);
+  console.log('texture brush painted:', await win.evaluate(() => { const u = E.undo[E.undo.length - 1]; return u && u.kind === 'box' ? `${u.w}×${u.h}` : String(u && u.kind); }));
+  await shot('32-texture-brush', 600);
+  await go('editor', wid); await win.waitForSelector('#tlFrames .tf'); await win.evaluate(() => lightSheet()); await win.waitForSelector('#lmApply'); await shot('33-light-sheet', 1500); await win.keyboard.press('Escape');
+  await go('library'); await shot('34-library-more', 2500);
   await go('drafts');
   await win.evaluate(() => askClaude('Make 6 drafts of a coin pickup')); await shot('13-ask', 600); await win.keyboard.press('Escape');
   // the pixelize sheet on a soft AI-ish picture

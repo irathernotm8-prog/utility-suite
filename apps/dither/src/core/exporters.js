@@ -42,9 +42,9 @@ ${RUNTIME_SRC()}
 return module.exports; })();
 
 let DEF = null;
-(function (effect, Canvas, PALETTES, RAMPS) {
+(function (effect, Canvas, PALETTES, RAMPS, Fluid) {
 ${code}
-})(function (d) { DEF = d; return d; }, DitherFX.Canvas, DitherFX.PALETTES, DitherFX.RAMPS);
+})(function (d) { DEF = d; return d; }, DitherFX.Canvas, DitherFX.PALETTES, DitherFX.RAMPS, DitherFX.Fluid);
 
 export const meta = ${JSON.stringify({ name: meta.name, w: meta.w, h: meta.h, frames: meta.n, durations: meta.durations, loop: meta.loop, params: meta.params })};
 
@@ -67,4 +67,28 @@ export default createEffect;
 }
 function writeModule(dir, code, meta) { const f = path.join(dir, `${jsName(meta.name)}.js`); fs.writeFileSync(f, effectModule(code, meta)); return f; }
 
-module.exports = { writeSheet, writeGif, writeFrames, writeContact, writeModule, effectModule, fileBase, jsName };
+// tilesets: 'tiled' (.png + .tsx with a Wang set + a demo .tmj map), 'godot' (.png + .tres TileSet with terrains), 'sheet' (.png + JSON)
+function writeTileset(dir, s, format = 'tiled') {
+  const SP = require('./sprite'), TL = require('./tiles'), SC = require('./scenes'); const ts = SC.tilesetOf(s); const base = fileBase(s.name); const out = [];
+  const pngFile = path.join(dir, `${base}.png`); fs.writeFileSync(pngFile, png.encode(ts.sheet)); out.push(pngFile);
+  if (format === 'godot') { const f = path.join(dir, `${base}.tres`); fs.writeFileSync(f, TL.godotTres(ts, { image: `${base}.png`, terrain: s.tileset.terrain || s.name })); out.push(f); }
+  else if (format === 'sheet') { const f = path.join(dir, `${base}.json`); fs.writeFileSync(f, JSON.stringify({ image: `${base}.png`, tile: ts.tile, columns: ts.cols, kind: ts.kind, bits: 'N=1 NE=2 E=4 SE=8 S=16 SW=32 W=64 NW=128 (corners only count when both sides next to them are set)', tiles: ts.masks.map((m, i) => ({ index: i, mask: m })) }, null, 1)); out.push(f); }
+  else { const tsx = path.join(dir, `${base}.tsx`); fs.writeFileSync(tsx, TL.tiledTsx(ts, { name: s.name, image: `${base}.png`, terrain: s.tileset.terrain || s.name })); out.push(tsx); const demo = TL.mapIndices(ts, TL.DEMO, { edges: 'open' }); const tmj = path.join(dir, `${base} demo.tmj`); fs.writeFileSync(tmj, TL.tiledTmj(ts, demo.cells, { tsx: `${base}.tsx` })); out.push(tmj); }
+  void SP; return out;
+}
+// scenes: 'png' (camera at 0), 'gif' (a pan), 'layers' (one PNG per layer + scene.json with depth/repeat for parallax in a game), 'tiled' (each terrain layer as .tmj + its tileset .tsx)
+function writeScene(dir, proj, sc, format = 'layers', { scale } = {}) {
+  const SC = require('./scenes'), TL = require('./tiles'); const base = fileBase(sc.name); const out = [];
+  if (format === 'png') { const f = path.join(dir, `${base}.png`); const img = SC.render(proj, sc); fs.writeFileSync(f, png.encode(scale > 1 ? sheets.scaleImage(img, scale) : img)); return [f]; }
+  if (format === 'gif') { const r = SC.pan(proj, sc, { frames: 48 }); return [writeGif(path.join(dir, `${base}.gif`), r.frames, r.w, r.h, { durations: r.durations, scale: scale || 2, loop: true })]; }
+  const sub = path.join(dir, base); fs.mkdirSync(sub, { recursive: true }); const cache = new Map(); const layers = [];
+  sc.layers.forEach((l, i) => {
+    const img = SC.layerImage(proj, l, 0, cache); const name = `${String(i).padStart(2, '0')} ${fileBase(l.name)}`;
+    if (format === 'tiled' && l.kind === 'tiles') { const s = proj.getSprite(l.tileset); const files = writeTileset(sub, s, 'tiled'); const ts = SC.tilesetOf(s); const m = TL.mapIndices(ts, l.rows, { edges: l.edges || 'open' }); const f = path.join(sub, `${name}.tmj`); fs.writeFileSync(f, TL.tiledTmj(ts, m.cells, { tsx: `${fileBase(s.name)}.tsx`, name: l.name })); out.push(...files.filter((x) => !/demo/.test(x)), f); }
+    const f = path.join(sub, `${name}.png`); fs.writeFileSync(f, png.encode(img)); out.push(f); layers.push({ name: l.name, file: path.basename(f), x: l.x || 0, y: l.y || 0, depth: l.depth ?? 1, repeat: l.repeat || null, w: img.w, h: img.h });
+  });
+  const j = path.join(sub, 'scene.json'); fs.writeFileSync(j, JSON.stringify({ name: sc.name, view: [sc.w, sc.h], length: sc.length, background: sc.background, parallax: 'layer screen x = x - cameraX * depth (depth 0 stays put, 1 moves with the world)', layers }, null, 1)); out.push(j);
+  return [...new Set(out)];
+}
+
+module.exports = { writeTileset, writeScene, writeSheet, writeGif, writeFrames, writeContact, writeModule, effectModule, fileBase, jsName };

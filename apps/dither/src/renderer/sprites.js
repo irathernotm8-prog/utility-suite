@@ -10,7 +10,7 @@ VIEWS.sprites = {
     $$('.fx-card', view).forEach((el) => {
       const id = el.dataset.id; const st = $('.d-stage', el); const cv = document.createElement('canvas'); st.appendChild(cv);
       const p = new Player(cv, { pad: 10, max: 8, bg: S.settings.previewBg || 'checker' });
-      call('sprites:frames', id).then((r) => { if (!p.disposed) p.set(r.frames, r.meta); st.classList.remove('loading'); }).catch(() => st.classList.remove('loading'));
+      call('sprites:frames', id, 176).then((r) => { if (!p.disposed) p.set(r.frames, r.meta); st.classList.remove('loading'); }).catch(() => st.classList.remove('loading'));
       st.onclick = () => go('editor', id); $('.d-more', el).onclick = (e) => spriteMenu(e.currentTarget, id);
     });
   },

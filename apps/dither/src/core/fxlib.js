@@ -244,4 +244,6 @@ const LIB = [
   },
 ];
 
+LIB.push(...require('./fxlib2').LIB2);
+
 module.exports = { LIB };

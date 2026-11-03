@@ -57,6 +57,24 @@ Post: g.outline(c,{corners}) · g.replace(from,to) · g.shift(dx,dy,wrap) · g.f
 g.symmetry(mirrorX, mirrorY) — mirror every following draw call · g.clip = [x,y,w,h] | null
 g.blit(img,x,y,{flipX,flipY,scale,tint}) — draw another {w,h,data} (e.g. g.copy()) · g.ramp(nameOrArray, t) → colour
 
+## The effects toolkit (use these before hand-rolling loops; they are fast, seeded and loop-safe)
+Colours lists below accept a ramp name ('fire', 'smoke', 'magic', …), a palette name, or a list of slots/hex, ordered young/hot/bright → old/cool/dim.
+g.particles(spec, t) — a whole particle system as a pure function of t, so streams loop seamlessly:
+  { x, y, count, seed, emit:'burst'|'stream', start, spread, angle:[a,b] (radians, 0 = right, -PI/2 = up), speed:[a,b] (pixels travelled over one life),
+    life:[a,b] (fraction of the effect), drag (0–5, eases out), gravity (pixels fallen by end of life; negative rises), wind:[x,y],
+    area:[w,h] | radius (where they spawn), size:[a,b] (radius), grow (−1…1), shape:'px'|'dot'|'square'|'spark', streak (spark length), colors, fade (dither out at end, default true) }
+  Pass a sub-range of t for bursts that start later: g.particles(spec, range(t, 0.2, 1)).
+g.trail(path, t, { length, steps, colors, width, from, wrap }) — a fading streak behind path(t) → [x,y] (projectiles, swooshes, comets)
+g.shockwave(cx, cy, r, { thickness, colors (outer→inner), squash (0.3 = ground ring seen from the side), breakup 0–1, segments, seed, fade 0–1 })
+g.bolt(x1, y1, x2, y2, { seed, jag, detail, branches, colors (core→glow), width:1 for a thin fork }) — lightning; change seed per frame to flicker. g.lastBolt = its points.
+g.flames(x, y, w, h, t, { colors, scale, turbulence, speed, seed }) — a seamless looping fire column in a box (periodic noise)
+new Fluid(w, h, { scale, buoyancy, cooling, fade, wind, turbulence, iterations }) — smoke/steam/poison simulation. Make it in setup(), warm it up with fl.warm(steps, (fl,i) => fl.add(...)) so frame 0 isn't empty,
+  then per frame: fl.add(x, y, r, { density, heat, vx, vy }); fl.step(); g.fluid(fl, colors, { field:'density'|'heat', threshold, gain }). Fluid loops are near-seamless, not exact.
+g.cycle(colors, shift) — palette cycling: pixels in the list move shift steps along it (water, lava, shimmering rims). Draw once, cycle by f.
+g.flash(c, amount) — hit flash (dithered toward one colour) · g.dissolve(level 0–1, { seed, scale, edge: colours, width }) — burn/dissolve away
+ctx.shake(amount) → [dx, dy] for this frame, then g.shift(dx, dy) · ctx.pnoise(x, y, periodX, periodY) — noise that repeats (scroll by a whole period for seamless loops) · ctx.lnoise(x, y, t, r) — noise that loops over t
+Sizes: effects can be up to 1024×1024 (sprites 2048×2048). Keep big effects to few frames and use the toolkit rather than per-pixel loops.
+
 Built-in palettes:
 ${pals}
 
@@ -66,7 +84,7 @@ ${ramps}
 Performance: every frame has a budget (the whole render must finish in a few seconds). Per-pixel loops over 64×64 × 24 frames are fine; nested particle × pixel loops over large canvases are not.
 
 ## Starter library
-Call list_library / get_library_effect for working examples (explosion, slash, lightning, fire loop, heal, black hole, rain, pickup sparkle, hit impact). Start from one when it fits, then make it the user's own.
+Call list_library / get_library_effect for working examples — 30 of them, including fireball, meteor impact, portal, shield bubble, level up, tornado, ice shatter, poison cloud (Fluid), torch (flames), electric arc (bolt), waterfall and lava (cycle), teleport (dissolve), snowfall and confetti (particles). Start from one when it fits, then make it the user's own.
 
 ## Sprites
 create_sprite makes a document (w×h, palette, frames). draw_sprite applies ops to a frame/layer and returns the result.
@@ -76,6 +94,22 @@ Ops (JSON objects with "op"): ${OPS.join(', ')}.
 - flood {x,y,color} · dither {x,y,w,h,color,level} · outline {color,corners} · replace {from,to} · shift {dx,dy,wrap} · flip {axis:'x'|'y'} · clear {x?,y?,w?,h?} · text {text,x,y,color,scale}
 - Any op can carry "frame" (index from 0) and "layer" (id or name) to target another cel, and "mirror": 'x'|'y'|'both'.
 edit_sprite handles frames (add, duplicate, delete, move, durations), layers, tags, palette and resize.
+- texture {kind:'stone'|'bricks'|'scales'|'bark'|'wood'|'weave'|'grass'|'metal'|'sand'|'noise', colors?, scale?, seed?, strength?, x?,y?,w?,h?} — paints a pattern into flat colours using each colour's own ramp (texture_sprite is the same with a before/after)
+- cleanup {} — removes doubled corners in 1px diagonals and lone strays · smooth {background?, minRun?} — selective anti-aliasing in inside corners (polish_sprite runs both)
+- relight {light} — re-lights the art from its normal map, snapping to each colour's ramp (normal_map shows/exports the map)
+
+## Big canvases (up to 2048×2048: scenes, backgrounds, splash art, big bosses)
+Over ~256px, view returns an overview with a labelled tile grid (A1 top-left; letters across, numbers down; 64/128/256px tiles by size). Work tile by tile:
+- view region:"B2" (or "B2:C3", or {x,y,w,h}) for a gridded close-up; get_sprite region:"B2" for exact rows.
+- draw_sprite region:"B2" — every op's coordinates start at that tile's top-left and nothing outside it changes (svg, shade and texture work inside the box too). The picture you get back is the zoomed tile.
+- Block in the whole composition first with draw_svg at full size (big shapes, flats), then shade, then detail tile by tile, then critique.
+scale_sprite makes smaller versions (e.g. a 128px portrait → 64 → 32 for an icon) that keep eyes, outlines and highlights; always finish them by hand.
+
+## Tiles and scenes
+make_tileset builds a whole autotile set (47 blob tiles, or 16 sides-only) from five drawn tiles: fill, top edge, left edge, outer corner (top-left) and inner corner (top-left), with transparency outside the terrain; pass bottom/right too when lighting differs. Put them in one sprite as frames 1–5 (create_sprite frames:5, draw each), then make_tileset sprite:<id>.
+check_tile tests a tile for seams (fix:"offset" to move the seams to the middle and repaint them; fix:"blend").
+Scenes: create_scene (viewport w×h, a world length), edit_scene add_layer for sprites back to front with depth (0 sky that never moves, 0.2–0.5 distant layers, 1 the play layer, >1 foreground) and repeat:"x" for skies, hills and clouds; paint_scene sets a terrain layer from rows of "#"/"." and picks every edge and corner tile. view kind:"scene" (params {camera:x}) and record kind:"scene" pans across it.
+Export tilesets for Tiled (.tsx with a Wang set) or Godot 4 (.tres with terrains), and scenes as layers + scene.json (parallax), tiled maps, PNG or a GIF pan.
 ## Detailed sprites: work in passes
 Placing thousands of pixels one by one gives flat, noisy art. Build detailed sprites the way pixel artists do, and look after every pass (each tool returns a picture):
 1. Silhouette + flats — draw_svg. Write an SVG whose viewBox is the sprite's pixel size (viewBox="0 0 48 48" for a 48×48 sprite), one flat colour per material. Big shapes first, then features.

@@ -19,6 +19,10 @@ const engine = require('./engine');
 const connectors = require('./connectors');
 const ai = require('./ai');
 const { makeHandlers } = require('./mcp-handlers');
+const detail = require('./core/detail');
+const tiles = require('./core/tiles');
+const scenes = require('./core/scenes');
+const resample = require('./core/resample');
 
 const IS_MAC = process.platform === 'darwin';
 if (process.env.DITHER_USER_DATA) app.setPath('userData', process.env.DITHER_USER_DATA);
@@ -91,7 +95,7 @@ function appMenu() {
     ...(IS_MAC ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, { label: 'Settings…', accelerator: 'Cmd+,', click: go('settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     { label: 'File', submenu: [{ label: 'New sprite…', accelerator: 'CmdOrCtrl+N', click: go('new-sprite') }, { label: 'New effect', accelerator: 'CmdOrCtrl+Shift+N', click: go('new-effect') }, { label: 'New project…', click: go('new-project') }, { type: 'separator' }, { label: 'Pixelize a picture…', click: go('pixelize') }, { type: 'separator' }, IS_MAC ? { role: 'close' } : { role: 'quit' }] },
     { role: 'editMenu' },
-    { label: 'View', submenu: [{ label: 'Drafts', accelerator: 'CmdOrCtrl+1', click: go('drafts') }, { label: 'Effects', accelerator: 'CmdOrCtrl+2', click: go('effects') }, { label: 'Sprites', accelerator: 'CmdOrCtrl+3', click: go('sprites') }, { label: 'Animate', accelerator: 'CmdOrCtrl+4', click: go('animate') }, { label: 'References', accelerator: 'CmdOrCtrl+5', click: go('refs') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: 'View', submenu: [{ label: 'Drafts', accelerator: 'CmdOrCtrl+1', click: go('drafts') }, { label: 'Effects', accelerator: 'CmdOrCtrl+2', click: go('effects') }, { label: 'Sprites', accelerator: 'CmdOrCtrl+3', click: go('sprites') }, { label: 'Animate', accelerator: 'CmdOrCtrl+4', click: go('animate') }, { label: 'Tiles & scenes', accelerator: 'CmdOrCtrl+6', click: go('tiles') }, { label: 'References', accelerator: 'CmdOrCtrl+5', click: go('refs') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(t));
@@ -138,7 +142,7 @@ h('boards:remove', (id) => { P().removeBoard(id); changed('board', id); return t
 // sprites
 h('sprites:list', () => P().listSprites());
 h('sprites:get', (id) => P().getSprite(id));
-h('sprites:frames', (id) => { const s = P().getSprite(id); return { meta: { w: s.w, h: s.h, n: s.frames.length, durations: s.frames.map((f) => f.duration), loop: true }, frames: SP.composeAll(s) }; });
+h('sprites:frames', (id, max) => { const s = P().getSprite(id); let frames = SP.composeAll(s), w = s.w, hh = s.h; if (max && Math.max(w, hh) > max) { const sm = frames.map((f) => resample.shrink({ w, h: hh, data: f }, max)); frames = sm.map((x) => x.data); w = sm[0].w; hh = sm[0].h; } return { meta: { w, h: hh, n: s.frames.length, durations: s.frames.map((f) => f.duration), loop: true, full: [s.w, s.h] }, frames }; });
 h('sprites:create', (opts) => { const s = SP.create(opts); P().saveSprite(s); changed('sprite', s.id); return s; });
 h('sprites:save', (s) => { P().saveSprite(SP.hydrate(s)); return { id: s.id, updatedAt: Date.now() }; });
 h('sprites:remove', (id) => { P().removeSprite(id); changed('sprite', id); return true; });
@@ -147,11 +151,31 @@ h('sprites:bake', async (effectId) => { const r = await handle('bake_effect', { 
 h('sprites:import', async (file, opts = {}) => {
   const img = decodeImage(file); let res = img, pal = null;
   if (opts.snap) { const r = snap.snap(img, opts); res = r.img; pal = r.palette; }
-  if (res.w > 512 || res.h > 512) throw new Error(`That picture is ${res.w}×${res.h}. Pixelize it (or pick a target width) to bring it under 512×512.`);
+  if (res.w > 2048 || res.h > 2048) throw new Error(`That picture is ${res.w}×${res.h}. Pixelize it (or pick a target width) to bring it under 2048×2048.`);
   const s = SP.create({ name: opts.name || path.basename(file).replace(/\.[^.]+$/, ''), w: res.w, h: res.h, palette: pal && pal.length ? pal.slice(0, 64) : (sheets.colorsUsed([res.data]).length <= 64 ? sheets.colorsUsed([res.data]).map((c) => c.color) : 'pico8') });
   SP.setCel(s, s.layers[0].id, s.frames[0].id, res.data); P().saveSprite(s); changed('sprite', s.id); return s.id;
 });
 h('pixelize:preview', (file, opts = {}) => { const img = decodeImage(file); const r = snap.snap(img, opts); return { w: r.img.w, h: r.img.h, data: r.img.data, grid: r.grid, palette: r.palette, source: { w: img.w, h: img.h } }; });
+
+// 0.4: detail tools, tiles and scenes (the window uses the same core code as Claude's tools)
+h('kit:texture', (cel, w, hh, opts = {}) => detail.texture(new Uint8ClampedArray(cel), w, hh, opts));
+h('kit:smooth', (cel, w, hh, opts = {}) => detail.smooth(new Uint8ClampedArray(cel), w, hh, opts));
+h('kit:cleanup', (cel, w, hh, opts = {}) => detail.cleanup(new Uint8ClampedArray(cel), w, hh, opts));
+h('kit:normal', (cel, w, hh, opts = {}) => { const r = detail.normalMap(new Uint8ClampedArray(cel), w, hh, opts); const lit = (opts.lights || []).map((l) => detail.relight(new Uint8ClampedArray(cel), w, hh, { ...opts, light: l, normals: r.normals }).data); return { data: r.data, lit }; });
+h('kit:relight', (cel, w, hh, opts = {}) => detail.relight(new Uint8ClampedArray(cel), w, hh, opts));
+h('kit:seams', (cel, w, hh, fix) => { let img = { w, h: hh, data: new Uint8ClampedArray(cel) }; if (fix) img = tiles.makeSeamless(img, { mode: fix }); return { check: tiles.seamCheck(img), data: img.data }; });
+h('kit:textures', () => detail.TEXTURES);
+h('tool', (name, args) => viaTool(name, args));
+h('tiles:pieces', ({ name, tile, palette }) => { const s = SP.create({ name: name || 'Terrain pieces', w: tile, h: tile, palette: palette || 'sweetie16', frames: 5 }); s.tags = [{ name: 'fill', from: 0, to: 0 }, { name: 'top edge', from: 1, to: 1 }, { name: 'left edge', from: 2, to: 2 }, { name: 'outer corner', from: 3, to: 3 }, { name: 'inner corner', from: 4, to: 4 }].map((t) => ({ ...t, direction: 'forward' })); s.piecesFor = 'tileset'; P().saveSprite(s); changed('sprite', s.id); return s.id; });
+h('tiles:demo', (id) => { const ts = scenes.tilesetOf(P().getSprite(id)); return tiles.renderMap(ts, tiles.DEMO, { edges: 'open' }).img; });
+h('scenes:list', () => P().listScenes());
+h('scenes:get', (id) => P().getScene(id));
+h('scenes:save', (sc) => { const r = P().saveScene(sc); changed('scene', r.id); return r; });
+h('scenes:create', (o) => { const r = P().saveScene(scenes.blankScene(o)); changed('scene', r.id); return r; });
+h('scenes:remove', (id) => { P().removeScene(id); changed('scene', id); return true; });
+h('scenes:render', (sc, camX = 0, ms = 0) => scenes.render(P(), typeof sc === 'string' ? P().getScene(sc) : sc, { camX, ms }));
+h('scenes:layer', (l) => scenes.layerImage(P(), l));
+h('scenes:map', (tilesetId, rows, edges) => { const ts = scenes.tilesetOf(P().getSprite(tilesetId)); return { ...tiles.renderMap(ts, rows, { edges: edges || 'open' }).img, tile: ts.tile }; });
 
 // the detail kit: vectors, shading, critique (the window's editor uses the same code as Claude's tools)
 const vector = require('./core/vector'); const shadeKit = require('./core/shade'); const critic = require('./core/critic');

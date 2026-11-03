@@ -18,6 +18,14 @@ A pixel-art and pixel-animation studio built for working with Claude, Codex and 
   - **On this computer:** Wan 2.2 TI2V 5B through the ComfyUI that Kiln runs, free and private. One click downloads the three model files (~18 GB) into Kiln's library. **Cloud:** your own fal.ai key (stored encrypted) with Kling 3.0 or Wan; the endpoint id is editable if fal renames it.
   - **Make a sprite:** the green screen is keyed out (chroma distance, edge-only despill, the compressed rim and stray specks removed), the character is held in place by its feet (or sideways only), the loop point is found, frames are picked evenly, scaled down with a majority vote, mapped to one shared palette and de-flickered. Live preview with height, frames, colours, palette, hold, screen removal and outline; **Keep** makes a normal sprite you can Shade and Critique.
   - **Import** any MP4, MOV, WebM, GIF or animated WebP (a 3D render, green-screen footage) and convert it the same way.
+- **Bigger and more detailed (0.4).**
+  - **Big canvases** up to 2048×2048 (effects up to 1024): backdrops, splash art, big bosses. The editor only redraws what changed, zooms out below 1×, shows a tile grid, and undo stores just the changed box. Claude sees big sprites as an overview with named tiles (A1, B2 …) and works tile by tile: `view region:"B2"`, `draw_sprite region:"B2"` (coordinates start at the tile), `get_sprite region`.
+  - **Smaller copies** (`scale_sprite`, editor ⋯ › Make a smaller copy): each new pixel takes the colour that matters most in its box, so eyes, outlines and highlights survive.
+  - **Texture brush** and `texture_sprite`: stone, bricks, scales, bark, wood, weave, grass, metal, sand or noise, painted in each colour's own hue-shifted ramp so it stays on-palette.
+  - **Polish edges** (`polish_sprite`): removes doubled corners in 1px diagonals and lone strays, and adds one in-between colour in the inside corners of stair-steps.
+  - **Normal map & light** (`normal_map`): a normal map from the silhouette and values, exported as a sheet for 2D lights in Godot/Unity, and relighting from any direction (snapped back to each colour's ramp).
+- **Effects toolkit (0.4).** `g.particles` (bursts and seamlessly looping streams, as a pure function of t), `g.trail`, `g.shockwave`, `g.bolt`, `g.flames` (periodic noise, loops with no seam), `Fluid` (a small smoke/steam/poison simulation), `g.cycle` (palette cycling), `g.flash`, `g.dissolve`, `shake()`, `pnoise`/`lnoise`. **21 new starter effects** use them: fireball, meteor impact, portal, shield bubble, level up, tornado, ice shatter, poison cloud, smoke puff, dust landing, water splash, waterfall, lava pool, torch, electric arc, healing aura, confetti, teleport, magic circle, snowfall and campfire with smoke.
+- **Tiles & scenes (0.4).** Draw five tiles (fill, top edge, left edge, outer corner, inner corner) and **New tileset** builds the full 47-tile blob set (or the 16-tile sides set). `check_tile` and the editor's tile preview find seams (wrap by half or dither them together). **Scenes** are a camera over a wider world: sprite layers with parallax depth and repeat, terrain layers painted cell by cell (the right edge/corner tile is picked for you), animated sprites, a pan preview. Export tilesets for **Tiled** (.tsx with a Wang set) or **Godot 4** (.tres with terrain peering bits), and scenes as layers + `scene.json`, Tiled maps, PNG or a GIF pan.
 - **References.** Drop in screenshots of things you like and note why. Claude can look at them with `view`.
 - **Starter effects.** Nine working effects to read, remix and learn the kit from: explosion, slash, lightning, campfire loop, heal, black hole, rain, pickup sparkle and hit impact.
 - **Generate & pixelize.** A local model, with no tokens and nothing leaving the computer. Dither uses the Stable Diffusion engine that Kiln runs (Forge, A1111, SD.Next or ComfyUI) with the free **Pixel Art XL** LoRA (one-click install into Kiln's library). **Pixel snap** then finds the hidden grid, takes one colour per cell, reduces the palette and clears the background. Pixelize does the same for any picture.
@@ -31,7 +39,7 @@ A pixel-art and pixel-animation studio built for working with Claude, Codex and 
 
 ## The plugin (Claude Desktop, Claude Code, Codex)
 
-Use **Connections** to add it with one click; each config file is backed up first. The MCP server is `mcp/dither-mcp.js`. It runs with Dither's own Electron as Node and forwards calls to the running app over a private local bridge (127.0.0.1 plus a token in `bridge.json`), starting Dither hidden if it isn't open. Tools: `dither_guide`, `dither_context`, `create_project`, `set_active_project`, `list_library`, `get_library_effect`, `try_effect`, `create_drafts`, `create_effect`, `update_effect`, `get_effect`, `list_effects`, `get_feedback`, `view`, `list_references`, `create_sprite`, `draw_sprite`, `draw_svg`, `shade_sprite`, `make_ramp`, `critique`, `get_sprite`, `edit_sprite`, `bake_effect`, `record`, `export`, `pixelize_image`, `generate_image`, `animate_status`, `animate_character`, `import_clip`, `list_clips`, `clip_to_sprite`, `delete_item`.
+Use **Connections** to add it with one click; each config file is backed up first. The MCP server is `mcp/dither-mcp.js`. It runs with Dither's own Electron as Node and forwards calls to the running app over a private local bridge (127.0.0.1 plus a token in `bridge.json`), starting Dither hidden if it isn't open. Tools: `dither_guide`, `dither_context`, `create_project`, `set_active_project`, `list_library`, `get_library_effect`, `try_effect`, `create_drafts`, `create_effect`, `update_effect`, `get_effect`, `list_effects`, `get_feedback`, `view`, `list_references`, `create_sprite`, `draw_sprite`, `draw_svg`, `shade_sprite`, `make_ramp`, `critique`, `get_sprite`, `edit_sprite`, `bake_effect`, `record`, `export`, `pixelize_image`, `generate_image`, `animate_status`, `animate_character`, `import_clip`, `list_clips`, `clip_to_sprite`, `scale_sprite`, `texture_sprite`, `polish_sprite`, `normal_map`, `make_tileset`, `check_tile`, `create_scene`, `edit_scene`, `paint_scene`, `delete_item`.
 
 Every tool that makes pixels returns a **picture**, either a numbered contact sheet or a board of every draft, so the AI sees what it drew. `get_sprite` can return a frame as rows of palette slots, so the AI can read pixels exactly. The full contract Claude reads is in `src/core/guide.js` and `mcp/guide-instructions.js`.
 
@@ -46,8 +54,8 @@ Effect code never runs in the window or the main process. It runs in a hidden **
 ```bash
 npm install
 npm start
-npm test                                        # 19 Node checks: the clip → sprite pipeline and both Animate engines (a stand-in ComfyUI and a mocked fal.ai), vectors, shading, the critic, PNG/GIF codecs, the kit, every starter effect, Pixel snap, sprites, sheets, the JS module, projects, the plugin handlers end to end, the MCP server over stdio
-xvfb-run node test/e2e/shots.js /tmp/shots      # (Linux) seeds a project, clicks through every screen in dark + light, draws in the editor, records a GIF + WebM, checks the sandbox stops endless loops and blocks the network, imports a real H.264 clip, runs Animate on a stand-in ComfyUI, and drives the real MCP server → bridge → app
+npm test                                        # 23 Node checks: the effects toolkit and 30 starters, big canvases and tile regions, detail tools, tilesets/scenes and their exports, the clip → sprite pipeline and both Animate engines (a stand-in ComfyUI and a mocked fal.ai), vectors, shading, the critic, PNG/GIF codecs, the kit, every starter effect, Pixel snap, sprites, sheets, the JS module, projects, the plugin handlers end to end, the MCP server over stdio
+xvfb-run node test/e2e/shots.js /tmp/shots      # (Linux) seeds a project, clicks through every screen in dark + light, draws in the editor, records a GIF + WebM, checks the sandbox stops endless loops and blocks the network, imports a real H.264 clip, runs Animate on a stand-in ComfyUI, builds a scene and paints terrain, draws and texture-brushes on a 512px canvas, and drives the real MCP server → bridge → app
 python3 build/make-icon.py                      # the icon
 ```
 
@@ -56,7 +64,7 @@ python3 build/make-icon.py                      # the icon
 | | |
 |---|---|
 | `src/core/fxruntime.js` | The pixel canvas, drawing kit, palettes, ramps, font, noise, easing and the effect player. Plain JS that runs in the sandbox, in Node and inside exported modules |
-| `src/core/fxlib.js` | Starter effects |
+| `src/core/fxlib.js`, `fxlib2.js` | Starter effects (`fxlib2.js`: the ones built on the 0.4 toolkit) |
 | `src/core/sprite.js` | Sprite documents (layers × frames of RGBA cels), drawing ops, compose, (de)serialise |
 | `src/core/project.js` | Projects on disk, effects with versions and feedback, boards, references |
 | `src/core/pixelsnap.js` | Grid detection (edge phase coherence), per-cell colour, k-means/palette mapping, background removal, orphan clean-up |
@@ -64,6 +72,10 @@ python3 build/make-icon.py                      # the icon
 | `src/core/vector.js` | SVG subset → pixels: pixel-centre fills, pixel-perfect strokes, dithered gradients/opacity, material tags |
 | `src/core/shade.js` | Materials, hue-shifted ramps, normals from forms, lighting, contact shadows, selective outline, clean-up |
 | `src/core/critic.js` | The pixel-art critic and zoomed crops |
+| `src/core/resample.js` | Detail-keeping downscale, thumbnails, tile names and the overview picture for big canvases |
+| `src/core/detail.js` | Textures, normal maps and relighting, selective anti-aliasing, corner clean-up |
+| `src/core/tiles.js` | Autotile (47/16) from five pieces, terrain grids, seam check/fix, parallax render, Tiled/Godot exports |
+| `src/core/scenes.js` | Scenes in a project: layer pictures, render for a camera, pans |
 | `src/core/clip2sprite.js` | Clip → sprite: green-screen keyer, alignment, loop finder, downsampling, shared palette, de-flicker |
 | `src/video.js` | Motion presets and the guard prompt, the Wan 2.2 ComfyUI graph, fal.ai queue (Kling 3.0 / Wan), resumable downloads |
 | `src/animate.js` | Animate: source on green, generate, import, preview/keep, Wan install into Kiln |
@@ -75,9 +87,9 @@ python3 build/make-icon.py                      # the icon
 | `src/fxhost.js`, `src/sandbox/` | The sandboxed render window + worker, WebM recording, video/GIF frame extraction |
 | `src/engine.js` | Local Stable Diffusion (A1111/Forge/ComfyUI), Pixel Art XL install into Kiln |
 | `src/ai.js` | Finding Claude Code / Codex and running Ask |
-| `src/renderer/` | The window: `drafts.js`, `effects.js` (list + lab), `sprites.js`, `editor.js`, `refs.js`, `animate.js`, `make.js`, `more.js` (starter effects, connections, settings), `player.js` |
+| `src/renderer/` | The window: `drafts.js`, `effects.js` (list + lab), `sprites.js`, `editor.js`, `refs.js`, `animate.js`, `tiles.js` (tiles & scenes, scene editor), `make.js`, `more.js` (starter effects, connections, settings), `player.js` |
 
 ## Data
 
-- Projects: `~/Documents/Dither/<Project>/` (change it in Settings). Each has `dither.json` (boards, references), `sprites/*.dsprite`, `effects/<id>/` (`effect.json`, then `v1.js`, `v2.js` and so on), `refs/`, `clips/<id>/` (clip.json, frames, source.png), `records/`, `exports/` and `.trash/`.
+- Projects: `~/Documents/Dither/<Project>/` (change it in Settings). Each has `dither.json` (boards, references), `sprites/*.dsprite`, `effects/<id>/` (`effect.json`, then `v1.js`, `v2.js` and so on), `refs/`, `clips/<id>/` (clip.json, frames, source.png), `scenes/<id>.json`, `records/`, `exports/` and `.trash/`.
 - App data: `settings.json`, `bridge.json` (the plugin's private connection), `mcp/` (the installed MCP script) and `ask/` (scratch space for Ask).

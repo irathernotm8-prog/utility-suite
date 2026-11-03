@@ -15,6 +15,10 @@ const { LIB } = require('./core/fxlib');
 const { guideText } = require('./core/guide');
 const SH = require('./core/shade');
 const CR = require('./core/critic');
+const RS = require('./core/resample');
+const DT = require('./core/detail');
+const TL = require('./core/tiles');
+const SC = require('./core/scenes');
 
 const text = (v) => ({ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v, null, 1) });
 const image = (img) => ({ type: 'image', data: png.encode(img).toString('base64'), mimeType: 'image/png' });
@@ -34,7 +38,17 @@ function makeHandlers(ctx) {
   }
   const sheetFor = (r, title) => sheets.contactSheet(r.frames, r.meta.w, r.meta.h, { title, durations: r.meta.durations });
   const fbOf = (m) => ({ verdict: m.feedback?.verdict || null, stars: m.feedback?.stars || 0, open_notes: (m.feedback?.notes || []).map((n, i) => ({ index: i, ...n })).filter((n) => !n.done).map(({ index, text: t, frame, v, at }) => ({ index, note: t, frame, on_version: v, at: new Date(at).toISOString() })), resolved_notes: (m.feedback?.notes || []).filter((n) => n.done).length });
-  const spriteImg = (s, frames, scale) => { const fr = (frames || s.frames.map((_, i) => i)).map((i) => SP.compose(s, i)); return sheets.contactSheet(fr, s.w, s.h, { title: s.name, durations: s.frames.map((f) => f.duration), scale }); };
+  // big sprites come back as an overview (one frame: with its tile grid and names) instead of a huge picture
+  const spriteImg = (s, frames, scale) => {
+    const list = frames || s.frames.map((_, i) => i); const big = Math.max(s.w, s.h) > 256;
+    if (big && list.length === 1) return RS.overview({ w: s.w, h: s.h, data: SP.compose(s, list[0]) });
+    let fr = list.map((i) => SP.compose(s, i)), w = s.w, h = s.h;
+    if (big) { const k = 256 / Math.max(w, h); const sm = fr.map((f) => RS.downscale({ w, h, data: f }, w * k, h * k, { mode: 'majority' })); fr = sm.map((x) => x.data); w = sm[0].w; h = sm[0].h; }
+    return sheets.contactSheet(fr, w, h, { title: s.name + (big ? ` (shrunk from ${s.w}×${s.h})` : ''), durations: list.map((i) => s.frames[i].duration), scale });
+  };
+  const bigNote = (s) => (Math.max(s.w, s.h) > 128 ? { tiles: `${RS.tileSize(s.w, s.h) || s.w}px tiles ${RS.tiles(s.w, s.h)[0].name}…${RS.tiles(s.w, s.h).slice(-1)[0].name} (letters across, numbers down)`, how: 'Big canvas: look closer with view region:"B2" (or "B2:C3", or {x,y,w,h}); draw inside one with draw_sprite region:"B2" (coordinates then start at that tile’s top-left); read pixels with get_sprite region.' } : {});
+  const crop = (d, w, r) => { const o = new Uint8ClampedArray(r.w * r.h * 4); for (let j = 0; j < r.h; j++) o.set(d.subarray(((r.y + j) * w + r.x) * 4, ((r.y + j) * w + r.x + r.w) * 4), j * r.w * 4); return { w: r.w, h: r.h, data: o }; };
+  const zoomImg = (c, scale) => { const sc = scale || Math.max(1, Math.min(24, Math.floor(720 / Math.max(c.w, c.h)))); return sc >= 4 ? gridded(c, sc) : sheets.scaleImage(c, sc); };
 
   const H = {
     dither_guide: () => ok(text(guideText())),
@@ -112,17 +126,18 @@ function makeHandlers(ctx) {
     view: async ({ kind, id, frame, scale, params, project, version, region }) => {
       const proj = P(project);
       if (region && (kind === 'effect' || kind === 'sprite')) {
-        const f = await framesOf(proj, kind, id); const fi = Math.max(0, Math.min(f.frames.length - 1, (frame || 1) - 1)); const c = CR.crop(f.frames[fi], f.meta.w, f.meta.h, region);
-        const sc = scale || Math.max(4, Math.min(24, Math.floor(480 / Math.max(c.w, c.h))));
-        return ok(text({ id, frame: fi + 1, region: { x: region.x | 0, y: region.y | 0, w: c.w, h: c.h }, scale: sc, note: 'Pixel grid at 1 square per pixel; coordinates are sprite pixels.' }), image(gridded(c, sc)));
+        const f = await framesOf(proj, kind, id); const fi = Math.max(0, Math.min(f.frames.length - 1, (frame || 1) - 1)); const r = RS.parseRegion(region, f.meta.w, f.meta.h); const c = crop(f.frames[fi], f.meta.w, r);
+        const sc = scale || Math.max(1, Math.min(24, Math.floor(720 / Math.max(c.w, c.h))));
+        return ok(text({ id, frame: fi + 1, region: { name: r.name, x: r.x, y: r.y, w: c.w, h: c.h }, scale: sc, note: sc >= 4 ? 'Pixel grid at 1 square per pixel (every 8th line stronger); coordinates are sprite pixels.' : 'Zoomed crop.' }), image(zoomImg(c, sc)));
       }
       if (kind === 'effect') { const r = await renderEffect(proj, id, { version, params }); const fr = frame ? [r.frames[Math.max(0, Math.min(r.frames.length - 1, frame - 1))]] : r.frames; return ok(text({ id: r.e.id, name: r.e.name, version: r.e.version, ...summaryOf(r.meta, r.frames) }), image(sheets.contactSheet(fr, r.meta.w, r.meta.h, { title: `${r.e.name} v${r.e.version}`, scale, durations: frame ? null : r.meta.durations }))); }
-      if (kind === 'sprite') { const s = proj.getSprite(id); return ok(text({ id: s.id, name: s.name, size: `${s.w}×${s.h}`, frames: s.frames.length, layers: s.layers.map((l) => l.name) }), image(spriteImg(s, frame ? [frame - 1] : null, scale))); }
+      if (kind === 'sprite') { const s = proj.getSprite(id); return ok(text({ id: s.id, name: s.name, size: `${s.w}×${s.h}`, frames: s.frames.length, layers: s.layers.map((l) => l.name), tileset: s.tileset ? { tile: s.tileset.tile, kind: s.tileset.kind, tiles: s.tileset.masks.length } : undefined, ...bigNote(s) }), image(spriteImg(s, frame ? [frame - 1] : Math.max(s.w, s.h) > 256 ? [0] : null, scale))); }
+      if (kind === 'scene') { const sc = proj.getScene(id); const img = SC.render(proj, sc, { camX: params && params.camera || 0 }); return ok(text({ id: sc.id, name: sc.name, size: `${sc.w}×${sc.h}`, length: sc.length, layers: sc.layers.map((l) => ({ id: l.id, name: l.name, kind: l.kind, depth: l.depth, repeat: l.repeat || undefined })), note: 'Pass params:{camera:x} to look further along the scene.' }), image(sheets.scaleImage(img, Math.max(1, Math.min(4, Math.floor(960 / sc.w)))))); }
       if (kind === 'reference') { const r = proj.meta.refs.find((x) => x.id === id || x.title === id); if (!r) return err('No such reference. Use list_references.'); const img = ctx.decodeImage(proj.p('refs', r.file)); const s = Math.min(1, 1200 / Math.max(img.w, img.h)); return ok(text({ id: r.id, title: r.title, note: r.note }), image(s < 1 ? shrink(img, s) : img)); }
       if (kind === 'board') { const b = proj.getBoard(id || 'latest'); const rows = []; for (const eid of b.items) { try { const r = await renderEffect(proj, eid); rows.push({ label: `${r.e.name}${r.e.feedback?.verdict ? ' (' + r.e.feedback.verdict + ')' : ''}`, frames: r.frames, w: r.meta.w, h: r.meta.h }); } catch {} } return ok(text({ board: b.id, idea: b.idea }), rows.length ? image(sheets.boardSheet(rows)) : null); }
       if (kind === 'library') { return H.get_library_effect({ id }); }
       if (kind === 'clip') { if (!ctx.animate) return err('No clips here'); const r = ctx.animate.rawPreview(id, { count: 12, max: 160 }); return ok(text({ clip: r.clip.id, name: r.clip.name, frames: r.clip.n, fps: r.clip.fps, loop: r.clip.loop, next: 'Turn it into pixel art with clip_to_sprite (keep:false to preview first).' }), image(sheets.contactSheet(r.frames, r.w, r.h, { title: `${r.clip.name}: video frames` }))); }
-      return err('kind must be effect, sprite, clip, reference, board or library');
+      return err('kind must be effect, sprite, scene, clip, reference, board or library');
     },
 
     list_references: ({ project }) => ok(text(P(project).meta.refs.map((r) => ({ id: r.id, title: r.title, note: r.note || undefined })))),
@@ -133,12 +148,13 @@ function makeHandlers(ctx) {
       return ok(text({ id: s.id, name: s.name, size: `${s.w}×${s.h}`, frames: s.frames.length, layer: s.layers[0].name, palette: s.palette.map((c, i) => `${i.toString(36)}=${c}`).join(' ') }));
     },
 
-    draw_sprite: ({ sprite, ops, frame, layer, look, project }) => {
+    draw_sprite: ({ sprite, ops, frame, layer, look, region, project }) => {
       if (!Array.isArray(ops)) return err('ops must be an array of draw ops (see dither_guide)');
       const proj = P(project); const s = proj.getSprite(sprite);
-      const touched = SP.apply(s, ops, { frame: frame || 0, layer });
+      const touched = SP.apply(s, ops, { frame: frame || 0, layer, region });
       const warnings = s._warnings; delete s._warnings; proj.saveSprite(s); ctx.changed('sprite', s.id);
       const frames = [...new Set(touched.map((k) => s.frames.findIndex((f) => f.id === k.split('/')[1])))].sort((a, b) => a - b);
+      if (region && look !== false) { const r = RS.parseRegion(region, s.w, s.h); return ok(text({ id: s.id, changed_frames: frames.map((i) => i + 1), ops: ops.length, region: r, warnings }), image(zoomImg(crop(SP.compose(s, frames[0] ?? frame ?? 0), s.w, r)))); }
       return ok(text({ id: s.id, changed_frames: frames.map((i) => i + 1), ops: ops.length, warnings }), look === false ? null : image(spriteImg(s, frames.length ? frames : [frame || 0])));
     },
 
@@ -175,15 +191,16 @@ function makeHandlers(ctx) {
       return ok(text({ ...r.summary, issues: r.issues.map(({ n, type, severity, x, y, w, h, frame: fr, message }) => ({ n, type, severity, at: x != null ? { x, y, w, h } : undefined, frame: fr, message })), how: 'Numbers match the boxes on the picture. Fix majors first; take another look with view (region) to see an area up close.' }), image(r.image));
     },
 
-    get_sprite: ({ sprite, frame, layer, as, project }) => {
+    get_sprite: ({ sprite, frame, layer, as, region, project }) => {
       const s = P(project).getSprite(sprite);
       const info = { id: s.id, name: s.name, w: s.w, h: s.h, palette: s.palette.map((c, i) => `${i.toString(36)}=${c}`).join(' '), layers: s.layers.map((l) => ({ id: l.id, name: l.name, visible: l.visible })), frames: s.frames.map((f, i) => ({ index: i, duration: f.duration })), tags: s.tags };
       if (as === 'rows' || frame !== undefined) {
         const fi = frame || 0; const l = layer ? s.layers.find((x) => x.id === layer || x.name === layer) : null;
         const d = l ? SP.getCel(s, l.id, s.frames[fi].id) || new Uint8ClampedArray(s.w * s.h * 4) : SP.compose(s, fi);
         const pal = s.palette.map(FX.hex); const extra = {}; let ex = 0;
-        const rows = []; for (let y = 0; y < s.h; y++) { let r = ''; for (let x = 0; x < s.w; x++) { const i = (y * s.w + x) * 4; if (!d[i + 3]) { r += '.'; continue; } const k = pal.findIndex((p) => p[0] === d[i] && p[1] === d[i + 1] && p[2] === d[i + 2]); if (k >= 0 && k < 36) r += k.toString(36); else { const hx = FX.toHex([d[i], d[i + 1], d[i + 2]]); if (!extra[hx]) extra[hx] = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[ex++] || '?'; r += extra[hx]; } } rows.push(r); }
-        info.frame = fi; info.rows = rows; if (ex) info.off_palette = Object.fromEntries(Object.entries(extra).map(([h, k]) => [k, h]));
+        const R = region ? RS.parseRegion(region, s.w, s.h) : { x: 0, y: 0, w: s.w, h: s.h }; if (!region && s.w * s.h > 160 * 160) return ok(text({ ...info, ...bigNote(s), rows: undefined, note: 'Too big to return as rows: pass region (a tile name like "B2" or {x,y,w,h}).' }));
+        const rows = []; for (let y = R.y; y < R.y + R.h; y++) { let r = ''; for (let x = R.x; x < R.x + R.w; x++) { const i = (y * s.w + x) * 4; if (!d[i + 3]) { r += '.'; continue; } const k = pal.findIndex((p) => p[0] === d[i] && p[1] === d[i + 1] && p[2] === d[i + 2]); if (k >= 0 && k < 36) r += k.toString(36); else { const hx = FX.toHex([d[i], d[i + 1], d[i + 2]]); if (!extra[hx]) extra[hx] = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[ex++] || '?'; r += extra[hx]; } } rows.push(r); }
+        info.frame = fi; if (region) info.region = R; info.rows = rows; if (ex) info.off_palette = Object.fromEntries(Object.entries(extra).map(([h, k]) => [k, h]));
       }
       return ok(text(info));
     },
@@ -227,7 +244,8 @@ function makeHandlers(ctx) {
     },
 
     export: async ({ kind = 'effect', id, format = 'sheet', dest, scale, cols, padding, project }) => {
-      const proj = P(project); const { name, frames, meta, code } = await framesOf(proj, kind, id);
+      const proj = P(project);
+      if (kind === 'tileset' || kind === 'scene') { const dir = dest ? home(dest) : proj.outDir('exports'); fs.mkdirSync(dir, { recursive: true }); const files = kind === 'tileset' ? EX.writeTileset(dir, proj.getSprite(id), format) : EX.writeScene(dir, proj, proj.getScene(id), format, { scale }); ctx.activity(`Exported ${kind} (${format})`); return ok(text({ files })); } const { name, frames, meta, code } = await framesOf(proj, kind, id);
       const dir = dest ? home(dest) : proj.outDir('exports'); fs.mkdirSync(dir, { recursive: true }); let files;
       if (format === 'sheet') files = EX.writeSheet(dir, name, frames, meta.w, meta.h, { durations: meta.durations, cols, padding });
       else if (format === 'gif') files = [EX.writeGif(path.join(dir, `${EX.fileBase(name)}.gif`), frames, meta.w, meta.h, { durations: meta.durations, scale: scale || 1, loop: meta.loop !== false })];
@@ -281,9 +299,85 @@ function makeHandlers(ctx) {
       return ok(text({ sprite: r.sprite, size: `${r.w}×${r.h}`, frames: r.frames, info: r.info, next: 'Check it with view/critique; shade_sprite can re-light it, draw_sprite fixes details.' }), image(spriteImg(s)));
     },
 
+    // ───────── 0.4: big canvases, detail tools, tiles and scenes
+    scale_sprite: ({ sprite, w, h, factor, mode, name, project }) => {
+      const proj = P(project); const s = proj.getSprite(sprite); let W = w, H = h;
+      if (factor) { W = Math.round(s.w * factor); H = Math.round(s.h * factor); } else if (W && !H) H = Math.round(s.h * W / s.w); else if (H && !W) W = Math.round(s.w * H / s.h);
+      if (!W || !H) return err('Give w and/or h (pixels), or factor (e.g. 0.5)'); if (W > s.w || H > s.h) return err('scale_sprite makes smaller versions. To make the canvas bigger, use edit_sprite action "resize".');
+      const n = SP.scaled(s, W, H, { mode: mode || 'detail', name }); proj.saveSprite(n); ctx.changed('sprite', n.id); ctx.activity(`Made a ${W}×${H} version of “${s.name}”`, { sprite: n.id });
+      return ok(text({ sprite: n.id, name: n.name, size: `${W}×${H}`, from: `${s.w}×${s.h}`, mode: mode || 'detail', next: 'Small versions always need a hand pass: check eyes, outlines and single-pixel details with view region, fix with draw_sprite, then critique.' }), image(sheets.contactSheet([RS.downscale({ w: s.w, h: s.h, data: SP.compose(s, 0) }, W, H, { mode: 'nearest' }).data, SP.compose(n, 0)], W, H, { title: `nearest vs ${mode || 'detail'}`, cols: 2 })));
+    },
+
+    texture_sprite: ({ sprite, kind, colors, scale, seed, strength, region, frames, layer, material, project }) => {
+      const proj = P(project); const s = proj.getSprite(sprite); const list = frames === 'all' ? s.frames.map((_, i) => i) : [].concat(frames ?? 0);
+      const before = SP.compose(s, list[0]); SP.apply(s, list.map((f) => ({ op: 'texture', kind, colors, scale, seed, strength, material, frame: f, layer })), { region });
+      proj.saveSprite(s); ctx.changed('sprite', s.id);
+      const R = region ? RS.parseRegion(region, s.w, s.h) : null; const a = R ? crop(before, s.w, R) : { w: s.w, h: s.h, data: before }, b = R ? crop(SP.compose(s, list[0]), s.w, R) : { w: s.w, h: s.h, data: SP.compose(s, list[0]) };
+      return ok(text({ sprite: s.id, texture: kind || 'noise', frames: list.map((i) => i + 1), kinds: DT.TEXTURES, palette_size: s.palette.length }), image(sheets.contactSheet([a.data, b.data], a.w, a.h, { title: 'before / after', cols: 2, maxW: 900 })));
+    },
+
+    polish_sprite: ({ sprite, smooth, cleanup, background, frames, layer, min_run, project }) => {
+      const proj = P(project); const s = proj.getSprite(sprite); const list = frames === 'all' ? s.frames.map((_, i) => i) : [].concat(frames ?? 0); const ops = [];
+      for (const f of list) { if (cleanup !== false) ops.push({ op: 'cleanup', frame: f, layer }); if (smooth !== false) ops.push({ op: 'smooth', background, minRun: min_run, frame: f, layer }); }
+      const before = SP.compose(s, list[0]); SP.apply(s, ops); const st = s._stats || {}; delete s._stats; proj.saveSprite(s); ctx.changed('sprite', s.id);
+      return ok(text({ sprite: s.id, frames: list.map((i) => i + 1), corners_cleaned: st.fixed || 0, pixels_smoothed: st.smoothed || 0, note: background ? undefined : 'Edges against transparency were left hard (pass background:"#rrggbb" to smooth them against a known backdrop).' }), image(sheets.contactSheet([before, SP.compose(s, list[0])], s.w, s.h, { title: 'before / after', cols: 2, maxW: 900 })));
+    },
+
+    normal_map: async ({ sprite, light, apply, export: exp, bulge, detail, by, project }) => {
+      const proj = P(project); const s = proj.getSprite(sprite); const maps = s.frames.map((_, i) => DT.normalMap(SP.compose(s, i), s.w, s.h, { bulge, detail, by }));
+      const parts = [{ w: s.w, h: s.h, data: SP.compose(s, 0) }, { w: s.w, h: s.h, data: maps[0].data }]; const res = { sprite: s.id };
+      for (const l of [].concat(light || ['top-left', 'right'])) parts.push({ w: s.w, h: s.h, data: DT.relight(SP.compose(s, 0), s.w, s.h, { light: l, normals: maps[0].normals }).data });
+      if (exp) { const files = EX.writeSheet(proj.outDir('exports'), `${s.name} normal`, maps.map((m) => m.data), s.w, s.h, { durations: s.frames.map((f) => f.duration) }); res.exported = files; res.how = 'Pair the normal-map sheet with the colour sheet (same layout) in Godot (CanvasTexture normal), Unity (Secondary Texture _NormalMap) or any 2D-lights shader.'; }
+      if (apply) { SP.apply(s, s.frames.map((_, i) => ({ op: 'relight', light: typeof apply === 'string' ? apply : [].concat(light || 'top-left')[0], bulge, detail, frame: i }))); proj.saveSprite(s); ctx.changed('sprite', s.id); res.applied = true; }
+      return ok(text({ ...res, shows: 'sprite · normal map · relit with each light' }), image(sheets.contactSheet(parts.map((p) => p.data), s.w, s.h, { title: `${s.name}: normals and relighting`, cols: parts.length, maxW: 1000 })));
+    },
+
+    make_tileset: ({ name, pieces, sprite, kind, terrain, project }) => {
+      const proj = P(project); const P5 = {};
+      if (sprite) { const s = proj.getSprite(sprite); const order = ['fill', 'top', 'left', 'outer', 'inner', 'bottom', 'right']; s.frames.slice(0, 7).forEach((f, i) => (P5[order[i]] = { w: s.w, h: s.h, data: SP.compose(s, i) })); }
+      for (const [k, v] of Object.entries(pieces || {})) { const ref = typeof v === 'string' ? { sprite: v } : v; const s = proj.getSprite(ref.sprite); P5[k] = { w: s.w, h: s.h, data: SP.compose(s, ref.frame || 0) }; }
+      const ts = TL.autotile(P5, { kind }); const t = SP.create({ name: name || 'Tileset', w: ts.sheet.w, h: ts.sheet.h, palette: [], frames: 1 });
+      SP.setCel(t, t.layers[0].id, t.frames[0].id, ts.sheet.data); t.tileset = { tile: ts.tile, kind: ts.kind, cols: ts.cols, masks: ts.masks, count: ts.count, terrain: terrain || name || 'Terrain' };
+      const used = new Set(); for (let i = 0; i < ts.sheet.data.length; i += 4) if (ts.sheet.data[i + 3]) used.add(FX.toHex([ts.sheet.data[i], ts.sheet.data[i + 1], ts.sheet.data[i + 2]])); t.palette = [...used].slice(0, 256);
+      proj.saveSprite(t); ctx.changed('sprite', t.id); ctx.activity(`Built tileset “${t.name}” (${ts.count} tiles)`, { sprite: t.id });
+      const demo = TL.renderMap(ts, TL.DEMO, { edges: 'open' }).img;
+      return ok(text({ tileset: t.id, tiles: ts.count, kind: ts.kind, tile_px: ts.tile, next: 'Use it in a scene: create_scene, then paint_scene with rows of "#" (terrain) and "." (empty) — the right tile is picked for every cell. Export for Tiled/Godot with export kind:"tileset".' }), image(sheets.contactSheet([demo.data], demo.w, demo.h, { title: `${t.name}: demo map`, maxW: 900 })));
+    },
+
+    check_tile: ({ sprite, frame, fix, project }) => {
+      const proj = P(project); const s = proj.getSprite(sprite); const fi = frame || 0; const img = { w: s.w, h: s.h, data: SP.compose(s, fi) }; const r = TL.seamCheck(img); let out = img;
+      if (fix) { out = TL.makeSeamless(img, { mode: fix }); SP.setCel(s, s.layers[s.layers.length - 1].id, s.frames[fi].id, out.data); for (const l of s.layers.slice(0, -1)) SP.setCel(s, l.id, s.frames[fi].id, null); proj.saveSprite(s); ctx.changed('sprite', s.id); }
+      const rep = TL.repeat(out, 3, 3); return ok(text({ sprite: s.id, ...r, fixed: fix || undefined, after: fix ? TL.seamCheck(out) : undefined, how: r.seamless ? 'Tiles cleanly.' : 'fix:"offset" wraps the tile by half so the seams sit in the middle for you to repaint; fix:"blend" dithers the edges into each other.' }), image(sheets.contactSheet([rep.data], rep.w, rep.h, { title: 'tiled 3×3', maxW: 900 })));
+    },
+
+    create_scene: ({ name, w, h, width, height, background, length, project }) => {
+      const proj = P(project); const sc = proj.saveScene(SC.blankScene({ name, w: w || width, h: h || height, background, length })); ctx.changed('scene', sc.id); ctx.activity(`Started scene “${sc.name}”`);
+      return ok(text({ scene: sc.id, size: `${sc.w}×${sc.h}`, length: sc.length, next: 'Add layers back to front with edit_scene action:"add_layer" (sprites with depth 0–1 for parallax and repeat:"x" for skies/hills) and paint_scene for terrain.' }));
+    },
+
+    edit_scene: ({ scene, action, layer, name, sprite, frame, x, y, depth, repeat, animate, visible, background, w, h, length, to, project }) => {
+      const proj = P(project); const sc = proj.getScene(scene); const L = layer ? sc.layers.find((l) => l.id === layer || l.name === layer) : null; const set = (o) => { for (const [k, v] of Object.entries({ name, sprite, frame, x, y, depth, repeat, animate, visible })) if (v !== undefined) o[k] = v; };
+      if (action === 'add_layer') { if (!sprite) return err('add_layer needs sprite (for terrain use paint_scene)'); const l = { id: SP.uid('sl'), kind: 'sprite', name: name || proj.getSprite(sprite).name, sprite, x: 0, y: 0, depth: 1 }; set(l); sc.layers.push(l); }
+      else if (action === 'update_layer') { if (!L) return err('No such layer'); set(L); }
+      else if (action === 'remove_layer') { if (!L) return err('No such layer'); sc.layers = sc.layers.filter((l) => l !== L); }
+      else if (action === 'move_layer') { if (!L) return err('No such layer'); const i = sc.layers.indexOf(L); sc.layers.splice(i, 1); sc.layers.splice(Math.max(0, Math.min(sc.layers.length, to ?? i)), 0, L); }
+      else if (action === 'set') { if (name) sc.name = name; if (background !== undefined) sc.background = background; if (w) sc.w = w; if (h) sc.h = h; if (length) sc.length = length; }
+      else return err('action: add_layer, update_layer, remove_layer, move_layer (to = index, 0 = back), set');
+      proj.saveScene(sc); ctx.changed('scene', sc.id); return H.view({ kind: 'scene', id: sc.id, project });
+    },
+
+    paint_scene: ({ scene, layer, tileset, rows, x, y, depth, name, edges, project }) => {
+      const proj = P(project); const sc = proj.getScene(scene); if (!Array.isArray(rows) || !rows.length) return err('rows: an array of strings, "#" = terrain, "." = empty (one character per tile)');
+      let L = layer ? sc.layers.find((l) => l.id === layer || l.name === layer) : null;
+      if (!L) { if (!tileset) return err('Give tileset (a tileset sprite from make_tileset) for a new terrain layer'); L = { id: SP.uid('sl'), kind: 'tiles', name: name || 'Terrain', tileset, x: x || 0, y: y || 0, depth: depth ?? 1 }; sc.layers.push(L); }
+      if (tileset) L.tileset = tileset; L.rows = rows; if (x !== undefined) L.x = x; if (y !== undefined) L.y = y; if (depth !== undefined) L.depth = depth; if (edges) L.edges = edges;
+      const ts = SC.tilesetOf(proj.getSprite(L.tileset)); L.tile = ts.tile; proj.saveScene(sc); ctx.changed('scene', sc.id);
+      const r = TL.renderMap(ts, rows, { edges: L.edges || 'open' }); return ok(text({ scene: sc.id, layer: L.id, cells: `${r.cells[0].length}×${r.cells.length}`, px: `${r.img.w}×${r.img.h}` }), image(sheets.scaleImage(SC.render(proj, sc), Math.max(1, Math.min(4, Math.floor(960 / sc.w))))));
+    },
+
     delete_item: ({ kind, id, project }) => {
       const proj = P(project);
-      if (kind === 'effect') { const m = proj.resolveEffect(id); proj.removeEffect(m.id); } else if (kind === 'sprite') proj.removeSprite(proj.getSprite(id).id); else if (kind === 'board') proj.removeBoard(id); else return err('kind: effect, sprite or board');
+      if (kind === 'effect') { const m = proj.resolveEffect(id); proj.removeEffect(m.id); } else if (kind === 'sprite') proj.removeSprite(proj.getSprite(id).id); else if (kind === 'board') proj.removeBoard(id); else if (kind === 'scene') proj.removeScene(id); else return err('kind: effect, sprite, scene or board');
       ctx.changed(kind, id); return ok(text({ deleted: id, note: 'Moved to the project’s .trash folder' }));
     },
   };
@@ -291,8 +385,9 @@ function makeHandlers(ctx) {
   async function framesOf(proj, kind, id, version) {
     if (kind === 'effect') { const r = await renderEffect(proj, id, { version }); return { name: r.e.name, frames: r.frames, meta: r.meta, code: r.e.code }; }
     if (kind === 'sprite') { const s = proj.getSprite(id); return { name: s.name, frames: SP.composeAll(s), meta: { w: s.w, h: s.h, n: s.frames.length, durations: s.frames.map((f) => f.duration), loop: true } }; }
+    if (kind === 'scene') { const sc = proj.getScene(id); const r = SC.pan(proj, sc, { frames: 36 }); return { name: sc.name, frames: r.frames, meta: { w: r.w, h: r.h, n: r.frames.length, durations: r.durations, loop: true } }; }
     if (kind === 'library') { const l = LIB.find((x) => x.id === id); if (!l) throw new Error('No such library effect'); const r = await ctx.render(l.code); return { name: l.name, frames: r.frames, meta: r.meta, code: l.code }; }
-    throw new Error('kind must be effect, sprite or library');
+    throw new Error('kind must be effect, sprite, scene or library');
   }
 
   return async (name, args, client) => {
