@@ -86,6 +86,13 @@ register('elements', {
         out.append(g);
         if (!q) out.append(h('p.tiny.dim', { style: { marginTop: '6px' } }, 'Drop any photo onto a frame to fill it.'));
       }
+      if (!q || 'html code web video motion animation clip'.includes(q)) {
+        out.append(h('div.sec', h('h4', 'Code & motion')));
+        out.append(h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' } },
+          h('button.btn', { title: 'Write (or paste) HTML/CSS at the design size. Animations become video.', html: ico('code-xml') + '<span>HTML layer</span>', on: { click: () => import('../modals/html-editor.js').then((m) => m.openHtmlEditor()) } }),
+          h('button.btn', { title: 'Add a video clip (MP4, MOV, WebM…)', html: ico('clapperboard') + '<span>Video clip</span>', on: { click: () => import('../video-layer.js').then((m) => m.pickVideo(ensureEditor())) } })));
+        out.append(h('p.tiny.dim', { style: { marginTop: '6px' } }, 'Or let Claude or ChatGPT design it for you in the AI design tab.'));
+      }
       if (!q || 'qr code link url'.includes(q)) {
         out.append(h('div.sec', h('h4', 'QR code')));
         const inp = h('input.input', { placeholder: 'https://… or any text', style: { flex: 1 }, on: { keydown: (e) => { if (e.key === 'Enter') go(); e.stopPropagation(); } } });

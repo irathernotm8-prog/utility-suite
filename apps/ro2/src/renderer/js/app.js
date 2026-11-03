@@ -107,6 +107,8 @@ export async function addFiles(files, at) {
     try {
       const ext = (f.name.split('.').pop() || '').toLowerCase();
       if (ext === 'ro2') { await openFile(window.ro2.files.pathOf(f)); return; }
+      if (/^(mp4|mov|m4v|webm|mkv|avi)$/.test(ext) || f.type.startsWith('video/')) { const info = await window.ro2.media.import(window.ro2.files.pathOf(f)); const { addVideoLayer } = await import('./video-layer.js'); const o = await addVideoLayer(ed, info); ed.add(o, at ? { at } : {}); toast('Video added. It plays when you export the design as a video (Timeline).'); continue; }
+      if (/^(mp3|wav|m4a|aac|flac|ogg|opus)$/.test(ext) || f.type.startsWith('audio/')) { const info = await window.ro2.media.import(window.ro2.files.pathOf(f)); const T = await import('./timeline.js'); T.setMusic(ed, { path: info.path, name: info.name, duration: info.duration, volume: 0.8, fadeIn: 0, fadeOut: 1.5 }); T.toggleTimeline(true); autosave(); toast('Music added to the timeline.'); continue; }
       let dataUrl, svg = null;
       if (['heic', 'heif', 'tif', 'tiff'].includes(ext)) dataUrl = await window.ro2.files.convertImage(new Uint8Array(await f.arrayBuffer()), ext);
       else if (ext === 'svg' || f.type === 'image/svg+xml') svg = await f.text();
@@ -190,7 +192,7 @@ function fitInk(o, L, s) {
 // With "everything on this page", other photos get the same grade from their own originals, and shape, text and
 // page-background colours go through the same colour function.
 function brandHexes() { const k = app.brand && (app.brand.kits.find((x) => x.id === app.brand.active) || app.brand.kits[0]); return k ? k.colors.map((c) => c.hex) : []; }
-async function applyGrade(ed, img, res) {
+export async function applyGrade(ed, img, res) {
   const b = busy('Applying the colours…');
   try {
     const { gradeData, gradeHex, isIdentity } = await import('./grade.js');

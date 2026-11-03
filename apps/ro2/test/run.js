@@ -18,11 +18,11 @@ t('every icon name used in the UI exists', () => {
     for (const m of s.matchAll(/\bicon: '([a-z0-9-]+)'/g)) names.add(m[1]);
     for (const m of s.matchAll(/name: '([a-z0-9-]+)', color/g)) names.add(m[1]);
   }
-  const el = src.find(([f]) => f.endsWith('elements.js'))[1];
+  const el = src.find(([f]) => f.endsWith(path.sep + 'elements.js'))[1];
   for (const m of el.match(/POPULAR_ICONS = \[([\s\S]*?)\]/)[1].matchAll(/'([a-z0-9-]+)'/g)) names.add(m[1]);
   const ctx = src.find(([f]) => f.endsWith('ctxbar.js'))[1];
   for (const m of ctx.match(/aIcon = \{([^}]*)\}/)[1].matchAll(/'([a-z0-9-]+)'/g)) names.add(m[1]);
-  const lay = src.find(([f]) => f.endsWith('layers.js'))[1];
+  const lay = src.find(([f]) => f.endsWith(path.sep + 'panels' + path.sep + 'layers.js'))[1];
   for (const m of lay.match(/KIND_ICON = \{([^}]*)\}/)[1].matchAll(/'([a-z0-9-]+)'/g)) names.add(m[1]);
   const missing = [...names].filter((n) => !icons[n]);
   assert(!missing.length, 'missing: ' + missing.join(', '));
@@ -77,6 +77,27 @@ t('designs store: save, list, rename, duplicate', () => {
 });
 t('build config keeps the icon and the renderer', () => {
   const p = require('../package.json'); assert(p.build.files.includes('src/**/*') && p.build.files.includes('build/icon.png')); assert(fs.existsSync(path.join(__dirname, '..', 'build/icon.png')));
-  assert(!p.dependencies || !Object.keys(p.dependencies).length, 'no runtime npm dependencies');
+  assert.deepEqual(Object.keys(p.dependencies || {}).sort(), ['ffmpeg-static', 'ffprobe-static'], 'only FFmpeg as runtime npm dependencies');
+  assert(p.build.files.includes('mcp/**/*'), 'the MCP server ships');
+  for (const u of ['node_modules/ffmpeg-static/**', 'node_modules/ffprobe-static/**', 'mcp/**']) assert(p.build.asarUnpack.includes(u), 'unpacked: ' + u);
+});
+t('AI tools: every MCP tool has a handler in the window, schemas are sound', () => {
+  const { TOOLS, INSTRUCTIONS } = require('../mcp/tools.js'); assert(INSTRUCTIONS.length > 100);
+  const agent = fs.readFileSync(path.join(R, 'js/agent.js'), 'utf8'); const names = new Set();
+  for (const tool of TOOLS) {
+    assert(!names.has(tool.name), 'duplicate ' + tool.name); names.add(tool.name);
+    assert(/^[a-z0-9_]{3,40}$/.test(tool.name) && tool.description.length > 10 && tool.inputSchema.type === 'object', tool.name);
+    for (const r of tool.inputSchema.required || []) assert(tool.inputSchema.properties[r], `${tool.name}.${r}`);
+    if (tool.name !== 'ro2_guide') assert(new RegExp(`\\n  (async )?${tool.name}\\(`).test(agent), 'no handler for ' + tool.name);
+  }
+  const { guideText } = require('../mcp/guide.js'); const g = guideText({ fonts: ['Poppins'], shapes: ['star'], brand: { name: 'K', colors: ['#fff'], fonts: {}, logos: [] } });
+  assert(/Poppins/.test(g) && /data-duration/.test(g) && /brand kit is "K"/.test(g));
+});
+t('video engine (shared with RO3) loads and finds FFmpeg', () => {
+  const ff = require('../src/engine/ffmpeg.js'); const tl = require('../src/engine/timeline.js');
+  assert(typeof tl.renderProject === 'function' && tl.TRANSITIONS.slideleft && tl.TRANSITIONS.fadeblack);
+  const T = fs.readFileSync(path.join(R, 'js/video-export.js'), 'utf8').match(/TRANSITIONS = \[([\s\S]*?)\];/)[1];
+  for (const m of T.matchAll(/\['([a-z]+)', '/g)) assert(m[1] === 'none' || tl.TRANSITIONS[m[1]], 'engine knows ' + m[1]);
+  assert(Object.values(ff).length);
 });
 console.log(`\n${pass}/${pass + fail} passed`); process.exit(fail ? 1 : 0);

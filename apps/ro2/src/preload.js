@@ -31,5 +31,11 @@ contextBridge.exposeInMainWorld('ro2', {
     addLogo: call('brand:add-logo'), removeLogo: call('brand:remove-logo'), logo: call('brand:logo'), pickLogos: call('brand:pick-logos'),
   },
   library: { search: call('library:search'), fetch: call('library:fetch') },
+  html: { register: call('html:register'), render: call('html:render'), inspect: call('html:inspect'), layers: call('html:layers') },
+  video: { export: call('video:export'), cancel: call('video:cancel'), previewPath: call('video:preview-path'), onProgress: on('video:progress') },
+  media: { import: call('media:import'), pick: call('media:pick'), poster: call('media:poster'), url: call('media:url'), openInRo3: call('ro3:open') },
+  ai: { status: call('ai:status'), connect: call('ai:connect'), set: call('ai:set'), models: call('ai:models'), ask: call('ai:ask'), stop: call('ai:stop'), onEvent: on('ai:event'), onBridge: on('ai:bridge') },
+  agentFiles: { outPath: call('agent:out-path') },
+  agent: { onCall: on('agent:call'), reply: (id, result) => ipcRenderer.send('agent:reply', { id, result }), ready: () => ipcRenderer.send('agent:ready') },
   models: { list: call('models:list'), download: call('models:download'), cancel: call('models:cancel'), remove: call('models:delete'), onProgress: on('models:progress') },
 });

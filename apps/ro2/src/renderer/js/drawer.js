@@ -2,7 +2,7 @@
 import { h, ico, $ } from './ui.js';
 
 const panels = new Map(); let current = null; let lastRail = 'elements'; let renderToken = 0;
-export const RAIL = ['templates', 'elements', 'text', 'brand', 'photos', 'uploads', 'background', 'ai', 'layers'];
+export const RAIL = ['templates', 'elements', 'text', 'brand', 'photos', 'uploads', 'background', 'ai', 'assistant', 'layers'];
 
 export function register(id, def) { panels.set(id, def); }
 export function buildRail() {

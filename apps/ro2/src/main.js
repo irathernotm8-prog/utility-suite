@@ -10,6 +10,12 @@ const { pathToFileURL } = require('url');
 const { Models, CATALOG } = require('./models');
 const { Designs, safeName } = require('./designs');
 const { Brand } = require('./brand');
+const html = require('./html');
+const video = require('./video');
+const connectors = require('./connectors');
+const ai = require('./ai');
+const llm = require('./llm');
+const { guideText } = require('../mcp/guide');
 
 if (process.env.RO2_USER_DATA) app.setPath('userData', path.resolve(process.env.RO2_USER_DATA));
 app.setName('RO2');
@@ -30,36 +36,54 @@ function loadSettings() { try { settings = { ...DEFAULTS, ...JSON.parse(fs.readF
 function saveSettings() { try { fs.writeFileSync(SETTINGS_FILE(), JSON.stringify(settings, null, 1)); } catch (e) { log('settings', e); } }
 const designsFolder = () => process.env.RO2_DESIGNS || settings.designsFolder || path.join(app.getPath('documents'), 'RO2');
 const modelsFolder = () => process.env.RO2_MODELS || path.join(app.getPath('userData'), 'Models');
+const mediaFolder = () => path.join(designsFolder(), 'Media');
 
 let win = null; let models; let designs; let brand; const pendingOpen = [];
 const send = (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send(ch, data); };
 
 // ───────────── protocol ─────────────
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.onnx': 'application/octet-stream', '.txt': 'text/plain' };
-function serveFile(file, root) {
+const MIME = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.m4v': 'video/mp4', '.gif': 'image/gif', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg', '.aac': 'audio/aac', '.flac': 'audio/flac', '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.onnx': 'application/octet-stream', '.txt': 'text/plain' };
+function serveFile(file, root, { cors = false, range = null } = {}) {
   const resolved = path.resolve(file);
   if (!resolved.startsWith(path.resolve(root) + path.sep)) return new Response('Forbidden', { status: 403 });
   if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) return new Response('Not found', { status: 404 });
+  const size = fs.statSync(resolved).size;
   const headers = {
     'Content-Type': MIME[path.extname(resolved).toLowerCase()] || 'application/octet-stream',
     // Cross-origin isolation lets the AI use every CPU core (SharedArrayBuffer); "credentialless" still lets library thumbnails load.
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Embedder-Policy': 'credentialless',
-    'Cross-Origin-Resource-Policy': 'same-origin',
-    'Content-Length': String(fs.statSync(resolved).size),
+    'Cross-Origin-Resource-Policy': cors ? 'cross-origin' : 'same-origin',
+    ...(cors ? { 'Access-Control-Allow-Origin': '*' } : {}),
+    'Accept-Ranges': 'bytes',
   };
+  // byte ranges, so <video> can seek
+  const m = range && /bytes=(\d*)-(\d*)/.exec(range);
+  if (m) {
+    const start = m[1] ? +m[1] : Math.max(0, size - +m[2]); const end = m[1] && m[2] ? Math.min(size - 1, +m[2]) : size - 1;
+    if (start >= size) return new Response(null, { status: 416, headers: { ...headers, 'Content-Range': `bytes */${size}` } });
+    headers['Content-Range'] = `bytes ${start}-${end}/${size}`; headers['Content-Length'] = String(end - start + 1);
+    return new Response(require('stream').Readable.toWeb(fs.createReadStream(resolved, { start, end })), { status: 206, headers });
+  }
+  headers['Content-Length'] = String(size);
   const stream = fs.createReadStream(resolved);
   return new Response(require('stream').Readable.toWeb(stream), { status: 200, headers });
 }
+function ro2Protocol(req) {
+  const u = new URL(req.url);
+  const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
+  if (u.host === 'app') return serveFile(path.join(RENDERER, rel || 'index.html'), RENDERER, { cors: /^vendor\/fonts\//.test(rel) });
+  if (u.host === 'models') return serveFile(path.join(modelsFolder(), rel), modelsFolder());
+  if (u.host === 'brand') return serveFile(brand.logoPath(rel), brand.logoPath(''), { cors: true });
+  if (u.host === 'html') return html.serve(u);
+  // video and music: the design's Media folder and finished previews only
+  if (u.host === 'media') { const f = u.searchParams.get('f') || ''; for (const root of [mediaFolder(), video.WORK(), path.join(os.tmpdir(), 'ro2-previews')]) if (path.resolve(f).startsWith(path.resolve(root) + path.sep)) return serveFile(f, root, { range: req.headers.get('range'), cors: true }); return new Response('Forbidden', { status: 403 }); }
+  return new Response('Not found', { status: 404 });
+}
 function registerProtocol() {
-  protocol.handle('ro2', (req) => {
-    const u = new URL(req.url);
-    const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
-    if (u.host === 'app') return serveFile(path.join(RENDERER, rel || 'index.html'), RENDERER);
-    if (u.host === 'models') return serveFile(path.join(modelsFolder(), rel), modelsFolder());
-    if (u.host === 'brand') return serveFile(brand.logoPath(rel), brand.logoPath(''));
-    return new Response('Not found', { status: 404 });
-  });
+  protocol.handle('ro2', ro2Protocol);
+  html.setFonts(RENDERER);
+  html.htmlSession(ro2Protocol);
 }
 
 // ───────────── window ─────────────
@@ -310,11 +334,102 @@ function registerIpc() {
     for (const f of r.filePaths) brand.addLogo(id, { name: path.basename(f).replace(/\.[^.]+$/, ''), bytes: fs.readFileSync(f), ext: path.extname(f).slice(1) });
     return brand.get();
   });
+
+  // ── HTML layers
+  handle('html:register', (spec) => html.register(spec));
+  handle('html:render', async (spec, opts) => { const r = await html.render(spec, opts || {}); return { dataUrl: 'data:image/png;base64,' + r.png.toString('base64'), w: r.w, h: r.h, meta: r.meta, logs: r.logs, key: r.key }; });
+  handle('html:inspect', (spec) => html.inspect(spec));
+  handle('html:layers', (spec, opts) => html.toLayers(spec, opts || {}));
+
+  // ── video: export, previews, clips and music
+  const jobs = new Map();
+  handle('video:export', async (jobId, spec) => {
+    const ac = new AbortController(); jobs.set(jobId, ac);
+    try { return await video.exportVideo(spec, (p) => send('video:progress', { jobId, p }), ac.signal); }
+    finally { jobs.delete(jobId); }
+  });
+  handle('video:cancel', (jobId) => { const j = jobs.get(jobId); if (j) j.abort(); return true; });
+  handle('video:preview-path', () => { const d = path.join(os.tmpdir(), 'ro2-previews'); fs.mkdirSync(d, { recursive: true }); for (const f of fs.readdirSync(d)) { try { if (Date.now() - fs.statSync(path.join(d, f)).mtimeMs > 3600e3) fs.rmSync(path.join(d, f), { force: true }); } catch {} } return path.join(d, `preview-${Date.now()}.mp4`); });
+  handle('media:import', (file) => video.importMedia(file, mediaFolder()));
+  handle('media:pick', async (kind) => {
+    const exts = kind === 'audio' ? ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus'] : ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', 'gif'];
+    const r = await dialog.showOpenDialog(win, { title: kind === 'audio' ? 'Choose music' : 'Choose a video', filters: [{ name: kind === 'audio' ? 'Audio' : 'Video', extensions: exts }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    return video.importMedia(r.filePaths[0], mediaFolder());
+  });
+  handle('agent:out-path', (name, ext, dir) => { // where an AI's export goes: Downloads (or the folder it named), never over a file
+    const d = dir && path.isAbsolute(dir) ? dir : app.getPath('downloads'); fs.mkdirSync(d, { recursive: true });
+    const base = safeName(String(name || 'Design')); let p = path.join(d, `${base}.${ext}`); let n = 2;
+    while (fs.existsSync(p)) p = path.join(d, `${base} (${n++}).${ext}`);
+    return p;
+  });
+  handle('media:poster', (file, t) => video.posterAt(file, t));
+  handle('media:url', (file) => `ro2://media/x?f=${encodeURIComponent(file)}`);
+  handle('ro3:open', async (file) => {
+    const ro3 = process.platform === 'darwin' ? ['/Applications/RO3.app', path.join(os.homedir(), 'Applications', 'RO3.app')].find((p) => fs.existsSync(p))
+      : [path.join(process.env.LOCALAPPDATA || '', 'Programs', 'RO3', 'RO3.exe'), path.join(process.env.LOCALAPPDATA || '', 'Programs', 'ro3', 'RO3.exe')].find((p) => fs.existsSync(p));
+    if (!ro3) { shell.showItemInFolder(file); return { ok: false, reason: 'RO3 isn’t installed on this computer (install it from Utility Hub). The video is shown in its folder instead.' }; }
+    if (process.platform === 'darwin') require('child_process').spawn('open', ['-a', ro3, file], { detached: true, stdio: 'ignore' }).unref();
+    else require('child_process').spawn(ro3, [file], { detached: true, stdio: 'ignore' }).unref();
+    return { ok: true };
+  });
+
+  // ── AI: the Claude / Codex plugin, and the in-app assistant
+  handle('ai:status', () => ({ claude: ai.cli('claude'), codex: ai.cli('codex'), connectors: connectors.connectorStatus(), providers: llm.PROVIDERS, settings: aiSettingsPublic() }));
+  handle('ai:connect', async (which) => (which === 'desktop' ? connectors.connectDesktop() : which === 'code' ? connectors.connectCode() : connectors.connectCodex()));
+  handle('ai:set', (patch) => { const a = settings.ai || {}; if (patch.key != null && patch.provider) { a.keys = a.keys || {}; a.keys[patch.provider] = patch.key ? encrypt(patch.key) : undefined; } for (const k of ['provider', 'model', 'base', 'route']) if (patch[k] !== undefined) a[k] = patch[k]; settings.ai = a; saveSettings(); return aiSettingsPublic(); });
+  handle('ai:models', async (provider) => { const p = llm.PROVIDERS.find((x) => x.id === provider); const a = settings.ai || {}; return llm.listModels({ ...p, base: (provider === 'custom' && a.base) || p.base }, keyOf(provider)); });
+  const turns = new Map(); const histories = new Map();
+  handle('ai:ask', async (turnId, { prompt, route, reset }) => {
+    const ac = new AbortController(); turns.set(turnId, ac);
+    const ev = (e) => send('ai:event', { turnId, ...e });
+    try {
+      const a = settings.ai || {}; const r = route || a.route || 'auto';
+      if (reset) histories.clear();
+      if (r === 'claude-code' || r === 'codex' || (r === 'auto' && !keyOf(a.provider) && (ai.cli('claude') || ai.cli('codex')))) {
+        connectors.installScript();
+        const res = await ai.askAgent({ prompt, entry: connectors.connectorStatus().entry, cwd: path.join(app.getPath('userData'), 'agent'), signal: ac.signal, provider: r === 'codex' ? 'codex' : r === 'claude-code' ? 'claude' : 'auto', resume: histories.get('cli') || null, onEvent: ev });
+        if (res.session) histories.set('cli', res.session);
+        return { who: res.who, text: res.text };
+      }
+      const provider = llm.PROVIDERS.find((x) => x.id === (a.provider || 'anthropic')); if (!provider) throw new Error('Choose an AI in Settings › AI.');
+      const history = histories.get(provider.id) || []; histories.set(provider.id, history);
+      const res = await llm.runTurn({ provider: { ...provider, base: (provider.id === 'custom' && a.base) || provider.base }, key: keyOf(provider.id), model: a.model, system: INAPP_SYSTEM(), history, prompt, signal: ac.signal, onEvent: ev, handle: (name, args) => agentCall(name, args, provider.name.split(' · ').pop()) });
+      return { who: provider.name.split(' · ').pop(), text: res.text };
+    } finally { turns.delete(turnId); }
+  });
+  handle('ai:stop', (turnId) => { const t = turns.get(turnId); if (t) t.abort(); return true; });
+  ipcMain.on('agent:reply', (_e, { id, result }) => { const p = pendingCalls.get(id); if (p) { pendingCalls.delete(id); p(result); } });
   handle('models:list', () => models.list());
   handle('models:download', (id) => models.download(id));
   handle('models:cancel', (id) => models.cancel(id));
   handle('models:delete', (id) => models.remove(id));
 }
+
+// ───────────── the AI bridge: every tool runs in the window, where the design lives ─────────────
+const { safeStorage } = require('electron');
+const encrypt = (t) => { try { return safeStorage.isEncryptionAvailable() ? 'enc:' + safeStorage.encryptString(t).toString('base64') : 'raw:' + Buffer.from(t).toString('base64'); } catch { return 'raw:' + Buffer.from(t).toString('base64'); } };
+const decrypt = (v) => { if (!v) return ''; try { if (v.startsWith('enc:')) return safeStorage.decryptString(Buffer.from(v.slice(4), 'base64')); if (v.startsWith('raw:')) return Buffer.from(v.slice(4), 'base64').toString(); } catch {} return ''; };
+const keyOf = (provider) => decrypt(((settings.ai || {}).keys || {})[provider]);
+function aiSettingsPublic() { const a = settings.ai || {}; return { provider: a.provider || 'anthropic', model: a.model || '', base: a.base || '', route: a.route || 'auto', hasKey: Object.fromEntries(Object.entries(a.keys || {}).filter(([, v]) => v).map(([k]) => [k, true])) }; }
+const INAPP_SYSTEM = () => `You are the design assistant inside RO2, the user's design and photo editor. You have RO2's tools and can see your work with screenshot. ${guideText({})}`;
+const pendingCalls = new Map(); let callSeq = 0;
+async function waitForWindow(ms = 30000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (win && !win.isDestroyed() && !win.webContents.isLoading() && win.__agentReady) return true; await new Promise((r) => setTimeout(r, 200)); } return false; }
+async function agentCall(name, args, client) {
+  if (name === 'ro2_guide') { // the guide is written here; the window adds its fonts, shapes and brand kit
+    const r = await agentCall('__info', {}, client).catch(() => null); let info = {};
+    try { info = JSON.parse(r.content[0].text); } catch {}
+    return { content: [{ type: 'text', text: guideText(info) }] };
+  }
+  if (!(await waitForWindow())) return { content: [{ type: 'text', text: 'RO2’s window isn’t ready. Ask the user to open RO2.' }], isError: true };
+  const id = ++callSeq;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { pendingCalls.delete(id); resolve({ content: [{ type: 'text', text: 'RO2 took too long to answer (15 min).' }], isError: true }); }, 15 * 60e3);
+    pendingCalls.set(id, (r) => { clearTimeout(timer); resolve(r && r.content ? r : { content: [{ type: 'text', text: 'Bad reply from the RO2 window' }], isError: true }); });
+    send('agent:call', { id, name, args: args || {}, client: client || 'AI' });
+  });
+}
+ipcMain.on('agent:ready', () => { if (win) win.__agentReady = true; });
 
 // ───────────── app ─────────────
 function openPaths(argv) {
@@ -335,10 +450,13 @@ else {
     session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(['local-fonts', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'].includes(perm)));
     session.defaultSession.setPermissionCheckHandler((_wc, perm) => ['local-fonts', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'].includes(perm));
     createWindow();
+    connectors.startBridge((name, args, client) => agentCall(name, args, client), (st) => send('ai:bridge', st));
+    connectors.refreshInstalled();
     openPaths(process.argv.slice(app.isPackaged ? 1 : 2));
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
   });
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', () => connectors.stopBridge());
 }
 
 module.exports = { CATALOG };

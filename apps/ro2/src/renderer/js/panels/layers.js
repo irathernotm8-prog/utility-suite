@@ -6,7 +6,7 @@ import { kindOf, fabric } from '../editor/fab.js';
 import { TEMPLATES, buildTemplate } from '../templates.js';
 import { thumbOfTemplate } from '../home.js';
 
-const KIND_ICON = { text: 'type', image: 'image', line: 'minus', icon: 'smile', group: 'group', shape: 'shapes' };
+const KIND_ICON = { text: 'type', image: 'image', html: 'code-xml', video: 'clapperboard', line: 'minus', icon: 'smile', group: 'group', shape: 'shapes' };
 function label(o) { const k = kindOf(o); if (k === 'text') return (o.text || '').replace(/\s+/g, ' ').slice(0, 40) || 'Text'; return o.ro2Name || (k === 'image' ? 'Photo' : k === 'shape' ? 'Shape' : k[0].toUpperCase() + k.slice(1)); }
 register('layers', {
   label: 'Layers', icon: 'layers',

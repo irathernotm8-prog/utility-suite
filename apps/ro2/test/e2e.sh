@@ -6,6 +6,6 @@ cd "$(dirname "$0")/.."
 mkdir -p test/fixtures
 [ -f test/fixtures/person.jpg ] || curl -sL -o test/fixtures/person.jpg https://huggingface.co/Carve/LaMa-ONNX/resolve/main/image.jpg
 UD=$(mktemp -d)
-RO2_E2E=test/e2e.js RO2_USER_DATA="$UD" RO2_DESIGNS="$UD/designs" RO2_MODELS="${RO2_MODELS:-$UD/models}" \
+RO2_E2E=${E2E:-test/e2e.js} RO2_E2E_OUT="${E2E_OUT:-test/e2e-out}" RO2_USER_DATA="$UD" RO2_DESIGNS="$UD/designs" RO2_MODELS="${RO2_MODELS:-$UD/models}" \
   xvfb-run -a -s "-screen 0 1440x900x24" ./node_modules/.bin/electron . --no-sandbox > /dev/null 2>&1 || true
-cat test/e2e-out/log.txt
+cat "${E2E_OUT:-test/e2e-out}/log.txt"

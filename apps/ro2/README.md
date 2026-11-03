@@ -15,8 +15,11 @@ The quick, easy design and photo editor in the Utility Package. RO3 is the heavy
   - **Arrange**: layers panel (reorder by drag, hide, lock, rename), align and distribute, group/ungroup, exact position, size and rotation.
   - **Brand**: brand kits with logos (PNG, SVG, JPG, WebP, GIF; drag onto the page), brand colours (also first in every colour picker; "From logo" picks them for you), heading / subheading / body fonts, and "Apply brand to this page" to restyle a design in one click.
   - **Background**: colours, gradients (linear/radial, editable stops), see-through, or a photo.
+- **AI design**: ask Claude, ChatGPT, Gemini (and others, or a model on the computer with Ollama / LM Studio) to make or change a design in the AI design tab, with your own API key or through Claude Code / Codex. Or connect RO2 to **Claude Desktop, Claude Code or Codex** in one click and ask from there. The AI builds each page as an HTML layer at the design's exact size, looks at its work with screenshots and fixes it; it can also add text, shapes, photos, icons and video, grade colours, set up the timeline and export.
+- **HTML layers**: paste or write HTML/CSS/JS (Elements › Code & motion, or double-click to edit, with a live preview). It becomes a layer; animations play in videos and GIFs; "Make editable" turns it into normal text boxes, shapes and pictures.
+- **Video**: pages are scenes in a lite timeline (durations, 20 transitions, music with fade out, preview). Animated HTML and video clips (trim, sound on/off) play on their page. Export MP4, WebM (optionally see-through) or GIF; open the result in RO3 for heavier editing. Uses RO3's video engine.
 - **Resize**: change the whole design to any preset or custom size; content scales to fit (or keeps its size); optionally as a resized copy, or as several copies at once (pick many sizes; each becomes its own design on Home).
-- **Export**: PNG (optionally transparent), JPG, WebP at 0.5×–4×, vector SVG (fonts embedded) and vector PDF (all pages in one file); one page or all; Copy as PNG.
+- **Export**: PNG (optionally transparent), JPG, WebP at 0.5×–4×, vector SVG (fonts embedded) and vector PDF (all pages in one file); one page or all; Copy as PNG; MP4, WebM and GIF for moving designs.
 - **AI tools** (on this computer, nothing uploaded; WebGPU on the graphics card, else every CPU core):
   - **Remove background** (ORMBG; IS-Net "whole scene" as an option) with guided-filter edge refinement, Keep/Remove brushes, click-to-keep/remove objects, new colour or blurred background, sticker outline.
   - **Magic eraser** (LaMa): brush, box or click-to-select an object (SlimSAM), shift-click to add, alt-click to subtract, choose Part / Object / Whole, grow edges & shadows, erase on release. Works without the model too (RO3's PatchMatch quick fill).
@@ -32,6 +35,8 @@ The quick, easy design and photo editor in the Utility Package. RO3 is the heavy
 |---|---|
 | Designs | `~/Documents/RO2/*.ro2` (one JSON file per design with its pictures inside; change in Settings) |
 | AI models | app-data folder › `Models/<id>/` (ormbg 176 MB, lama 93 MB, slimsam 40 MB, ocrpro 31 MB, isnet 179 MB and the classic ocr 3 MB optional), downloaded on first use from Hugging Face / GitHub |
+| Video & music used in designs | `~/Documents/RO2/Media/` (copied in, so designs keep working if the original moves) |
+| AI | API keys encrypted in `settings.json`; `bridge.json` (the local connection for Claude Desktop / Code / Codex); the MCP server copy in `mcp/` |
 | Brand kits | app-data folder › `brand.json`, logos in `Brand/<kit id>/` |
 | Settings, recent colours, Home index | app-data folder › `settings.json`, `index.json`; errors go to `ro2.log` |
 
@@ -43,11 +48,11 @@ App-data folder: `~/Library/Application Support/RO2` on a Mac, `%APPDATA%\RO2` o
 cd ~/Downloads/Utility\ Package/apps/ro2
 npm install
 npm start
-npm test            # quick checks: icons, fonts, model catalog, shapes, imports, designs store, brand kits
+npm test            # quick checks: icons, fonts, model catalog, shapes, imports, designs store, brand kits, AI tools, video engine
 npm run e2e         # drives the real window and saves ~60 screenshots to test/e2e-out (Linux: needs xvfb-run)
 ```
 
-`RO2_MODELS=/path/to/models npm run e2e` also runs the AI checks. `RO2_USER_DATA`, `RO2_DESIGNS` and `RO2_MODELS` point the app at other folders; `RO2_DEVTOOLS=1` opens DevTools.
+`RO2_MODELS=/path/to/models npm run e2e` also runs the AI checks. `E2E=test/e2e-ai.js E2E_OUT=test/e2e-ai-out npm run e2e` runs the AI design / HTML / video checks. `RO2_USER_DATA`, `RO2_DESIGNS` and `RO2_MODELS` point the app at other folders; `RO2_DEVTOOLS=1` opens DevTools.
 
 ## Code map
 
@@ -56,6 +61,12 @@ src/main.js            window, ro2:// protocol (pages + model files, cross-origi
                        files (HEIC/TIFF via sips / WIC), export (PDF via printToPDF), photo search, models
 src/models.js          the AI model catalog and the resumable downloader
 src/designs.js         .ro2 files and the Home index
+src/html.js            HTML layers: sandboxed hidden windows, RO2's clock (frame mode), render / frames / to layers
+src/video.js           design → video: scenes (stills + recorded HTML + clips) and the timeline; media import
+src/engine/            the video engine, shared with RO3 (ffmpeg, media, formats, timeline, color-grade)
+src/connectors.js      the local bridge + Claude Desktop / Claude Code / Codex plugin install
+src/ai.js, src/llm.js  Claude Code / Codex CLIs; API providers and the tool loop for the in-app assistant
+mcp/                   ro2-mcp.js (stdio MCP server), tools.js (the 31 tools), guide.js (ro2_guide)
 src/brand.js           brand kits (brand.json + logo files), served at ro2://brand/
 src/preload.js         window.ro2: the only bridge to the computer
 src/renderer/
@@ -73,6 +84,10 @@ src/renderer/
   js/ai/               ai.worker.js (onnxruntime-web: removebg, SAM, LaMa inpaint/expand), client.js
                        (worker RPC, model download prompt), studio.js (the AI focus mode), patch.worker.js,
                        layerize.js (Make editable: OCR + auto-segment + build), layers-studio.js (its screen); studio.js also has Touch up and Colour grade
+  js/agent.js          every AI tool, run in the window
+  js/panels/assistant.js  the AI design tab
+  js/html-layer.js, js/html-to-layers.js, js/modals/html-editor.js   HTML layers
+  js/video-export.js, js/video-layer.js, js/timeline.js             video
   js/grade.js          colour grade looks, hue shift, palette swap (Lab), LUT-based apply
   js/templates.js, js/sizes.js, js/fonts.js, js/ui.js
   vendor/              fabric 7.4.0, onnxruntime-web 1.30.0, lucide-static 1.49.0, 40 fonts,
@@ -82,6 +97,6 @@ build/make-icon.py     draws build/icon.svg + icon.png (and the title-bar mark)
 
 ## Notes
 
-- No runtime npm dependencies and no native modules: everything the page needs is in `src/renderer/vendor`, so Windows cross-builds need nothing special.
+- No native modules. The only npm runtime dependencies are ffmpeg-static and ffprobe-static (as in RO3); everything the page needs is in `src/renderer/vendor`.
 - Images live once per design in `assets` (by id); objects point at them with `assetId`, which keeps undo snapshots small.
 - Licenses: fabric.js MIT, ONNX Runtime MIT, Lucide ISC, tesseract.js Apache-2.0, qrcode-generator MIT, fonts SIL OFL 1.1 (in `vendor/fonts/licenses`), models Apache-2.0. Free photos carry their own CC licenses; RO2 keeps each photo's credit.

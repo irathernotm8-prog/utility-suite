@@ -107,6 +107,19 @@ export function renderCtx() {
       '-', { label: 'Bulleted list', icon: 'list', run: () => listAll() },
     ]), { icon: 'case-sensitive', title: 'Text case & lists' }));
     el.append(sep(), cbtn('Effects', () => openPanel('effects'), { icon: 'wand-sparkles' }));
+  } else if (k === 'html') {
+    const o = a; const hl = o.ro2Html;
+    el.append(cbtn('Edit HTML', () => import('./modals/html-editor.js').then((m) => m.openHtmlEditor(o)), { icon: 'code-xml', cls: 'accent' }));
+    if (hl.animated) el.append(cbtn('Play', () => import('./timeline.js').then(async (T) => { const { previewVideo } = await import('./video-export.js'); const b = (await import('./ui.js')).busy('Making a preview…'); try { const r = await previewVideo(E, { pages: [E.page] }, (p, t) => b.set(p, t)); b.close(); T.playVideo(r.output, 'Preview'); } catch (e) { b.close(); (await import('./ui.js')).toastErr(e); } }), { icon: 'play', title: `Plays for ${hl.duration} s` }));
+    el.append(cbtn('Make editable', () => import('./html-to-layers.js').then((m) => m.htmlToLayers(E, o)), { icon: 'layers', title: 'Turn the HTML into normal RO2 layers (text, shapes, pictures) you can edit by hand' }));
+    el.append(sep(), cbtn('Effects', () => openPanel('effects'), { icon: 'wand-sparkles' }));
+  } else if (k === 'video') {
+    const o = a;
+    el.append(cbtn('Trim', () => import('./video-layer.js').then((m) => m.openTrim(E, o)), { icon: 'scissors', cls: 'accent' }));
+    el.append(cbtn(o.ro2Video.muted ? 'Sound off' : 'Sound on', () => { o.ro2Video = { ...o.ro2Video, muted: !o.ro2Video.muted }; E.commit(); renderCtx(); }, { icon: o.ro2Video.muted ? 'volume-x' : 'volume-2', title: o.ro2Video.hasAudio ? 'The clip’s own sound in the video' : 'This clip has no sound' }));
+    el.append(cbtn('Timeline', () => import('./timeline.js').then((m) => m.toggleTimeline(true)), { icon: 'clapperboard' }));
+    el.append(cbtn('Frame', (e, b) => popover(b, h('div', { style: { width: '290px' } }, h('div', { style: { fontWeight: 800, marginBottom: '8px' } }, 'Shape this clip'), framesGrid((id) => { applyFrame(o, id); E.canvas.requestRenderAll(); E.commit(); closePopover(); }, o.ro2Frame))), { icon: 'square-dashed-bottom' }));
+    el.append(sep(), cbtn('Effects', () => openPanel('effects'), { icon: 'wand-sparkles' }));
   } else if (k === 'image') {
     const img = a;
     el.append(cbtn('Edit photo', (e, b) => {

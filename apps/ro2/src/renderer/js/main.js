@@ -12,7 +12,7 @@ import { adjustPanel } from './panels/image.js';
 import { startCrop } from './editor/crop.js';
 import { makeShape, makeLine } from './editor/objects.js';
 import { byId, LINES } from './editor/shapes.js';
-import './panels/elements.js'; import './panels/brand.js'; import './panels/text.js'; import './panels/photos.js'; import './panels/background.js'; import './panels/ai.js'; import './panels/layers.js'; import './panels/props.js';
+import './panels/elements.js'; import './panels/brand.js'; import './panels/text.js'; import './panels/photos.js'; import './panels/background.js'; import './panels/ai.js'; import './panels/layers.js'; import './panels/props.js'; import './panels/assistant.js';
 import { addPayload } from './panels/elements.js';
 import { addTextPreset } from './panels/text.js';
 
@@ -36,6 +36,7 @@ async function boot() {
   setRecent(app.settings.recentColors); applyTheme();
   await (await import('./panels/brand.js')).loadBrand().catch(() => {});
   buildRail(); wireTitle(); wireStage(); wireKeys(); wireDrop(); wireMenu();
+  (await import('./agent.js')).initAgent();
   app.on('view', setView);
   app.on('doc', () => { titleInput.value = app.editor.doc.name; renderPages(); renderCtx(); });
   app.on('saved-state', (s) => { saveState.innerHTML = s === 'saving' ? '<span class="spinner" style="width:12px;height:12px"></span>Saving' : s === 'saved' ? ico('cloud-check') + 'Saved' : s === 'error' ? ico('cloud-alert') + 'Not saved' : ico('cloud') + 'Edited'; });
@@ -111,10 +112,15 @@ function wireStage() {
   ed.canvas.on('mouse:down', () => { closePopover(); });
   ed.canvas.on('mouse:up', () => { if (app.transforming) { app.transforming = false; placeFloat(); } });
   ed.canvas.on('object:moving', () => { app.transforming = true; $('#floatbar').classList.add('hidden'); });
+  const tlBtn = h('button.btn.ghost.sm.tl-toggle', { title: 'Timeline: page durations, transitions and music for video', html: ico('clapperboard') + '<span>Timeline</span>', on: { click: () => import('./timeline.js').then((m) => m.toggleTimeline()) } });
+  $('#stageBottom').prepend(tlBtn);
+  app.on('timeline', (v) => tlBtn.classList.toggle('on', !!v));
+  const tlRefresh = debounce(() => import('./timeline.js').then((m) => m.timelineOpen() && m.renderTimeline()), 120);
+  ed.on('pages', tlRefresh); ed.on('page', tlRefresh); ed.on('timeline', () => {}); ed.on('change', tlRefresh);
   ed.on('pages', renderPages); ed.on('page', () => { renderPages(); renderCtx(); if (['layers', 'background'].includes(currentPanel())) refresh(); });
   ed.on('zoom', (z) => { zoomLabel.textContent = Math.round(z * 100) + '%'; zoomRow.set(Math.log2(z)); });
   ed.on('background', () => { if (!ed.active()) renderCtx(); if (currentPanel() === 'background') refresh(); });
-  ed.on('image-dblclick', (img) => { if (ed.cropping) return ed.cropping.done(); startCrop(ed, img, { onEnd: async (applied) => { if (applied && img.ro2Frame) { (await import('./panels/image.js')).applyFrame(img, img.ro2Frame); ed.canvas.requestRenderAll(); ed.commit(); } renderCtx(); } }).then(renderCtx); });
+  ed.on('image-dblclick', (img) => { if (img.ro2Html) return import('./modals/html-editor.js').then((m) => m.openHtmlEditor(img)); if (img.ro2Video) return import('./video-layer.js').then((m) => m.openTrim(ed, img)); if (ed.cropping) return ed.cropping.done(); startCrop(ed, img, { onEnd: async (applied) => { if (applied && img.ro2Frame) { (await import('./panels/image.js')).applyFrame(img, img.ro2Frame); ed.canvas.requestRenderAll(); ed.commit(); } renderCtx(); } }).then(renderCtx); });
   ed.on('contextmenu', ({ target, x, y }) => { if (target && target.selectable !== false && !ed.selected().includes(target)) ed.select(target); contextMenu({ x, y }); });
   // zoom box
   const zb = $('#zoomBox');

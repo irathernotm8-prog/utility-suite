@@ -3,7 +3,7 @@ import * as fabric from '../../vendor/fabric/fabric.min.mjs';
 export { fabric };
 
 // Properties RO2 adds to objects (saved in designs, kept by undo).
-export const PROPS = ['id', 'ro2Name', 'ro2Role', 'assetId', 'ro2Shape', 'ro2Credit', 'ro2Locked', 'ro2Adjust', 'ro2Filter', 'ro2Frame', 'ro2Fill', 'ro2Upper', 'ro2Icon', 'ro2Qr', 'ro2Curve', 'ro2GradeSrc', 'ro2Grade',
+export const PROPS = ['id', 'ro2Name', 'ro2Role', 'assetId', 'ro2Shape', 'ro2Credit', 'ro2Locked', 'ro2Adjust', 'ro2Filter', 'ro2Frame', 'ro2Fill', 'ro2Upper', 'ro2Icon', 'ro2Qr', 'ro2Curve', 'ro2GradeSrc', 'ro2Grade', 'ro2Html', 'ro2Video',
   'selectable', 'evented', 'lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'strokeUniform', 'visible', 'flipX', 'flipY'];
 
 const ACCENT = '#46e6a2';
@@ -126,6 +126,8 @@ export function kindOf(o) {
   if (!o) return null;
   if (o.type === 'activeselection' || o.type === 'ActiveSelection') return 'multi';
   if (o instanceof fabric.Textbox || o instanceof fabric.IText || o instanceof fabric.FabricText) return 'text';
+  if (o.ro2Html) return 'html';
+  if (o.ro2Video) return 'video';
   if (o instanceof fabric.FabricImage) return 'image';
   if (o instanceof Ro2Line) return 'line';
   if (o.ro2Icon) return 'icon';

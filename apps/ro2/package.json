@@ -1,8 +1,8 @@
 {
   "name": "ro2",
   "productName": "RO2",
-  "version": "0.3.1",
-  "description": "RO2: the quick, easy design and photo editor. Shapes, icons, text and photos, any size or aspect ratio, a background remover, a magic eraser and grab, Make editable (flat pictures into layers), brand kits, light and dark themes, and export to PNG, JPG, WebP, SVG and PDF.",
+  "version": "0.4.0",
+  "description": "RO2: the quick, easy design and photo editor. Shapes, icons, text and photos, any size or aspect ratio, HTML layers, AI design with Claude, ChatGPT and more (in the app, or from Claude Desktop, Claude Code and Codex), animated designs exported as MP4, WebM and GIF with a lite timeline, a background remover, a magic eraser and grab, Make editable, brand kits, light and dark themes, and export to PNG, JPG, WebP, SVG and PDF.",
   "main": "src/main.js",
   "author": "Bilal",
   "license": "UNLICENSED",
@@ -28,6 +28,7 @@
     },
     "files": [
       "src/**/*",
+      "mcp/**/*",
       "build/icon.png",
       "package.json",
       "!src/**/*.map"
@@ -55,6 +56,15 @@
         "zip"
       ],
       "icon": "build/icon.png"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/ffprobe-static/**",
+      "mcp/**"
+    ]
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0"
   }
 }

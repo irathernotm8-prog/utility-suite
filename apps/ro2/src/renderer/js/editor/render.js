@@ -1,11 +1,13 @@
 // Drawing pages on their own (for export, thumbnails and the page strip), away from the editing canvas.
 import { fabric } from './fab.js';
 import { ensureFontsFor, bundledFonts } from '../fonts.js';
+import { sharpenHtml } from '../html-layer.js';
 
-async function staticPage(editor, page, { transparent = false } = {}) {
+async function staticPage(editor, page, { transparent = false, scale = 1 } = {}) {
   const el = document.createElement('canvas');
   const sc = new fabric.StaticCanvas(el, { width: editor.W, height: editor.H, enableRetinaScaling: false, renderOnAddRemove: false, imageSmoothingEnabled: true });
-  const objs = editor.resolveAssets(page.objects || []);
+  let objs = editor.resolveAssets(page.objects || []);
+  if (scale > 1.05) objs = await sharpenHtml(objs, scale); // HTML layers re-drawn sharp for big exports
   await ensureFontsFor(objs);
   const live = await fabric.util.enlivenObjects(objs);
   if (!transparent) sc.add(editor.makeBgObject(page.bg || { color: '#ffffff' }));
@@ -16,7 +18,7 @@ const pageOf = (editor, i) => (i === editor.page ? { ...editor.pageData, ...edit
 
 // A canvas element of the page at `scale` × its design size
 export async function pageCanvas(editor, i, { scale = 1, transparent = false, background } = {}) {
-  const sc = await staticPage(editor, pageOf(editor, i), { transparent });
+  const sc = await staticPage(editor, pageOf(editor, i), { transparent, scale });
   const out = sc.toCanvasElement(scale);
   sc.dispose();
   if (background) { // e.g. white under a JPG
