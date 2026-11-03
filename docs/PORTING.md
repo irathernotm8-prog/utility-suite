@@ -27,6 +27,7 @@
 |---|---|---|
 | Assist | `apps/assist` | `docs/handoffs/Assist.md` |
 | Atoll | `apps/atoll` | `docs/handoffs/Atoll.md` (vendors Touchline's data layer: `npm run sync-touchline`; no native modules) |
+| Atrium | `apps/atrium` | `docs/handoffs/Atrium.md` (MCP plugin for Claude/Codex; one pure-JS dependency, `qrcode-generator`; no native modules; the live preview is a local server on 127.0.0.1, and phone preview needs Private-network firewall access on Windows) |
 | Beam | `apps/beam` | `docs/handoffs/Beam.md` (no native modules; needs Local Network on Mac and Private-network firewall access on Windows) |
 | Vantage | `apps/vantage` | `docs/handoffs/Vantage.md` (no native modules; downloads wireproxy at runtime for the VPN) |
 | Waypoint | `apps/waypoint` | `docs/handoffs/Waypoint.md` (no native modules; phone hand-off needs Private-network firewall access on Windows) |

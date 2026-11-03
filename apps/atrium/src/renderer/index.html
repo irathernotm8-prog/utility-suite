@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file: http://127.0.0.1:* https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src http://127.0.0.1:*; media-src 'self' blob: file: http://127.0.0.1:*">
+  <title>Atrium</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <header id="top">
+      <div class="top-left">
+        <button id="homeBtn" class="brand-btn" title="All sites (⇧⌘H)"><img src="../../build/icon.png" alt=""><span>Atrium</span></button>
+        <span class="crumb-sep">/</span>
+        <button id="siteBtn" class="crumb"><span class="site-dot"></span><span id="siteName" class="ellip">Site</span><span data-icon="chevron" data-size="13" class="chev"></span></button>
+        <span class="crumb-sep">/</span>
+        <button id="pageBtn" class="crumb"><span data-icon="pages" data-size="15"></span><span id="pageName" class="ellip">Home</span><span data-icon="chevron" data-size="13" class="chev"></span></button>
+      </div>
+      <div class="top-mid" id="topMid">
+        <div class="seg" id="deviceSeg">
+          <button data-device="desktop" title="Desktop (⌘1)"><span data-icon="desktop" data-size="16"></span></button>
+          <button data-device="tablet" title="Tablet (⌘2)"><span data-icon="tablet" data-size="16"></span></button>
+          <button data-device="phone" title="Phone (⌘3)"><span data-icon="phone" data-size="16"></span></button>
+        </div>
+        <span id="widthLabel" class="tiny muted tnum"></span>
+        <div class="seg" id="modeSeg">
+          <button data-mode="edit" title="Click to select and edit"><span data-icon="cursor" data-size="14"></span>Edit</button>
+          <button data-mode="view" title="Use the site like a visitor (⌘P)"><span data-icon="eye" data-size="15"></span>Preview</button>
+        </div>
+      </div>
+      <div class="top-right" id="topRight">
+        <button class="icon-btn sm" id="undoBtn" title="Undo (⌘Z)"><span data-icon="undo" data-size="17"></span></button>
+        <button class="icon-btn sm" id="redoBtn" title="Redo (⇧⌘Z)"><span data-icon="redo" data-size="17"></span></button>
+        <button class="icon-btn sm" id="historyBtn" title="Versions"><span data-icon="history" data-size="17"></span></button>
+        <span class="top-sep"></span>
+        <button class="btn sm ghost" id="auditBtn" title="Check quality (⇧⌘A)"><span data-icon="shield" data-size="15"></span><span>Check</span></button>
+        <button class="icon-btn sm" id="phoneBtn" title="Preview on your phone"><span data-icon="qr" data-size="17"></span></button>
+        <button class="icon-btn sm" id="openBtn" title="Open in your browser"><span data-icon="external" data-size="17"></span></button>
+        <button class="btn sm" id="exportBtn" title="Export (⌘E)"><span data-icon="download" data-size="15"></span>Export</button>
+        <button class="btn sm primary" id="publishBtn" title="Publish (⇧⌘P)"><span data-icon="publish" data-size="15"></span>Publish</button>
+        <button class="icon-btn sm" id="settingsBtn" title="Settings (⌘,)"><span data-icon="gear" data-size="17"></span></button>
+      </div>
+    </header>
+
+    <!-- builder -->
+    <section id="builder">
+      <nav id="rail">
+        <button data-panel="layers" title="Pages & layers"><span data-icon="layers" data-size="19"></span><i>Layers</i></button>
+        <button data-panel="add" title="Add a section"><span data-icon="library" data-size="19"></span><i>Add</i></button>
+        <button data-panel="theme" title="Theme"><span data-icon="theme" data-size="19"></span><i>Theme</i></button>
+        <button data-panel="assets" title="Images & files"><span data-icon="image" data-size="19"></span><i>Assets</i></button>
+        <button data-panel="blog" title="Blog posts"><span data-icon="blog" data-size="19"></span><i>Blog</i></button>
+        <button data-panel="site" title="Site settings: SEO, analytics, forms"><span data-icon="site" data-size="19"></span><i>Site</i></button>
+        <div class="rail-fill"></div>
+        <button data-panel="code" title="Custom code"><span data-icon="code" data-size="19"></span><i>Code</i></button>
+      </nav>
+      <aside id="left"><div id="leftBody"></div></aside>
+      <main id="canvas">
+        <div id="stage">
+          <div id="frameWrap"><iframe id="frame" title="Site preview"></iframe><div id="frameShield" hidden></div></div>
+        </div>
+        <div id="aiBusy" class="ai-busy" hidden><span class="spin"></span><span id="aiBusyText">AI is working…</span><button class="btn xs" id="aiBusyStop">Stop</button></div>
+      </main>
+      <aside id="right">
+        <div class="right-tabs seg full">
+          <button data-rtab="inspect"><span data-icon="sliders" data-size="15"></span>Inspect</button>
+          <button data-rtab="ai"><span data-icon="sparkle" data-size="15"></span>AI<span class="nav-dot" id="aiDot"></span></button>
+        </div>
+        <div id="rightBody"></div>
+      </aside>
+    </section>
+
+    <!-- all sites -->
+    <section id="home" hidden></section>
+    <!-- settings -->
+    <section id="prefs" hidden></section>
+  </div>
+  <div id="sheetHost"></div>
+  <div id="popHost"></div>
+  <div id="toasts"></div>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="builder.js"></script>
+  <script src="panels.js"></script>
+  <script src="inspector.js"></script>
+  <script src="chat.js"></script>
+  <script src="sheets.js"></script>
+  <script src="home.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

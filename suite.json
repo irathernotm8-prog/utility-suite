@@ -275,6 +275,16 @@
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
+    },
+    {
+      "id": "atrium",
+      "name": "Atrium",
+      "description": "Website builder for you and your AI: premium sections and themes, a live preview you click to edit, Claude, GPT, Gemini or a local model with full control of the site, quality checks, and exports to any host, WordPress, Weebly and other site builders.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [
+        "test/e2e-out"
+      ]
     }
   ],
   "updates": {
