@@ -34,6 +34,10 @@ const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
 // ───────── finding joints
 function bbox(img) { let x0 = img.w, y0 = img.h, x1 = -1, y1 = -1; for (let y = 0; y < img.h; y++) for (let x = 0; x < img.w; x++) if (img.data[(y * img.w + x) * 4 + 3] > 127) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1 }; }
+function runsBy(img, y, on) { const r = []; let s = -1; for (let x = 0; x <= img.w; x++) { const v = x < img.w && on((y * img.w + x) * 4); if (v && s < 0) s = x; if (!v && s >= 0) { r.push([s, x - 1]); s = -1; } } return r; }
+// the outline colour: the commonest colour on the silhouette's edge (if it's dark and clearly dominant)
+function outlineKey(img) { const cnt = new Map(); let n = 0; for (let y = 0; y < img.h; y++) for (let x = 0; x < img.w; x++) { const i = (y * img.w + x) * 4; if (img.data[i + 3] <= 127) continue; let edge = false; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Y2 = y + dy; if (X < 0 || Y2 < 0 || X >= img.w || Y2 >= img.h || img.data[(Y2 * img.w + X) * 4 + 3] <= 127) edge = true; } if (!edge) continue; n++; const k = (img.data[i] << 16) | (img.data[i + 1] << 8) | img.data[i + 2]; cnt.set(k, (cnt.get(k) || 0) + 1); }
+  let bk = -1, bn = 0; for (const [k, c] of cnt) if (c > bn) { bn = c; bk = k; } const l = 0.3 * (bk >> 16) + 0.59 * ((bk >> 8) & 255) + 0.11 * (bk & 255); return bn > n * 0.5 && l < 90 ? bk : -1; }
 function runs(img, y) { const r = []; let s = -1; for (let x = 0; x <= img.w; x++) { const on = x < img.w && img.data[(y * img.w + x) * 4 + 3] > 127; if (on && s < 0) s = x; if (!on && s >= 0) { r.push([s, x - 1]); s = -1; } } return r; }
 // joints from the silhouette alone: works for a character standing upright, arms down or out (then you or Claude adjust)
 function guessJoints(img, view = 'side') {
@@ -45,14 +49,20 @@ function guessJoints(img, view = 'side') {
   let neckF = 0.2, best = Infinity; for (let f = 0.12; f <= 0.45; f += 0.01) { const w = width[Math.round(f * (H - 1))]; if (w > 0 && w < best * 0.97) { best = w; neckF = f; } }
   const headW = Math.max(...width.slice(0, Math.round(neckF * H) + 1)); if (best > headW * 0.85) neckF = headW > b.w * 0.5 ? 0.33 : 0.2;   // no clear neck: guess from how wide the head is
   // the crotch: the highest row in the lower 60% where the legs are two separate runs
-  let crotchF = null; for (let f = 0.95; f >= 0.45; f -= 0.01) { const r = runs(img, Y(f)).filter(([a, c]) => c - a >= 1); if (r.length >= 2) crotchF = f; else if (crotchF !== null) break; }
+  // legs drawn together are often only split by an outline-coloured line: count the outline colour as a gap
+  const ol = outlineKey(img); const inner = (y) => runsBy(img, y, (i) => img.data[i + 3] > 127 && ((img.data[i] << 16) | (img.data[i + 1] << 8) | img.data[i + 2]) !== ol);
+  // a gap near the middle of the row (not the gap between an arm and the body)
+  const midGap = (y) => { const all = runs(img, y); if (!all.length) return false; const mid = (all[0][0] + all[all.length - 1][1]) / 2, tol = Math.max(1.5, b.w * 0.12); const r = inner(y).filter(([a, c]) => c - a >= 1); for (let k = 1; k < r.length; k++) { const g0 = r[k - 1][1], g1 = r[k][0]; if (g1 - g0 > 1 && g0 < mid + tol && g1 > mid - tol) return true; } return false; };
+  let crotchF = null, legSpan = 0; for (let f = 0.97; f >= 0.4; f -= 0.01) { if (midGap(Y(f))) { crotchF = f; legSpan++; } else if (crotchF !== null) break; }
+  // a short split right at the bottom is two feet under a robe or dress, not legs
+  const robe = crotchF !== null && legSpan * 0.01 < 0.12; if (robe) crotchF = null;
   const legs = crotchF !== null; const pelvisF = legs ? Math.max(neckF + 0.15, crotchF - 0.04) : neckF + (1 - neckF) * 0.48;
   const cx = centre(Y((neckF + pelvisF) / 2)), neck = [centre(Y(neckF)), Y(neckF)], top = [centre(b.y0), b.y0], pelvis = [cx, Y(pelvisF)];
   const torsoLen = pelvis[1] - neck[1]; const shoulderY = neck[1] + torsoLen * 0.15;
   // arms out (T-pose) if the shoulder band is much wider than the torso just above the hips
   const bandW = Math.max(...width.slice(Math.round((shoulderY - b.y0)), Math.round(shoulderY - b.y0 + torsoLen * 0.25) + 1)), waistW = width[Math.round((pelvis[1] - b.y0) - torsoLen * 0.2)] || bandW;
   const J = { head_top: top, neck, pelvis };
-  const legRuns = legs ? runs(img, Y(Math.min(0.99, crotchF + 0.06))).filter(([a, c]) => c - a >= 1) : null;
+  const legRuns = legs ? inner(Y(Math.min(0.99, crotchF + 0.06))).filter(([a, c]) => c - a >= 1) : null;
   const legX = legRuns && legRuns.length >= 2 ? [(legRuns[0][0] + legRuns[0][1]) / 2, (legRuns[legRuns.length - 1][0] + legRuns[legRuns.length - 1][1]) / 2] : [cx - b.w * 0.12, cx + b.w * 0.12];
   const bottom = runs(img, b.y1);
   if (kind === 'side' || kind === 'back34') {
@@ -70,14 +80,16 @@ function guessJoints(img, view = 'side') {
     const edge = (y, dir) => { const r = runs(img, Math.round(Math.min(b.y1, Math.max(b.y0, y)))); if (!r.length) return cx + dir * sw; return dir < 0 ? r[0][0] + aw : r[r.length - 1][1] + 1 - aw; };
     for (const [s, dir] of [['f', -1], ['b', 1]]) {      // f = the character's right = left on screen
       const sh = armOut ? [cx + dir * sw * 0.8, shoulderY] : [edge(shoulderY + torsoLen * 0.12, dir), shoulderY];
-      const elbow = armOut ? [cx + dir * (sw + torsoLen * 0.5), shoulderY + torsoLen * 0.05] : [edge(sh[1] + torsoLen * 0.45, dir), sh[1] + torsoLen * 0.45];
-      const wrist = armOut ? [cx + dir * (sw + torsoLen * 1.0), shoulderY + torsoLen * 0.08] : [edge(sh[1] + torsoLen * 0.82, dir), sh[1] + torsoLen * 0.82];
+      // arms out: the hand is the far end of the arm band; the elbow half-way
+      let tip = null; if (armOut) { let best = -1; for (let y = Math.round(shoulderY - torsoLen * 0.2); y <= Math.round(shoulderY + torsoLen * 0.5); y++) { if (y < b.y0 || y > b.y1) continue; const r = runs(img, y); if (!r.length) continue; const x = dir < 0 ? r[0][0] : r[r.length - 1][1]; const d = Math.abs(x - cx); if (d > best) { best = d; tip = [x, y]; } } }
+      const wrist = armOut && tip ? [tip[0] - dir * H * 0.05, tip[1]] : armOut ? [cx + dir * (sw + torsoLen * 1.0), shoulderY + torsoLen * 0.08] : [edge(sh[1] + torsoLen * 0.82, dir), sh[1] + torsoLen * 0.82];
+      const elbow = armOut ? lerp(sh, wrist, 0.5) : [edge(sh[1] + torsoLen * 0.45, dir), sh[1] + torsoLen * 0.45];
       const hx = legs ? legX[dir < 0 ? 0 : 1] : cx + dir * b.w * 0.12, hip = [hx, pelvis[1] + torsoLen * 0.06], ank = [hx, b.y1 - H * 0.04];
       Object.assign(J, { ['shoulder_' + s]: sh, ['elbow_' + s]: elbow, ['wrist_' + s]: wrist, ['hand_' + s]: [wrist[0] + (wrist[0] - elbow[0]) * 0.35, wrist[1] + (wrist[1] - elbow[1]) * 0.35], ['hip_' + s]: hip, ['knee_' + s]: lerp(hip, ank, 0.5), ['ankle_' + s]: ank, ['toe_' + s]: [hx, b.y1] });
     }
   }
   for (const k of JOINTS) J[k] = [Math.round(J[k][0] * 10) / 10, Math.round(J[k][1] * 10) / 10];
-  return { joints: J, source: 'silhouette', notes: [legs ? 'legs found' : 'no gap between the legs (robe/dress?): legs guessed', `head ${Math.round(neckF * 100)}% of the height`] };
+  return { joints: J, source: 'silhouette', robe, notes: [legs ? 'legs found' : robe ? 'a robe or dress (only the feet show): legs placed inside it and their motion softened' : 'no gap between the legs: legs guessed', `head ${Math.round(neckF * 100)}% of the height`] };
 }
 // joints from MediaPipe pose landmarks (33 points in pixels: [x, y, z, visibility])
 function jointsFromLandmarks(L, view = 'side', img = null) {

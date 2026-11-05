@@ -67,7 +67,9 @@ function lerpPose(A, B, u) {
 }
 function addPose(A, B) { const o = lerpPose(A, { root: {}, bones: {} }, 0); for (const [k, v] of Object.entries(B.root || {})) o.root[k] = (o.root[k] || 0) + v; for (const [b, v] of Object.entries(B.bones || {})) { o.bones[b] ||= {}; for (const [k, x] of Object.entries(v)) o.bones[b][k] = k === 'sl' || k === 'sw' ? (o.bones[b][k] ?? 1) * x : (o.bones[b][k] || 0) + x; } return o; }
 // the pose of an animation at frame f: keyed frames (from the pose editor or video) or the library motion; keys add on top of a motion
-function poseAt(anim, f, view) {
+// vo = the character's view ({ robe }): under a robe or dress the legs barely swing
+function poseAt(anim, f, view, vo) { let p = poseAt0(anim, f, view); if (!vo || !vo.robe) return p; p = JSON.parse(JSON.stringify(p)); for (const b of ['thigh_f', 'thigh_b', 'shin_f', 'shin_b', 'foot_f', 'foot_b']) { const q = p.bones && p.bones[b]; if (!q) continue; if (q.r) q.r *= 0.3; if (q.sl !== undefined) q.sl = 1 + (q.sl - 1) * 0.3; if (q.y) q.y *= 0.3; } return p; }
+function poseAt0(anim, f, view) {
   const n = Math.max(1, anim.frames || 1), t = anim.loop ? f / n : n > 1 ? f / (n - 1) : 0;
   let base = anim.motion ? motionPose(anim.motion, t, view, anim.amp ?? 1) : { root: {}, bones: {} };
   const keys = (anim.keys && (anim.keys[view] || anim.keys.all)) || null;
@@ -113,7 +115,7 @@ function viewRig(getSprite, ch, viewName, { pixel } = {}) {
 }
 // render frames of an animation for one view; frame box shared by all frames (or given)
 function renderAnim(getSprite, ch, anim, viewName, { mirror = false, frame, rig, pixel } = {}) {
-  const R0 = rig || viewRig(getSprite, ch, viewName, { pixel }); const n = Math.max(1, anim.frames || 1); const poses = Array.from({ length: n }, (_, f) => poseAt(anim, f, viewName));
+  const R0 = rig || viewRig(getSprite, ch, viewName, { pixel }); const n = Math.max(1, anim.frames || 1); const poses = Array.from({ length: n }, (_, f) => poseAt(anim, f, viewName, ch.views[viewName]));
   const F = frame || RG.bounds(R0.sk, R0.prep, poses, 2);
   const frames = poses.map((p) => { const r = RG.render(R0.sk, R0.prep, p, { frame: F, pixel: R0.pixel, palette: R0.palette }); return mirror ? flipX(r) : r; });
   return { frames: frames.map((f) => f.data), w: F.w, h: F.h, box: F, poses, fps: anim.fps || 10, rig: R0 };

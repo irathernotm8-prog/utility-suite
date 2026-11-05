@@ -13,6 +13,8 @@ const EX = require('./exporters');
 const base = (s) => String(s || 'character').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'character';
 const snake = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'anim';
 const r3 = (v) => Math.round(v * 1000) / 1000;
+// Godot reads 0 as an int and then won't interpolate it with floats: always write a decimal point
+const gf = (v) => { const x = r3(v); return Number.isInteger(x) ? x.toFixed(1) : String(x); };
 
 // ───────── baked sheets
 function bake(getSprite, ch, { anims, dirs } = {}) {
@@ -20,7 +22,7 @@ function bake(getSprite, ch, { anims, dirs } = {}) {
   const out = [];
   for (const d of CH.directions(ch).filter((x) => !dirs || dirs.includes(x.dir))) {
     const rig = CH.viewRig(getSprite, ch, d.view);
-    const allPoses = list.flatMap((a) => Array.from({ length: a.frames }, (_, f) => CH.poseAt(a, f, d.view)));
+    const allPoses = list.flatMap((a) => Array.from({ length: a.frames }, (_, f) => CH.poseAt(a, f, d.view, ch.views[d.view])));
     const box = RG.bounds(rig.sk, rig.prep, allPoses.length ? allPoses : [{}], 2);
     const rows = list.map((a) => {
       const r = CH.renderAnim(getSprite, ch, a, d.view, { mirror: d.mirror, frame: box, rig });
@@ -70,7 +72,7 @@ function spine(getSprite, ch, view, { atlasName } = {}) {
   const { rig, pieces } = partPieces(getSprite, ch, view); const sk = rig.sk; const root = sk.bones[0].start;
   const Y = (p) => [p[0] - root[0], -(p[1] - root[1])];
   const world = {}; for (const b of sk.bones) world[b.name] = { pos: Y(b.start), ang: b.name === 'root' || b.name === 'hips' ? 0 : -b.angle };
-  const bones = sk.bones.map((b) => { const wb = world[b.name]; if (!b.parent) return { name: 'root' }; const pw = world[b.parent]; const dx = wb.pos[0] - pw.pos[0], dy = wb.pos[1] - pw.pos[1], a = -pw.ang * Math.PI / 180; return { name: b.name, parent: b.parent, length: r3(b.length), x: r3(dx * Math.cos(a) - dy * Math.sin(a)), y: r3(dx * Math.sin(a) + dy * Math.cos(a)), rotation: r3(wb.ang - pw.ang) }; });
+  const bones = sk.bones.map((b) => { const wb = world[b.name]; if (!b.parent) return { name: 'root' }; const pw = world[b.parent]; const dx = wb.pos[0] - pw.pos[0], dy = wb.pos[1] - pw.pos[1], a = -pw.ang * Math.PI / 180; return { name: b.name, parent: b.parent, transform: 'noScale', length: r3(b.length), x: r3(dx * Math.cos(a) - dy * Math.sin(a)), y: r3(dx * Math.sin(a) + dy * Math.cos(a)), rotation: r3(wb.ang - pw.ang) }; });
   const slots = pieces.map((p) => ({ name: p.name, bone: p.bone, attachment: p.name }));
   const skin = { name: 'default', attachments: {} };
   for (const p of pieces) { const wb = world[p.bone]; const c = Y([(p.box.x0 + p.box.x1 + 1) / 2, (p.box.y0 + p.box.y1 + 1) / 2]); const dx = c[0] - wb.pos[0], dy = c[1] - wb.pos[1], a = -wb.ang * Math.PI / 180; skin.attachments[p.name] = { [p.name]: { x: r3(dx * Math.cos(a) - dy * Math.sin(a)), y: r3(dx * Math.sin(a) + dy * Math.cos(a)), rotation: r3(-wb.ang), width: p.img.w, height: p.img.h } }; }
@@ -78,7 +80,7 @@ function spine(getSprite, ch, view, { atlasName } = {}) {
   for (const a of ch.animations || []) {
     const n = Math.max(1, a.frames), dt = 1 / (a.fps || 10); const tl = {};
     for (let f = 0; f <= (a.loop ? n : n - 1); f++) {
-      const pose = CH.poseAt(a, a.loop ? f % n : f, view), time = r3(f * dt);
+      const pose = CH.poseAt(a, a.loop ? f % n : f, view, ch.views[view]), time = r3(f * dt);
       for (const b of sk.bones) { const p = b.name === 'root' ? pose.root || {} : (pose.bones || {})[b.name] || {}; const t = (tl[b.name] ||= { rotate: [], translate: [], scale: [] }); t.rotate.push({ time, value: r3(-(b.name === 'root' ? p.rot || 0 : p.r || 0)) }); t.translate.push({ time, x: r3((p.x || 0) * H), y: r3(-(p.y || 0) * H) }); if (b.name !== 'root') t.scale.push({ time, x: r3(p.sl ?? 1), y: r3(p.sw ?? 1) }); }
     }
     for (const [k, t] of Object.entries(tl)) { if (t.rotate.every((x) => !x.value)) delete t.rotate; if (t.translate.every((x) => !x.x && !x.y)) delete t.translate; if (!t.scale.length || t.scale.every((x) => x.x === 1 && x.y === 1)) delete t.scale; if (!Object.keys(t).length) delete tl[k]; }
@@ -105,13 +107,16 @@ function godotScene(getSprite, ch, view, { dir }) {
   const H = sk.H; const anims = [];
   (ch.animations || []).forEach((a, ai) => {
     const n = Math.max(1, a.frames), dt = 1 / (a.fps || 10), count = a.loop ? n + 1 : n; const times = Array.from({ length: count }, (_, f) => r3(f * dt)); const tracks = [];
-    const poses = times.map((_, f) => CH.poseAt(a, a.loop ? f % n : f, view));
+    const poses = times.map((_, f) => CH.poseAt(a, a.loop ? f % n : f, view, ch.views[view]));
     for (const b of sk.bones) {
       const rot = poses.map((p) => (b.name === 'root' ? p.root?.rot || 0 : p.bones?.[b.name]?.r || 0) * Math.PI / 180);
       const off = b.parent ? [b.start[0] - by[b.parent].start[0], b.start[1] - by[b.parent].start[1]] : [0, 0];
       const posv = poses.map((p) => { const q = b.name === 'root' ? p.root || {} : p.bones?.[b.name] || {}; return [off[0] + (q.x || 0) * H, off[1] + (q.y || 0) * H]; });
-      if (rot.some((v) => v)) tracks.push({ path: `${pathOf[b.name]}:rotation`, values: rot.map((v) => r3(v)) });
-      if (posv.some((v, i) => v[0] !== off[0] || v[1] !== off[1])) tracks.push({ path: `${pathOf[b.name]}:position`, values: posv.map((v) => `Vector2(${r3(v[0])}, ${r3(v[1])})`) });
+      if (rot.some((v) => v)) tracks.push({ path: `${pathOf[b.name]}:rotation`, values: rot.map((v) => gf(v)) });
+      // stretch (sl along the bone, sw across it) → Node2D scale on the nearest axis (bones have no rest rotation here)
+      const vert = Math.abs(Math.sin(b.angle * Math.PI / 180)) > 0.7071; const scl = poses.map((p) => { const q = p.bones?.[b.name] || {}; const sl = q.sl ?? 1, sw = q.sw ?? 1; return vert ? [sw, sl] : [sl, sw]; });
+      if (b.name !== 'root' && scl.some((v) => v[0] !== 1 || v[1] !== 1)) tracks.push({ path: `${pathOf[b.name]}:scale`, values: scl.map((v) => `Vector2(${gf(v[0])}, ${gf(v[1])})`) });
+      if (posv.some((v, i) => v[0] !== off[0] || v[1] !== off[1])) tracks.push({ path: `${pathOf[b.name]}:position`, values: posv.map((v) => `Vector2(${gf(v[0])}, ${gf(v[1])})`) });
     }
     const id = `Animation_${ai + 1}`;
     anims.push({ id, name: snake(a.name), text: `[sub_resource type="Animation" id="${id}"]\nresource_name = "${snake(a.name)}"\nlength = ${r3((count - (a.loop ? 1 : 0)) * dt) || dt}\n${a.loop ? 'loop_mode = 1\n' : ''}step = ${r3(dt)}\n${tracks.map((t, k) => `tracks/${k}/type = "value"\ntracks/${k}/imported = false\ntracks/${k}/enabled = true\ntracks/${k}/path = NodePath("${t.path}")\ntracks/${k}/interp = 1\ntracks/${k}/loop_wrap = true\ntracks/${k}/keys = {\n"times": PackedFloat32Array(${times.join(', ')}),\n"transitions": PackedFloat32Array(${times.map(() => 1).join(', ')}),\n"update": 0,\n"values": [${t.values.join(', ')}]\n}`).join('\n')}\n` });

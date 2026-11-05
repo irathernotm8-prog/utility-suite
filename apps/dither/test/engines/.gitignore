@@ -1,0 +1,6 @@
+lib/
+out/
+gp/
+node_modules/
+package*.json
+godot.json

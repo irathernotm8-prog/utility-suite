@@ -1,7 +1,7 @@
 {
   "name": "dither",
   "productName": "Dither",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Pixel art and pixel animation studio for you and your AI: effects as code, rounds of drafts you review side by side, a sprite and animation editor, a local pixel-art model, and a Claude/Codex plugin that sees what it draws.",
   "main": "src/main.js",
   "author": "Bilal",

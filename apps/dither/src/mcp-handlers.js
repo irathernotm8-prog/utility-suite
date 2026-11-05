@@ -391,14 +391,14 @@ function makeHandlers(ctx) {
       ctx.activity(`Made character “${r.character.name}”`); const img = chars().rigPicture(r.character.id, view || 'side', 6);
       return ok(text({ character: r.character.id, view: view || 'side', notes: r.notes, animations: r.character.animations.map((a) => a.name), next: 'Check the joints in the picture (red near side, blue far side). Move any that are off with set_joints (it re-cuts the parts), then view kind "character" params {anim:"walk"} to see it move.' }), image(img));
     },
-    set_joints: async ({ character, view, joints, recut, back_limbs, project }) => {
+    set_joints: async ({ character, view, joints, recut, back_limbs, robe, project }) => {
       P(project); const c0 = chars().get(character); view = view || Object.keys(c0.views)[0];
-      const r = await chars().setJoints(c0.id, view, joints, { recut: recut !== false, backLimbs: back_limbs }); return ok(text({ character: r.character.id, view, notes: r.notes }), image(chars().rigPicture(r.character.id, view, 6)));
+      const r = await chars().setJoints(c0.id, view, joints || {}, { recut: recut !== false && !!(joints && Object.keys(joints).length) || back_limbs !== undefined, backLimbs: back_limbs, robe }); return ok(text({ character: r.character.id, view, notes: r.notes }), image(chars().rigPicture(r.character.id, view, 6)));
     },
     character_view: async ({ character, view, sprite, frame, file, clip, mirror_of, action, directions, picks, engine, project }) => {
       P(project); const c0 = chars().get(character);
-      if (action === 'turnaround') { const clip2 = await chars().turnaround(c0.id, { engine }); return ok(text({ clip: clip2.id, frames: clip2.frames, next: `Look at it with view kind "clip", then character_view action:"pick" with picks {front: n, side: n, back: n, front34: n, back34: n} (frame numbers from 0) to make those views.` })); }
-      if (action === 'pick') { const r = await chars().viewsFromClip(c0.id, clip, picks); return ok(text({ character: c0.id, views: Object.keys(r.character.views), directions: r.character.directions, notes: r.notes }), image(sheets.boardSheet(Object.keys(r.character.views).map((v) => { const p = chars().preview(c0.id, { view: v }); return { label: v, frames: p.frames, w: p.w, h: p.h }; })))); }
+      if (action === 'turnaround') { const clip2 = await chars().turnaround(c0.id, { engine }); return ok(text({ clip: clip2.id, frames: clip2.frames, next: `Look at it with view kind "clip", then character_view action:"pick" with picks {front: n, side: n, back: n, front34: n, back34: n} (frame numbers from 0) to make those views — or leave picks out and the frames are chosen from the body angle.` })); }
+      if (action === 'pick') { let pk = picks, auto = null; if (!pk || !Object.keys(pk).length) { auto = await chars().autoPick(clip); pk = auto.picks; } const r = await chars().viewsFromClip(c0.id, clip, pk); if (auto) r.notes.unshift(...auto.notes, `auto picks: ${JSON.stringify(pk)}`); return ok(text({ character: c0.id, views: Object.keys(r.character.views), directions: r.character.directions, notes: r.notes }), image(sheets.boardSheet(Object.keys(r.character.views).map((v) => { const p = chars().preview(c0.id, { view: v }); return { label: v, frames: p.frames, w: p.w, h: p.h }; })))); }
       if (action === 'directions') { const c = chars().get(c0.id); c.directions = directions; chars().save(c); return ok(text({ directions: CHR.directions(c) })); }
       if (!view) return err('view: side, front, back, front34 or back34');
       const r = await chars().addView(c0.id, view, mirror_of ? { mirrorOf: mirror_of } : sprite ? { sprite, frame } : file ? { file: home(file) } : clip ? { clip, frame } : {}, { directions });

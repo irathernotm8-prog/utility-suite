@@ -35,13 +35,13 @@ function makeCharacters(ctx) {
       return { ...sil, notes: [...sil.notes, `the pose model wasn’t sure (confidence ${m.confidence}); joints from the silhouette`] };
     } catch (e) { return { ...sil, notes: [...sil.notes, `pose model unavailable (${e.message}); joints from the silhouette`] }; }
   }
-  async function makeView(c, view, img, { joints, backLimbs, model } = {}) {
+  async function makeView(c, view, img, { joints, backLimbs, model, robe: o2robe } = {}) {
     let J = joints, notes = [];
-    if (!J) { const r = await findJoints(img, view, { model }); J = r.joints; notes = r.notes; }
+    let robe = o2robe; if (!J) { const r = await findJoints(img, view, { model }); J = r.joints; notes = r.notes; if (robe === undefined) robe = !!r.robe; }
     const old = c.views[view]; const b = CH.buildView({ name: `${c.name} · ${view}`, img, joints: J, view, backLimbs });
     if (old) { try { const prev = get(old.sprite); b.sprite.id = prev.id; b.sprite.name = prev.name; for (const f of prev.frames.slice(1)) b.sprite.frames.push(f); for (const l of b.sprite.layers) { const pl = prev.layers.find((x) => x.name === l.name); if (!pl) continue; for (const f of prev.frames.slice(1)) { const cel = SP.getCel(prev, pl.id, f.id); if (cel) SP.setCel(b.sprite, l.id, f.id, cel); } } b.sprite.tags = prev.tags; } catch {} }
     P().saveSprite(b.sprite); ctx.changed('sprite', b.sprite.id);
-    c.views[view] = { sprite: b.sprite.id, joints: J, backLimbs: backLimbs || 'auto', source: img.w + '×' + img.h };
+    c.views[view] = { sprite: b.sprite.id, joints: J, backLimbs: backLimbs || 'auto', robe: robe ?? (old && old.robe) ?? false, source: img.w + '×' + img.h };
     fs.mkdirSync(P().p('characters', 'sources'), { recursive: true }); fs.writeFileSync(P().p('characters', 'sources', `${b.sprite.id}.png`), require('./core/png').encode(img));
     return { notes: [...notes, ...b.notes], copied: b.copied };
   }
@@ -58,10 +58,10 @@ function makeCharacters(ctx) {
     return { character: saved, notes: r.notes };
   }
   function sourceOf(c, view) { const v = c.views[view]; const f = P().p('characters', 'sources', `${v.sprite}.png`); if (fs.existsSync(f)) { const png = require('./core/png'); return png.decode(fs.readFileSync(f)); } const s = get(v.sprite); return { w: s.w, h: s.h, data: SP.compose(s, 0) }; }
-  async function setJoints(id, view, joints, { recut = true, backLimbs } = {}) {
+  async function setJoints(id, view, joints, { recut = true, backLimbs, robe } = {}) {
     const c = P().getCharacter(id); const v = c.views[view]; if (!v) throw new Error(`No ${view} view`);
     const J = { ...v.joints }; for (const [k, p] of Object.entries(joints || {})) { if (!RG.JOINTS.includes(k)) throw new Error(`Unknown joint “${k}”. Joints: ${RG.JOINTS.join(', ')}`); J[k] = [+p[0], +p[1]]; }
-    let notes = []; if (recut) { const r = await makeView(c, view, sourceOf(c, view), { joints: J, backLimbs: backLimbs || v.backLimbs }); notes = r.notes; } else v.joints = J;
+    let notes = []; if (recut) { const r = await makeView(c, view, sourceOf(c, view), { joints: J, backLimbs: backLimbs || v.backLimbs, robe: robe ?? v.robe }); notes = r.notes; } else { v.joints = J; if (robe !== undefined) v.robe = robe; }
     save(c); return { character: c, notes };
   }
   async function addView(id, view, src = {}, o = {}) {
@@ -75,6 +75,64 @@ function makeCharacters(ctx) {
   }
   // a turnaround clip from the character's picture (Animate), then views picked from its frames
   async function turnaround(id, { engine } = {}) { const c = P().getCharacter(id); const view = c.views.side ? 'side' : Object.keys(c.views)[0]; const s = get(c.views[view].sprite); return ctx.animate.generate({ source: { sprite: s.id }, preset: 'turnaround', engine, name: `${c.name} turnaround`, by: 'Dither' }); }
+  // which frame of a turnaround shows which view: body angle from the pose model's shoulders (x spread + depth),
+  // facing from the nose; without the model, silhouette widths and the order of the turn
+  async function autoPick(clip) {
+    const frames = P().clipFrames(clip); if (!frames || !frames.length) throw new Error('That clip has no frames');
+    const imgs = frames.map((f) => C2S.key(f)), n = imgs.length, notes = [];
+    const TARGET = { front: 0, front34: 45, side: 90, back34: 135, back: 180 };
+    let est = null;
+    if (ctx.poses) {
+      try {
+        const Ls = await ctx.poses(imgs.map((im) => { const d = new Uint8ClampedArray(im.w * im.h * 4); for (let i = 0; i < d.length; i += 4) { const a = im.data[i + 3] / 255; d[i] = im.data[i] * a + 255 * (1 - a); d[i + 1] = im.data[i + 1] * a + 255 * (1 - a); d[i + 2] = im.data[i + 2] * a + 255 * (1 - a); d[i + 3] = 255; } return { w: im.w, h: im.h, data: d }; }));
+        est = Ls.map((L) => {
+          if (!L) return null; const sh = [(L[11][0] + L[12][0]) / 2, (L[11][1] + L[12][1]) / 2], hp = [(L[23][0] + L[24][0]) / 2, (L[23][1] + L[24][1]) / 2], torso = Math.hypot(sh[0] - hp[0], sh[1] - hp[1]) || 1;
+          const dx = ((L[11][0] - L[12][0]) + (L[23][0] - L[24][0]) * 0.6) / torso;   // the person's left is screen-right when they face us
+          const nose = L[0], face = nose[0] > sh[0] ? 1 : -1, ok = Math.min(L[11][3] ?? 1, L[12][3] ?? 1);
+          const faceVis = [0, 1, 2, 3, 4, 5, 6, 9, 10].reduce((a, i) => a + (L[i][3] ?? 1), 0) / 9; return { dx, face, ok, faceVis };
+        });
+        // the shoulder/hip spread shrinks with cos(angle): the widest frame of the turn is straight on (the model's depth is too noisy to use)
+        const top = Math.max(...est.filter(Boolean).map((e) => Math.abs(e.dx))) || 1;
+        est.forEach((e) => { if (!e) return; const a = Math.acos(Math.min(1, Math.abs(e.dx) / top)) * 180 / Math.PI; e.ang = e.dx >= 0 ? a : 180 - a; });
+        if (est.filter(Boolean).length < Math.max(3, n * 0.4)) { est = null; notes.push('the pose model lost the figure in most frames; picked by silhouette width'); }
+      } catch (e) { est = null; notes.push(`pose model unavailable (${e.message}); picked by silhouette width`); }
+    }
+    const picks = {};
+    if (est) {
+      for (const [v, t] of Object.entries(TARGET)) {
+        let best = -1, bs = Infinity;
+        est.forEach((e, i) => { if (!e) return; let s = Math.abs(e.ang - t) + (1 - e.ok) * 20; if (v !== 'front' && v !== 'back' && e.face < 0) s += 35; if (s < bs) { bs = s; best = i; } });
+        if (best >= 0 && bs < 40) picks[v] = best;
+      }
+      // the model often reads a back as a mirrored front: if the two widest frames half a turn apart read the same way,
+      // the one with the clearer face is the front, the other the back, and the back three-quarter sits between side and back
+      const idx = est.map((e, i) => (e ? i : -1)).filter((i) => i >= 0), circ = (a, b) => Math.min(Math.abs(a - b), n - Math.abs(a - b));
+      const A = idx.reduce((m, i) => (Math.abs(est[i].dx) > Math.abs(est[m].dx) ? i : m), idx[0]);
+      const far = idx.filter((i) => circ(i, A) >= n / 4), B = far.length ? far.reduce((m, i) => (Math.abs(est[i].dx) > Math.abs(est[m].dx) ? i : m), far[0]) : -1;
+      if (B >= 0 && Math.abs(est[B].dx) > 0.6 * Math.abs(est[A].dx) && Math.sign(est[A].dx) === Math.sign(est[B].dx) && idx.some((i) => Math.abs(est[i].dx) < 0.45 * Math.abs(est[A].dx))) {
+        const faceScore = (i) => est[i].faceVis; const [F, Bk] = faceScore(A) >= faceScore(B) ? [A, B] : [B, A];
+        picks.front = F; picks.back = Bk;
+        notes.push('front and back looked alike to the pose model; the clearer face was taken as the front');
+      }
+      // three-quarter views sit on the turn between front/back and the side: keep them on that stretch of the clip
+      const arc = (a, b) => { const f = (b - a + n) % n, r = (a - b + n) % n, out = []; if (f <= r) for (let k = 1; k < f; k++) out.push((a + k) % n); else for (let k = 1; k < r; k++) out.push((a - k + n) % n); return out; };
+      for (const [v, end, t] of [['front34', 'front', 45], ['back34', 'back', 135]]) {
+        if (picks.side === undefined || picks[end] === undefined) { delete picks[v]; continue; } const on = arc(picks[end], picks.side); if (!on.length) { delete picks[v]; continue; }
+        const scored = on.filter((i) => est[i]); picks[v] = scored.length && !notes.length ? scored.reduce((m, i) => (Math.abs(est[i].ang - t) < Math.abs(est[m].ang - t) ? i : m), scored[0]) : on[Math.floor(on.length / 2)];
+      }
+      notes.push('picked from the body angle the pose model sees — check them before making the views');
+    } else {
+      const wid = imgs.map((im) => { const b = RG.bbox(im); return b ? b.x1 - b.x0 : 0; });
+      const order = wid.map((w, i) => i).sort((a, b) => wid[b] - wid[a]);
+      const f1 = order[0], f2 = order.find((i) => Math.min(Math.abs(i - f1), n - Math.abs(i - f1)) >= n / 4);
+      const [a, b] = [f1, f2 ?? (f1 + Math.floor(n / 2)) % n].sort((x, y) => x - y);
+      picks.front = a; picks.back = b; picks.side = a > 0 ? wid.slice(0, a).indexOf(Math.min(...wid.slice(0, a))) : 0;
+      if (a - picks.side > 1) picks.front34 = Math.round((a + picks.side) / 2);
+      if (b - a > 1) picks.back34 = Math.round((a + b) / 2);
+      notes.push('picked by silhouette width and the order of the turn (front and back can be swapped) — check them');
+    }
+    return { clip, frames: n, picks, notes };
+  }
   async function viewsFromClip(id, clip, picks) { const out = []; for (const [view, frame] of Object.entries(picks || {})) { if (frame === null || frame === undefined) continue; const r = await addView(id, view, { clip, frame }); out.push(...r.notes.map((n) => `${view}: ${n}`)); } return { character: P().getCharacter(id), notes: out }; }
 
   // animations
@@ -91,7 +149,7 @@ function makeCharacters(ctx) {
         for (const [b, v] of Object.entries(op.pose?.bones || {})) k.pose.bones[b] = { ...(k.pose.bones[b] || {}), ...v }; Object.assign(k.pose.root, op.pose?.root || {});
       }
       else if (action === 'clear_keys') { if (op.view) delete a.keys?.[op.view]; else a.keys = {}; }
-      else if (action === 'bake') { const view = op.view || Object.keys(c.views)[0]; a.keys ||= {}; a.keys[view] = Array.from({ length: a.frames }, (_, f) => ({ f, pose: CH.poseAt(a, f, view) })); a.motion = null; }
+      else if (action === 'bake') { const view = op.view || Object.keys(c.views)[0]; a.keys ||= {}; a.keys[view] = Array.from({ length: a.frames }, (_, f) => ({ f, pose: CH.poseAt(a, f, view, c.views[view]) })); a.motion = null; }
       else throw new Error('action: add, update, remove, pose, clear_keys, bake');
     }
     save(c); return c;
@@ -146,7 +204,7 @@ function makeCharacters(ctx) {
     if (format === 'godot' || format === 'all') files.push(...CX.writeRig(dir, get, c, 'godot'));
     return files;
   }
-  return { create, findJoints, setJoints, addView, turnaround, viewsFromClip, animation, fromVideo, skin, preview, rigPicture, exportTo, list: () => P().listCharacters(), get: (id) => P().getCharacter(id), save, remove: (id) => { P().removeCharacter(id); ctx.changed('character', id); return true; } };
+  return { create, findJoints, setJoints, addView, turnaround, autoPick, viewsFromClip, animation, fromVideo, skin, preview, rigPicture, exportTo, list: () => P().listCharacters(), get: (id) => P().getCharacter(id), save, remove: (id) => { P().removeCharacter(id); ctx.changed('character', id); return true; } };
 }
 
 module.exports = { makeCharacters };

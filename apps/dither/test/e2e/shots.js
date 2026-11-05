@@ -208,6 +208,7 @@ function seed(root) {
     const vdir2 = path.join(tmp, 'pv'); fs.mkdirSync(vdir2); require('child_process').execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-loop', '1', '-i', process.env.DITHER_POSE_PHOTO, '-t', '1', '-vf', "scale=640:-2,rotate='0.06*sin(2*PI*t)':c=white", '-r', '12', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(vdir2, 'pose.mp4')]);
     const v = await win.evaluate(async ([id, f]) => { const x = await call('chars:fromVideo', id, { file: f, name: 'from video', view: 'front', frames: 8 }); return { detected: x.detected, of: x.of, frames: x.anim.frames }; }, [r.character.id, path.join(vdir2, 'pose.mp4')]);
     console.log('motion from video:', JSON.stringify(v));
+    const ap = await win.evaluate(async (f) => { const cl = await call('animate:import', f); return call('chars:autoPick', cl.id || cl.clip?.id); }, path.join(vdir2, 'pose.mp4')); console.log('auto-pick on a front-facing clip:', JSON.stringify(ap));
     await go('character', r.character.id); await win.waitForSelector('#ceOv'); await win.waitForTimeout(1500); await shot('44-photo-rig', 900);
   }
   await go('drafts');

@@ -171,10 +171,12 @@ function panelRig() {
   $('#cePanel').innerHTML = `<div class="panel-h">Rig · ${VIEW_NAMES[CHS.view]}</div><div class="ce-p">
     <p class="muted small">Red joints are the near side, blue the far side, yellow the spine and head. Drag any that are off; the picture is re-cut into parts when you let go.</p>
     <label class="chk"><input type="checkbox" id="crParts" ${CHS.showParts ? 'checked' : ''}> Show the parts in colour</label>
+    <label class="chk"><input type="checkbox" id="crRobe" ${v.robe ? 'checked' : ''}> Robe or long dress (the legs barely swing)</label>
     <div class="field"><label>Far arm and leg (side views)</label><div class="seg sm" id="crBack">${[['auto', 'Auto'], ['copy', 'Copy the near ones'], ['own', 'Cut from picture']].map(([k, n]) => `<button data-b="${k}" class="${(v.backLimbs || 'auto') === k ? 'on' : ''}">${n}</button>`).join('')}</div></div>
     <div class="ce-btns"><button class="btn" id="crAuto">${icon('wand', 14)}Find joints again</button><button class="btn" id="crEdit">${icon('edit', 14)}Draw on the parts</button></div>
     <p class="muted tiny">Parts are layers of an ordinary sprite (“${esc(c.name)} · ${CHS.view}”): fix a hole, redraw a hand, shade them — animations pick it up.</p></div>`;
   $('#crParts').onchange = (e) => { CHS.showParts = e.target.checked; drawStage(); };
+  $('#crRobe').onchange = async (e) => { try { const r = await call('chars:joints', c.id, CHS.view, {}, { recut: false, robe: e.target.checked }); CHS.c = r.character; CHS.previewFrames = null; toast(e.target.checked ? 'Legs softened' : 'Legs move freely', 'Every animation in this view follows.'); } catch (x) { fail(x); } };
   $$('#crBack [data-b]').forEach((b) => (b.onclick = async () => { $$('#crBack button').forEach((x) => x.classList.toggle('on', x === b)); try { const r = await call('chars:joints', c.id, CHS.view, {}, { backLimbs: b.dataset.b }); CHS.c = r.character; drawStage(); } catch (e) { fail(e); } }));
   $('#crAuto').onclick = async () => { $('#crAuto').innerHTML = '<span class="spin"></span>Looking…'; try { const r = await call('chars:autoJoints', c.id, CHS.view); CHS.c = r.character; toast('Joints found', r.notes.slice(0, 2).join(' · ')); panelRig(); drawStage(); } catch (e) { fail(e); panelRig(); } };
   $('#crEdit').onclick = () => go('editor', v.sprite);
@@ -246,8 +248,9 @@ async function pickViews() {
   let sel = null;
   const drawPicks = () => { $('#pvPicks', el).innerHTML = ['front', 'side', 'back', 'front34', 'back34'].map((v) => `<button class="btn sm ${st.picks[v] !== undefined ? 'primary' : ''}" data-v="${v}">${VIEW_NAMES[v]}${st.picks[v] !== undefined ? ` · frame ${st.picks[v] + 1}` : ''}</button>`).join(''); $$('#pvPicks [data-v]', el).forEach((b) => (b.onclick = () => { if (sel === null) { toast('Pick a frame first', '', 'info'); return; } st.picks[b.dataset.v] = sel; drawPicks(); })); };
   const load = async () => { const r = await call('animate:raw', st.clip, { count: 24, max: 120 }); const host = $('#pvStrip', el); host.innerHTML = r.frames.map((_, i) => `<button class="pv-f" data-i="${i}"><canvas width="${r.w}" height="${r.h}"></canvas><span>${i + 1}</span></button>`).join(''); const step = Math.max(1, Math.round(r.durations[0] * r.clip.fps / 1000)); $$('.pv-f', host).forEach((b, i) => { $('canvas', b).getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(r.frames[i]), r.w, r.h), 0, 0); b.dataset.src = i * step; b.onclick = () => { sel = +b.dataset.src; $$('.pv-f', host).forEach((x) => x.classList.toggle('on', x === b)); }; }); };
-  $('#pvClip', el).onchange = (e) => { st.clip = e.target.value; st.picks = {}; drawPicks(); load(); };
-  $('#pvCancel', el).onclick = closeSheet; drawPicks(); load();
+  const auto = async () => { const c0 = st.clip; try { const r = await call('chars:autoPick', c0); if (st.clip !== c0 || Object.keys(st.picks).length) return; st.picks = { ...r.picks }; drawPicks(); toast('Views suggested', r.notes[r.notes.length - 1] || '', 'info'); } catch (e) { /* manual picking still works */ } };
+  $('#pvClip', el).onchange = (e) => { st.clip = e.target.value; st.picks = {}; drawPicks(); load(); auto(); };
+  $('#pvCancel', el).onclick = closeSheet; drawPicks(); load(); auto();
   $('#pvGo', el).onclick = async () => { if (!Object.keys(st.picks).length) return; const b = $('#pvGo', el); b.disabled = true; b.innerHTML = '<span class="spin"></span>Making views…'; try { const r = await call('chars:pick', CHS.c.id, st.clip, st.picks); closeSheet(); CHS.c = r.character; toast('Views added', Object.keys(st.picks).map((v) => VIEW_NAMES[v]).join(', ')); drawCE(); } catch (e) { b.disabled = false; b.innerHTML = 'Make views'; fail(e); } };
 }
 function panelSkins() {
