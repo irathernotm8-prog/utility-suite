@@ -25,8 +25,14 @@ class Project {
   saveMeta() { this.meta.updatedAt = Date.now(); writeJSON(this.metaFile, this.meta); }
   summary() {
     const sprites = this.listSprites(), effects = this.listEffects();
-    return { id: this.id, name: this.name, dir: this.dir, createdAt: this.meta.createdAt, updatedAt: this.meta.updatedAt, cover: this.meta.cover || null, counts: { sprites: sprites.length, effects: effects.filter((e) => !e.boardId || e.kept).length, drafts: effects.filter((e) => e.boardId).length, boards: this.meta.boards.length, refs: this.meta.refs.length, scenes: this.listScenes().length }, description: this.meta.description || '' };
+    return { id: this.id, name: this.name, dir: this.dir, createdAt: this.meta.createdAt, updatedAt: this.meta.updatedAt, cover: this.meta.cover || null, counts: { sprites: sprites.length, effects: effects.filter((e) => !e.boardId || e.kept).length, drafts: effects.filter((e) => e.boardId).length, boards: this.meta.boards.length, refs: this.meta.refs.length, scenes: this.listScenes().length, characters: this.listCharacters().length }, description: this.meta.description || '' };
   }
+
+  // ───────── characters (rigs per view; their parts live in ordinary sprites)
+  listCharacters() { const d = this.p('characters'); let files = []; try { files = fs.readdirSync(d).filter((f) => f.endsWith('.json')); } catch {} return files.map((f) => readJSON(path.join(d, f), null)).filter(Boolean).map((c) => ({ id: c.id, name: c.name, views: Object.keys(c.views || {}), directions: c.directions, animations: (c.animations || []).length, pixel: c.pixel !== false, cover: c.views && (c.views.side || c.views.front || Object.values(c.views)[0] || {}).sprite, updatedAt: c.updatedAt })).sort((a, b) => b.updatedAt - a.updatedAt); }
+  getCharacter(id) { let c = readJSON(this.p('characters', `${id}.json`), null); if (!c) { const hit = this.listCharacters().find((x) => x.name.toLowerCase() === String(id).toLowerCase()); if (hit) c = readJSON(this.p('characters', `${hit.id}.json`), null); } if (!c) throw new Error(`No character “${id}” in ${this.name}`); return c; }
+  saveCharacter(c) { if (!c.id) c.id = `${slug(c.name || 'character')}-${id6()}`; c.updatedAt = Date.now(); c.createdAt ||= Date.now(); writeJSON(this.p('characters', `${c.id}.json`), c); this.touch(); return c; }
+  removeCharacter(id) { const c = this.getCharacter(id); for (const v of Object.values(c.views || {})) { try { this.removeSprite(v.sprite); } catch {} } this.trash(this.p('characters', `${c.id}.json`)); this.touch(); }
 
   // ───────── scenes (parallax layers of sprites and terrain-grid tile layers)
   listScenes() { const d = this.p('scenes'); let files = []; try { files = fs.readdirSync(d).filter((f) => f.endsWith('.json')); } catch {} return files.map((f) => readJSON(path.join(d, f), null)).filter(Boolean).map((sc) => ({ id: sc.id, name: sc.name, w: sc.w, h: sc.h, layers: sc.layers.length, length: sc.length, updatedAt: sc.updatedAt })).sort((a, b) => b.updatedAt - a.updatedAt); }
@@ -37,7 +43,7 @@ class Project {
   // ───────── sprites
   listSprites() {
     const d = this.p('sprites'); let files = []; try { files = fs.readdirSync(d).filter((f) => f.endsWith('.dsprite')); } catch {}
-    return files.map((f) => { const s = readJSON(path.join(d, f), null); return s && { id: s.id, name: s.name, w: s.w, h: s.h, frames: s.frames.length, layers: s.layers.length, palette: s.palette.length, updatedAt: s.updatedAt, from: s.from || null, tileset: s.tileset ? { tile: s.tileset.tile, kind: s.tileset.kind, count: s.tileset.count } : undefined }; }).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt);
+    return files.map((f) => { const s = readJSON(path.join(d, f), null); return s && { id: s.id, name: s.name, w: s.w, h: s.h, frames: s.frames.length, layers: s.layers.length, palette: s.palette.length, updatedAt: s.updatedAt, from: s.from || null, tileset: s.tileset ? { tile: s.tileset.tile, kind: s.tileset.kind, count: s.tileset.count } : undefined, partsOf: s.partsOf || undefined }; }).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt);
   }
   spriteFile(id) { return this.p('sprites', `${id}.dsprite`); }
   getSprite(id) { const s = readJSON(this.spriteFile(id), null) || this.findSpriteByName(id); if (!s) throw new Error(`No sprite “${id}” in ${this.name}`); return SP.hydrate(s); }
@@ -143,7 +149,7 @@ class Library {
   }
   create(name, { description = '' } = {}) {
     const base = safeName(name); let dir = path.join(this.root, base); for (let i = 2; fs.existsSync(dir); i++) dir = path.join(this.root, `${base} ${i}`);
-    fs.mkdirSync(dir, { recursive: true }); for (const s of ['sprites', 'effects', 'clips', 'scenes', 'refs', 'records', 'exports']) fs.mkdirSync(path.join(dir, s), { recursive: true });
+    fs.mkdirSync(dir, { recursive: true }); for (const s of ['sprites', 'effects', 'clips', 'scenes', 'characters', 'refs', 'records', 'exports']) fs.mkdirSync(path.join(dir, s), { recursive: true });
     writeJSON(path.join(dir, 'dither.json'), { dither: 1, id: 'p' + crypto.randomBytes(4).toString('hex'), name: path.basename(dir), description, createdAt: Date.now(), updatedAt: Date.now(), boards: [], refs: [] });
     return this.get(dir);
   }

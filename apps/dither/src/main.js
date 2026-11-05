@@ -29,6 +29,7 @@ if (process.env.DITHER_USER_DATA) app.setPath('userData', process.env.DITHER_USE
 app.setName('Dither');
 if (process.platform === 'win32') app.setAppUserModelId('com.bilal.dither');
 let startHidden = process.argv.includes('--hidden');
+app.commandLine.appendSwitch('enable-unsafe-swiftshader');   // pose detection needs WebGL; this keeps it working on machines without a GPU
 if (!process.env.DITHER_E2E && !app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 // ───────────────────────── settings
@@ -67,7 +68,8 @@ const activity = (msg, ref) => send('ai:activity', { msg, ref: ref || null, at: 
 const falKey = () => { const v = settings.falKeyEnc; if (!v) return ''; try { return v.startsWith('p:') ? Buffer.from(v.slice(2), 'base64').toString() : safeStorage.decryptString(Buffer.from(v, 'base64')); } catch { return ''; } };
 const setFalKey = (k) => { settings.falKeyEnc = !k ? '' : safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(k).toString('base64') : 'p:' + Buffer.from(k).toString('base64'); saveSettings(); };
 const animate = require('./animate').makeAnimate({ active, engine, frames: (b, m, o) => fxhost.frames(b, m, o), decodeImage, settings: () => settings, falKey, changed, progress: (e) => send('animate:progress', e), userData: USER });
-const handle = makeHandlers({ lib, active, setActive, render, webm: fxhost.webm, engine, decodeImage, changed, activity, animate });
+const characters = require('./characters').makeCharacters({ active, decodeImage, poses: (f, o) => fxhost.poses(f, o), frames: (b, m, o) => fxhost.frames(b, m, o), animate, changed });
+const handle = makeHandlers({ lib, active, setActive, render, webm: fxhost.webm, engine, decodeImage, changed, activity, animate, characters });
 
 // ───────────────────────── window
 function createWindow() {
@@ -95,7 +97,7 @@ function appMenu() {
     ...(IS_MAC ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, { label: 'Settings…', accelerator: 'Cmd+,', click: go('settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     { label: 'File', submenu: [{ label: 'New sprite…', accelerator: 'CmdOrCtrl+N', click: go('new-sprite') }, { label: 'New effect', accelerator: 'CmdOrCtrl+Shift+N', click: go('new-effect') }, { label: 'New project…', click: go('new-project') }, { type: 'separator' }, { label: 'Pixelize a picture…', click: go('pixelize') }, { type: 'separator' }, IS_MAC ? { role: 'close' } : { role: 'quit' }] },
     { role: 'editMenu' },
-    { label: 'View', submenu: [{ label: 'Drafts', accelerator: 'CmdOrCtrl+1', click: go('drafts') }, { label: 'Effects', accelerator: 'CmdOrCtrl+2', click: go('effects') }, { label: 'Sprites', accelerator: 'CmdOrCtrl+3', click: go('sprites') }, { label: 'Animate', accelerator: 'CmdOrCtrl+4', click: go('animate') }, { label: 'Tiles & scenes', accelerator: 'CmdOrCtrl+6', click: go('tiles') }, { label: 'References', accelerator: 'CmdOrCtrl+5', click: go('refs') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: 'View', submenu: [{ label: 'Drafts', accelerator: 'CmdOrCtrl+1', click: go('drafts') }, { label: 'Effects', accelerator: 'CmdOrCtrl+2', click: go('effects') }, { label: 'Sprites', accelerator: 'CmdOrCtrl+3', click: go('sprites') }, { label: 'Animate', accelerator: 'CmdOrCtrl+4', click: go('animate') }, { label: 'Tiles & scenes', accelerator: 'CmdOrCtrl+6', click: go('tiles') }, { label: 'Characters', accelerator: 'CmdOrCtrl+7', click: go('characters') }, { label: 'References', accelerator: 'CmdOrCtrl+5', click: go('refs') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(t));
@@ -156,6 +158,26 @@ h('sprites:import', async (file, opts = {}) => {
   SP.setCel(s, s.layers[0].id, s.frames[0].id, res.data); P().saveSprite(s); changed('sprite', s.id); return s.id;
 });
 h('pixelize:preview', (file, opts = {}) => { const img = decodeImage(file); const r = snap.snap(img, opts); return { w: r.img.w, h: r.img.h, data: r.img.data, grid: r.grid, palette: r.palette, source: { w: img.w, h: img.h } }; });
+
+// 0.5: characters
+h('chars:list', () => characters.list());
+h('chars:get', (id) => characters.get(id));
+h('chars:save', (c) => characters.save(c));
+h('chars:create', (o) => characters.create(o));
+h('chars:remove', (id) => characters.remove(id));
+h('chars:joints', (id, view, joints, opts) => characters.setJoints(id, view, joints, opts));
+h('chars:autoJoints', async (id, view) => { const c = characters.get(id); const s = P().getSprite(c.views[view].sprite); const f = P().p('characters', 'sources', `${s.id}.png`); const img = fs.existsSync(f) ? require('./core/png').decode(fs.readFileSync(f)) : { w: s.w, h: s.h, data: SP.compose(s, 0) }; const r = await characters.findJoints(img, view); return characters.setJoints(id, view, r.joints).then((x) => ({ ...x, notes: [...r.notes, ...x.notes] })); });
+h('chars:addView', (id, view, src, o) => characters.addView(id, view, src, o));
+h('chars:anim', (id, op) => characters.animation(id, op));
+h('chars:fromVideo', (id, o) => characters.fromVideo(id, o));
+h('chars:skin', (id, op) => characters.skin(id, op));
+h('chars:preview', (id, o) => characters.preview(id, o));
+h('chars:rest', (id, view) => { const c = characters.get(id); const v = c.views[view]; const s = P().getSprite(v.sprite); return { w: s.w, h: s.h, data: SP.compose(s, 0), joints: v.joints, bones: require('./core/rig').skeleton(v.joints, view).bones.map((b) => ({ name: b.name, parent: b.parent, start: b.start, end: b.end })) }; });
+h('chars:pose', (id, view, pose, box) => { const CH = require('./core/character'), RG = require('./core/rig'); const c = characters.get(id); if (pose && pose.__anim) { const a = c.animations.find((x) => x.id === pose.__anim); pose = a ? CH.poseAt(a, pose.__frame || 0, view) : {}; } const rig = CH.viewRig((x) => P().getSprite(x), c, view); const F = box || RG.bounds(rig.sk, rig.prep, [pose || {}], 2); const r = RG.render(rig.sk, rig.prep, pose || {}, { frame: F, pixel: rig.pixel, palette: rig.palette }); const S = RG.solve(rig.sk, pose || {}); return { ...r, box: F, bones: rig.sk.bones.map((b) => ({ name: b.name, parent: b.parent, start: RG.ap(S[b.name].M, b.start), end: RG.ap(S[b.name].M, b.end) })) }; });
+h('chars:turnaround', (id, o) => characters.turnaround(id, o));
+h('chars:pick', (id, clip, picks) => characters.viewsFromClip(id, clip, picks));
+h('image:preview', (file, max) => resample.shrink(decodeImage(file), max || 160));
+h('chars:motions', () => Object.fromEntries(Object.entries(require('./core/character').MOTIONS).map(([k, m]) => [k, { label: m.label, loop: m.loop, frames: m.frames, fps: m.fps }])));
 
 // 0.4: detail tools, tiles and scenes (the window uses the same core code as Claude's tools)
 h('kit:texture', (cel, w, hh, opts = {}) => detail.texture(new Uint8ClampedArray(cel), w, hh, opts));

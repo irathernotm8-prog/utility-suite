@@ -76,6 +76,12 @@ function seed(root) {
   const castle = SP.create({ name: 'Castle backdrop', w: 512, h: 384, palette: [], frames: 1 }); SP.apply(castle, [{ op: 'svg', svg: castleSvg, mode: 'replace' }, { op: 'texture', kind: 'bricks', scale: 5, colors: ['#8b9bb4', '#94b0c2'] }, { op: 'texture', kind: 'grass', colors: ['#38b764'] }, { op: 'outline', color: '#1a1c2c' }]); delete castle._warnings; p.saveSprite(castle);
   const terr = Array.from({ length: 12 }, (_, y) => (y < 7 ? '.'.repeat(60) : y === 7 ? '.'.repeat(14) + '######' + '.'.repeat(16) + '#####' + '.'.repeat(19) : y === 8 ? '####' + '.'.repeat(8) + '##########' + '.'.repeat(10) + '###########' + '.'.repeat(4) + '#'.repeat(13) : '#'.repeat(60)));
   p.saveScene({ name: 'Level 1 — Meadow', w: 320, h: 180, background: '#29366f', length: 960, layers: [{ id: 'sl1', kind: 'sprite', name: 'Sky', sprite: sky.id, x: 0, y: 0, depth: 0, repeat: 'x' }, { id: 'sl2', kind: 'sprite', name: 'Hills', sprite: hills.id, x: 0, y: 92, depth: 0.35, repeat: 'x' }, { id: 'sl3', kind: 'tiles', name: 'Grass', tileset: tset.id, tile: T, x: 0, y: -12, depth: 1, rows: terr }, { id: 'sl4', kind: 'sprite', name: 'Slime', sprite: s.id, x: 120, y: 100, depth: 1, animate: true }] });
+  // 0.5: two character pictures (a side-view knight, a front-view hero) and a sword
+  const kn = new FX.Canvas(40, 52, ['#000']); kn.fillRect(15, 34, 5, 12, '#333c57').fillRect(19, 34, 5, 12, '#333c57').fillRect(15, 45, 8, 3, '#5a3a24').fillRect(19, 45, 8, 3, '#5a3a24').fillRect(13, 18, 12, 17, '#5d6b8c').fillRect(14, 19, 4, 15, '#8b9bb4').fillRect(13, 31, 12, 3, '#b13e53').fillRect(14, 5, 11, 12, '#e8b796').fillRect(13, 3, 13, 5, '#8b9bb4').fillRect(22, 9, 2, 2, '#1a1c2c').fillRect(13, 8, 3, 9, '#8b9bb4').fillRect(17, 19, 4, 9, '#8b9bb4').fillRect(17, 28, 4, 7, '#5d6b8c').fillRect(17, 35, 4, 3, '#e8b796').outline('#1a1c2c');
+  p.saveSprite(SP.fromFrames({ name: 'Knight (side)', w: 40, h: 52, frames: [kn.data] }));
+  const hf = new FX.Canvas(40, 52, ['#000']); hf.fillRect(13, 33, 6, 13, '#29366f').fillRect(21, 33, 6, 13, '#29366f').fillRect(12, 45, 7, 3, '#333c57').fillRect(21, 45, 7, 3, '#333c57').fillRect(12, 17, 16, 17, '#5d6b8c').fillRect(8, 18, 4, 13, '#5d6b8c').fillRect(28, 18, 4, 13, '#5d6b8c').fillRect(8, 31, 4, 4, '#e8b796').fillRect(28, 31, 4, 4, '#e8b796').fillRect(13, 31, 14, 3, '#b13e53').fillRect(14, 4, 12, 12, '#e8b796').fillRect(13, 2, 14, 5, '#8b9bb4').fillRect(16, 9, 2, 2, '#1a1c2c').fillRect(22, 9, 2, 2, '#1a1c2c').outline('#1a1c2c');
+  p.saveSprite(SP.fromFrames({ name: 'Knight (front)', w: 40, h: 52, frames: [hf.data] }));
+  const sw = new FX.Canvas(5, 16, ['#000']); sw.fillRect(2, 0, 1, 11, '#f4f4f4').fillRect(1, 1, 1, 10, '#c0cbdc').fillRect(3, 1, 1, 10, '#8b9bb4').fillRect(0, 11, 5, 1, '#ffcd75').fillRect(2, 12, 1, 4, '#5a3a24'); p.saveSprite(SP.fromFrames({ name: 'Sword', w: 5, h: 16, frames: [sw.data] }));
   L.create('Football Hub site');
   return { L, p, board: b, ids };
 }
@@ -169,6 +175,41 @@ function seed(root) {
   await shot('32-texture-brush', 600);
   await go('editor', wid); await win.waitForSelector('#tlFrames .tf'); await win.evaluate(() => lightSheet()); await win.waitForSelector('#lmApply'); await shot('33-light-sheet', 1500); await win.keyboard.press('Escape');
   await go('library'); await shot('34-library-more', 2500);
+  // 0.5: characters — make one from a sprite, rig view, animate with a bone dragged, directions, skins & gear, export
+  const knId = await win.evaluate(() => S.sprites.find((x) => x.name === 'Knight (side)').id), knF = await win.evaluate(() => S.sprites.find((x) => x.name === 'Knight (front)').id), swId = await win.evaluate(() => S.sprites.find((x) => x.name === 'Sword').id);
+  await go('characters'); await shot('35-characters-empty', 800);
+  await win.click('#chNew'); await win.waitForSelector('#ncGo'); await win.selectOption('#ncSprite', knId); await win.click('#ncDirs [data-d="4"]'); await win.waitForTimeout(400); await shot('36-new-character', 700);
+  await win.click('#ncGo'); await win.waitForSelector('#ceOv', { timeout: 60000 }); await win.waitForTimeout(1500); await shot('37-rig', 900);
+  const cId = await win.evaluate(() => CHS.c.id); console.log('character notes:', await win.evaluate(() => [...$$('.toast')].map((t) => t.textContent).join(' | ').slice(0, 300)));
+  // drag the near elbow a little, then show the parts
+  const ovb = await (await win.$('#ceOv')).boundingBox(); const jt = await win.evaluate(() => CHS.overlay.joints.elbow_f); const sc0 = await win.evaluate(() => CHS.scale);
+  await win.mouse.move(ovb.x + jt[0] * sc0, ovb.y + jt[1] * sc0); await win.mouse.down(); await win.mouse.move(ovb.x + (jt[0] + 2) * sc0, ovb.y + (jt[1] + 1) * sc0, { steps: 5 }); await win.mouse.up(); await win.waitForTimeout(1500);
+  console.log('elbow moved to', await win.evaluate(() => CHS.c.views.side.joints.elbow_f));
+  await win.click('#crParts'); await win.waitForTimeout(900); await shot('38-rig-parts', 600);
+  // add the front view from a sprite and mirror it for the back, via IPC (the menus do the same)
+  await win.evaluate(async ([id, f]) => { CHS.c = (await call('chars:addView', id, 'front', { sprite: f }, {})).character; CHS.c = (await call('chars:addView', id, 'back', { mirrorOf: 'front' }, {})).character; }, [cId, knF]);
+  await win.click('#ceTabs [data-t="animate"]'); await win.waitForTimeout(1200); await shot('39-animate', 900);
+  // key a pose: click the near upper arm and turn it
+  const bones = await win.evaluate(() => CHS.overlay && CHS.overlay.bones.find((b) => b.name === 'upper_arm_f')); const ox = await win.evaluate(() => [CHS.overlay.ox, CHS.overlay.oy, CHS.scale]); const ovb2 = await (await win.$('#ceOv')).boundingBox();
+  const mid = [(bones.start[0] + bones.end[0]) / 2, (bones.start[1] + bones.end[1]) / 2]; await win.mouse.move(ovb2.x + (mid[0] - ox[0]) * ox[2], ovb2.y + (mid[1] - ox[1]) * ox[2]); await win.mouse.down(); await win.mouse.move(ovb2.x + (mid[0] - ox[0] + 6) * ox[2], ovb2.y + (mid[1] - ox[1] - 2) * ox[2], { steps: 6 }); await win.mouse.up(); await win.waitForTimeout(1200);
+  console.log('keyed:', await win.evaluate(() => JSON.stringify((CHS.c.animations.find((a) => a.id === CHS.anim).keys || {}).side)));
+  await shot('40-pose-key', 600);
+  await win.click('#ceTabs [data-t="dirs"]'); await win.waitForTimeout(1500); await shot('41-directions', 900);
+  await win.evaluate(async ([id, sw]) => { CHS.c = await call('chars:skin', id, { action: 'attach', sprite: sw, bone: 'hand_f', py: 13 }); CHS.c = await call('chars:skin', id, { action: 'add', name: 'Gold', recolor: { '#5d6b8c': '#ffcd75', '#8b9bb4': '#f4f4f4' } }); }, [cId, swId]);
+  await win.click('#ceTabs [data-t="skins"]'); await win.waitForTimeout(1600); await shot('42-skins', 900);
+  await win.evaluate(() => { CHS.dir = 'down'; CHS.previewFrames = null; drawBar(); loadPreview(); }); await win.waitForTimeout(1500); await shot('42b-skin-down', 600);
+  await theme('light'); await shot('42c-skins-light', 700); await theme('dark');
+  const ex = await win.evaluate(async (id) => call('export', { kind: 'character', id, format: 'all', dest: undefined }), cId); console.log('character export:', ex.files.length, 'files, e.g.', ex.files.slice(0, 6).join(', '));
+  await go('characters'); await win.waitForTimeout(1500); await shot('43-characters', 900);
+  // the pose model on a real photo (if given) and motion from video
+  if (process.env.DITHER_POSE_PHOTO && fs.existsSync(process.env.DITHER_POSE_PHOTO)) {
+    const r = await win.evaluate(async (f) => call('chars:create', { name: 'Yoga', source: { file: f }, view: 'front', pixel: true, height: 96, directions: 4 }), process.env.DITHER_POSE_PHOTO);
+    console.log('photo → joints:', r.notes.join(' | '));
+    const vdir2 = path.join(tmp, 'pv'); fs.mkdirSync(vdir2); require('child_process').execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-loop', '1', '-i', process.env.DITHER_POSE_PHOTO, '-t', '1', '-vf', "scale=640:-2,rotate='0.06*sin(2*PI*t)':c=white", '-r', '12', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(vdir2, 'pose.mp4')]);
+    const v = await win.evaluate(async ([id, f]) => { const x = await call('chars:fromVideo', id, { file: f, name: 'from video', view: 'front', frames: 8 }); return { detected: x.detected, of: x.of, frames: x.anim.frames }; }, [r.character.id, path.join(vdir2, 'pose.mp4')]);
+    console.log('motion from video:', JSON.stringify(v));
+    await go('character', r.character.id); await win.waitForSelector('#ceOv'); await win.waitForTimeout(1500); await shot('44-photo-rig', 900);
+  }
   await go('drafts');
   await win.evaluate(() => askClaude('Make 6 drafts of a coin pickup')); await shot('13-ask', 600); await win.keyboard.press('Escape');
   // the pixelize sheet on a soft AI-ish picture

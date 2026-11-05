@@ -105,6 +105,16 @@ Over ~256px, view returns an overview with a labelled tile grid (A1 top-left; le
 - Block in the whole composition first with draw_svg at full size (big shapes, flats), then shade, then detail tile by tile, then critique.
 scale_sprite makes smaller versions (e.g. a 128px portrait → 64 → 32 for an icon) that keep eyes, outlines and highlights; always finish them by hand.
 
+## Characters (rigged 2D models for games)
+create_character turns one picture into a rigged character: parts on bones, ready-made motions, exportable to engines. Best picture: full body, standing, arms slightly away from the body, plain background; side-on for side-scrollers, front-on for top-down.
+1. create_character (sprite/file/clip, view, pixel, height, directions). Look at the joints it returns: red = near side (_f), blue = far side (_b). Fix wrong ones with set_joints (pixels of the picture). In side views the far arm/leg is copied from the near one when they overlap (back_limbs).
+2. Parts live in a normal sprite (one layer per bone): fix holes or redraw a part with draw_sprite (layer = bone name, frame 0). Overlaps at joints are filled automatically; check bends with view kind "character" params {anim:"walk"}.
+3. Animations: library motions are already added (idle, walk, run, jump, attack, hurt, death; also cast, climb). Tune with character_animation (amp, frames, fps), key poses on top with action "pose", or motion_from_video from a clip/file of a person doing the move.
+4. Directions: character_view adds front/back/three-quarter views (pictures, mirror_of, or a turnaround clip → pick). 4 directions = down/up/right/left, 8 adds the diagonals; missing views stand in with the nearest one (and say so).
+5. Skins/gear: character_skin (add a skin and draw its parts, recolor, attach a sword to hand_f).
+6. export kind "character": sheets (pixel-perfect, per direction, with hitboxes and attach points), spine, godot, or all.
+Pixel characters rotate with RotSprite and snap to their own palette, so frames stay clean — but big rotations of tiny parts still lose detail: prefer 48px+ characters for rigs, and hand-fix key frames.
+
 ## Tiles and scenes
 make_tileset builds a whole autotile set (47 blob tiles, or 16 sides-only) from five drawn tiles: fill, top edge, left edge, outer corner (top-left) and inner corner (top-left), with transparency outside the terrain; pass bottom/right too when lighting differs. Put them in one sprite as frames 1–5 (create_sprite frames:5, draw each), then make_tileset sprite:<id>.
 check_tile tests a tile for seams (fix:"offset" to move the seams to the middle and repaint them; fix:"blend").

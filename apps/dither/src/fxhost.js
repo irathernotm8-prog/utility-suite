@@ -14,7 +14,7 @@ function start() {
   win.loadFile(path.join(__dirname, 'sandbox', 'fx.html'));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
-  win.webContents.on('render-process-gone', () => { for (const [, w] of waits) w({ ok: false, error: 'The sandbox stopped. Try again.' }); waits.clear(); win = null; });
+  win.webContents.on('render-process-gone', () => { for (const [, w] of waits) w({ ok: false, error: 'The sandbox stopped. Try again.' }); waits.clear(); win = null; poseFiles = null; });
   return ready;
 }
 ipcMain.on('fx:result', (e, id, result) => { if (!win || e.sender !== win.webContents) return; const w = waits.get(id); if (w) { waits.delete(id); w(result); } });
@@ -29,5 +29,13 @@ async function job(kind, payload, timeoutMs = 15000) {
 async function render(code, opts = {}) { const r = await job('render', { code, opts }, opts.timeoutMs || 10000); return { meta: r.meta, frames: r.frames.map((b) => new Uint8ClampedArray(b)) }; }
 async function webm(frames, meta, { scale = 6, bg = '#16141e', loops = 3 } = {}) { const r = await job('webm', { frames: frames.map((f) => f.buffer.slice(f.byteOffset, f.byteOffset + f.byteLength)), w: meta.w, h: meta.h, durations: meta.durations, scale, bg, loops }, 60000); return Buffer.from(r.data); }
 async function frames(bytes, mime, opts = {}) { const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength); const r = await job('frames', { bytes: ab, mime, opts }, 180000); return { fps: r.fps, frames: r.frames.map((f) => ({ w: f.w, h: f.h, data: new Uint8ClampedArray(f.data) })) }; }
-function stop() { try { win && win.destroy(); } catch {} win = null; }
-module.exports = { start, render, webm, frames, stop };
+// pose landmarks for pictures or video frames: [{w,h,data}] → per frame 33 MediaPipe points [x, y, z, visibility] in pixels (or null)
+let poseFiles = null;
+async function poses(frames, opts = {}) {
+  const fs = require('fs'); const dir = path.join(__dirname, 'vendor', 'mediapipe'); const ab = (b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  const files = poseFiles ? { cached: true } : (poseFiles = true, { bundle: fs.readFileSync(path.join(dir, 'vision_bundle.mjs'), 'utf8'), loader: fs.readFileSync(path.join(dir, 'vision_wasm_internal.js'), 'utf8'), wasm: ab(fs.readFileSync(path.join(dir, 'vision_wasm_internal.wasm'))), model: ab(fs.readFileSync(path.join(dir, 'pose_landmarker_lite.task'))) });
+  try { const r = await job('pose', { files, frames: frames.map((f) => ({ w: f.w, h: f.h, data: f.data.buffer.slice(f.data.byteOffset, f.data.byteOffset + f.data.byteLength) })), opts }, 60000 + frames.length * 400); return opts.mask ? { poses: r.poses, masks: (r.masks || []).map((m) => m && { w: m.w, h: m.h, data: new Uint8Array(m.data) }) } : r.poses; }
+  catch (e) { poseFiles = null; throw e; }
+}
+function stop() { try { win && win.destroy(); } catch {} win = null; poseFiles = null; }
+module.exports = { start, render, webm, frames, poses, stop };

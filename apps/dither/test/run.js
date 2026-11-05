@@ -374,6 +374,55 @@ test('Tiles & scenes: 47/16 autotile sets, terrain grids, seams, parallax render
   const tx = await call('texture_sprite', { sprite: sky.j.id, kind: 'grass' }); assert.ok(tx.img);
 });
 
+test('Characters: picture → joints → parts → motions in every direction, RotSprite keeps the palette, skins, gear, retarget, exports', async () => {
+  const RG = require('../src/core/rig'), CHR = require('../src/core/character'), { makeCharacters } = require('../src/characters');
+  // a 48px side-view figure and a front-view one
+  const side = new FX.Canvas(40, 52, ['#000']); side.fillRect(15, 34, 5, 12, '#333c57').fillRect(19, 34, 5, 12, '#333c57').fillRect(15, 45, 8, 3, '#5a3a24').fillRect(19, 45, 8, 3, '#5a3a24').fillRect(13, 18, 12, 17, '#5d6b8c').fillRect(14, 5, 11, 12, '#e8b796').fillRect(13, 3, 13, 5, '#8b9bb4').fillRect(17, 19, 4, 16, '#8b9bb4').fillRect(17, 35, 4, 3, '#e8b796').outline('#1a1c2c');
+  const front = new FX.Canvas(40, 52, ['#000']); front.fillRect(13, 33, 6, 13, '#29366f').fillRect(21, 33, 6, 13, '#29366f').fillRect(12, 17, 16, 17, '#38b764').fillRect(8, 18, 4, 13, '#38b764').fillRect(28, 18, 4, 13, '#38b764').fillRect(8, 31, 4, 4, '#e8b796').fillRect(28, 31, 4, 4, '#e8b796').fillRect(14, 4, 12, 12, '#e8b796').fillRect(13, 2, 14, 5, '#5a3a24').outline('#1a1c2c');
+  const img = { w: side.w, h: side.h, data: side.data }; const pal = new Set(); for (let i = 0; i < img.data.length; i += 4) if (img.data[i + 3]) pal.add(FX.toHex([img.data[i], img.data[i + 1], img.data[i + 2]]));
+  const gj = RG.guessJoints(img, 'side'); assert.ok(gj.joints.neck[1] > 10 && gj.joints.neck[1] < 22, 'neck ' + gj.joints.neck); assert.ok(gj.joints.ankle_f[1] > 42);
+  const fj = RG.guessJoints({ w: front.w, h: front.h, data: front.data }, 'front').joints; assert.ok(fj.elbow_f[0] < 13 && fj.elbow_b[0] > 27, 'front arms at the sides ' + fj.elbow_f + ' ' + fj.elbow_b);
+  // rest pose renders back to the original picture
+  const sk = RG.skeleton(gj.joints, 'side'); const cut = RG.cut(img, sk); const prep = RG.prepare(sk.order.map((n) => ({ bone: n, data: cut.parts[n] })), img.w, img.h, true);
+  const rest = RG.render(sk, prep, {}, { frame: { x: 0, y: 0, w: img.w, h: img.h }, pixel: true, palette: [...pal].map((h) => FX.hex(h)) }); let diff = 0; for (let i = 0; i < rest.data.length; i += 4) if (!!rest.data[i + 3] !== !!img.data[i + 3] || (img.data[i + 3] && (rest.data[i] !== img.data[i] || rest.data[i + 2] !== img.data[i + 2]))) diff++;
+  assert.ok(diff < 25, 'rest pose ≈ the picture (' + diff + ' px differ)');
+  // a rotated pose stays on the palette (RotSprite + snap)
+  const bent = RG.render(sk, prep, { bones: { upper_arm_f: { r: -70 }, thigh_f: { r: -30 } } }, { frame: RG.bounds(sk, prep, [{ bones: { upper_arm_f: { r: -70 }, thigh_f: { r: -30 } } }]), pixel: true, palette: [...pal].map((h) => FX.hex(h)) });
+  for (let i = 0; i < bent.data.length; i += 4) if (bent.data[i + 3]) assert.ok(pal.has(FX.toHex([bent.data[i], bent.data[i + 1], bent.data[i + 2]])), 'off-palette colour');
+  // FK: rotating the thigh moves the foot, not the head
+  const S0 = RG.points(sk, {}), S1 = RG.points(sk, { bones: { thigh_f: { r: -45 } } }); assert.ok(S1.foot_f[0] > S0.foot_f[0] + 3); assert.deepEqual(S1.head.map(Math.round), S0.head.map(Math.round));
+  // every motion has a pose for side and front views
+  for (const m of Object.keys(CHR.MOTIONS)) for (const v of ['side', 'front', 'back34']) assert.ok(CHR.motionPose(m, 0.3, v).bones);
+  // retarget: a synthetic "person" whose right thigh swings ±30° gives thigh_f rotations of about that
+  const person = (t) => { const L = Array.from({ length: 33 }, () => [100, 100, 0, 1]); const set = (i, x, y, z = 0) => (L[i] = [x, y, z, 1]); set(0, 108, 30); set(7, 98, 32); set(8, 98, 32, 0.3); set(11, 100, 50, -0.1); set(12, 100, 50, 0.1); set(13, 100, 80, -0.1); set(14, 100, 80, 0.1); set(15, 100, 105, -0.1); set(16, 100, 105, 0.1); set(19, 100, 112); set(20, 100, 112); set(23, 100, 110, -0.1); set(24, 100, 110, 0.1);
+    const a = Math.sin(t * Math.PI * 2) * 30 * Math.PI / 180; set(25, 100 + Math.sin(a) * 40, 110 + Math.cos(a) * 40, -0.1); set(27, 100 + Math.sin(a) * 80, 110 + Math.cos(a) * 80, -0.1); set(31, 110 + Math.sin(a) * 80, 112 + Math.cos(a) * 80, -0.1); set(26, 100, 150, 0.1); set(28, 100, 190, 0.1); set(32, 110, 192, 0.1); return L; };
+  const rt = CHR.retarget(Array.from({ length: 24 }, (_, i) => person(i / 24)), sk, { view: 'side', frames: 8, loop: true });
+  const th = rt.keys.map((k) => k.pose.bones.thigh_f.r); assert.ok(Math.max(...th) > 18 && Math.min(...th) < -18, 'thigh swing ' + th.map(Math.round));
+  // through the service and the plugin
+  const lib = new Library(path.join(tmp, 'chars')); let active = null; const changed = () => {};
+  const characters = makeCharacters({ active: () => lib.get(active), decodeImage: () => null, poses: null, changed });
+  const handle = makeHandlers({ lib, active: () => lib.get(active), setActive: (id) => (active = id), render: async (code, o) => FX.render(code, o), engine: { status: async () => ({}) }, decodeImage: () => null, changed, activity: () => {}, characters });
+  const call = async (n, a) => { const r = await handle(n, a, 'Claude'); if (r.isError) throw new Error(n + ': ' + r.content[0].text); return { j: JSON.parse(r.content.find((c) => c.type === 'text').text), img: r.content.find((c) => c.type === 'image') }; };
+  await call('create_project', { name: 'Brawler' });
+  const sp = SP.fromFrames({ name: 'Knight art', w: img.w, h: img.h, frames: [img.data] }); lib.get(active).saveSprite(sp);
+  const fr = SP.fromFrames({ name: 'Hero front', w: front.w, h: front.h, frames: [front.data] }); lib.get(active).saveSprite(fr);
+  const c = await call('create_character', { name: 'Knight', sprite: sp.id, view: 'side', directions: 4 }); assert.ok(c.img); assert.ok(c.j.animations.includes('walk'));
+  const sj = await call('set_joints', { character: 'Knight', joints: { elbow_f: [21, 27] } }); assert.ok(sj.img);
+  await call('character_view', { character: 'Knight', view: 'front', sprite: fr.id }); const v2 = await call('character_view', { character: 'Knight', view: 'back', mirror_of: 'front' }); assert.ok(v2.j.directions.some((d) => d.startsWith('up:back')));
+  const an = await call('character_animation', { character: 'Knight', action: 'add', motion: 'cast' }); assert.equal(an.j.frames, 10);
+  await call('character_animation', { character: 'Knight', action: 'pose', anim: 'cast', view: 'side', frame: 5, pose: { bones: { head: { r: -20 } } } });
+  const vw = await call('view', { kind: 'character', id: 'Knight', params: { anim: 'walk', dir: 'left' } }); assert.equal(vw.j.dir, 'left'); assert.equal(vw.j.frames, 8);
+  const sh = await call('view', { kind: 'character', id: 'Knight', params: { sheet: true, dir: 'down' } }); assert.ok(sh.img);
+  const sword = SP.create({ name: 'Sword', w: 4, h: 14, palette: ['#c0cbdc', '#5a3a24'] }); SP.apply(sword, [{ op: 'rect', x: 1, y: 0, w: 2, h: 10, color: 0, fill: true }, { op: 'rect', x: 0, y: 10, w: 4, h: 4, color: 1, fill: true }]); lib.get(active).saveSprite(sword);
+  const sk2 = await call('character_skin', { character: 'Knight', action: 'attach', sprite: sword.id, bone: 'hand_f', py: 12 }); assert.equal(sk2.j.attachments.length, 1);
+  const sk3 = await call('character_skin', { character: 'Knight', action: 'add', name: 'Gold', recolor: { '#5d6b8c': '#ffcd75' } }); assert.equal(sk3.j.skin, 'Gold');
+  const ex = await call('export', { kind: 'character', id: 'Knight', format: 'all' }); const files = ex.j.files;
+  for (const want of ['Knight right.png', 'Knight down.png', 'Knight up.png', 'Knight left.png', 'Knight.json', 'Knight frames.tres', 'Knight side.json', 'Knight side.atlas', 'Knight side.tscn', 'Knight front.tscn']) assert.ok(files.includes(want), 'missing ' + want + ' in ' + files.join(', '));
+  const meta = JSON.parse(fs.readFileSync(path.join(ex.j.folder, 'Knight.json'), 'utf8')); const walk = meta.directions.right.animations.walk; assert.equal(walk.frames, 8); assert.equal(walk.points.length, 8); assert.ok(walk.hitboxes[0][2] > 4);
+  const spj = JSON.parse(fs.readFileSync(path.join(ex.j.folder, 'Knight side.json'), 'utf8')); assert.ok(spj.bones.length === 16 && spj.animations.walk.bones.thigh_f.rotate.length === 9 && spj.slots.some((x) => x.name.startsWith('att_')));
+  const tscn = fs.readFileSync(path.join(ex.j.folder, 'Knight side.tscn'), 'utf8'); assert.ok(/\[node name="thigh_f" type="Node2D" parent="root\/hips"\]/.test(tscn) && /NodePath\("root\/hips\/thigh_f:rotation"\)/.test(tscn) && /&"walk": SubResource/.test(tscn));
+});
+
 const fakeComfy = require('./fixtures/fake-comfy');
 const { makeAnimate } = require('../src/animate');
 function greenClip(n = 36, W = 320) {

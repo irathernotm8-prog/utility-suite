@@ -19,6 +19,7 @@ const RS = require('./core/resample');
 const DT = require('./core/detail');
 const TL = require('./core/tiles');
 const SC = require('./core/scenes');
+const CHR = require('./core/character');
 
 const text = (v) => ({ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v, null, 1) });
 const image = (img) => ({ type: 'image', data: png.encode(img).toString('base64'), mimeType: 'image/png' });
@@ -50,6 +51,7 @@ function makeHandlers(ctx) {
   const crop = (d, w, r) => { const o = new Uint8ClampedArray(r.w * r.h * 4); for (let j = 0; j < r.h; j++) o.set(d.subarray(((r.y + j) * w + r.x) * 4, ((r.y + j) * w + r.x + r.w) * 4), j * r.w * 4); return { w: r.w, h: r.h, data: o }; };
   const zoomImg = (c, scale) => { const sc = scale || Math.max(1, Math.min(24, Math.floor(720 / Math.max(c.w, c.h)))); return sc >= 4 ? gridded(c, sc) : sheets.scaleImage(c, sc); };
 
+  const chars = () => { if (!ctx.characters) throw new Error('Characters aren’t available here'); return ctx.characters; };
   const H = {
     dither_guide: () => ok(text(guideText())),
 
@@ -132,12 +134,19 @@ function makeHandlers(ctx) {
       }
       if (kind === 'effect') { const r = await renderEffect(proj, id, { version, params }); const fr = frame ? [r.frames[Math.max(0, Math.min(r.frames.length - 1, frame - 1))]] : r.frames; return ok(text({ id: r.e.id, name: r.e.name, version: r.e.version, ...summaryOf(r.meta, r.frames) }), image(sheets.contactSheet(fr, r.meta.w, r.meta.h, { title: `${r.e.name} v${r.e.version}`, scale, durations: frame ? null : r.meta.durations }))); }
       if (kind === 'sprite') { const s = proj.getSprite(id); return ok(text({ id: s.id, name: s.name, size: `${s.w}×${s.h}`, frames: s.frames.length, layers: s.layers.map((l) => l.name), tileset: s.tileset ? { tile: s.tileset.tile, kind: s.tileset.kind, tiles: s.tileset.masks.length } : undefined, ...bigNote(s) }), image(spriteImg(s, frame ? [frame - 1] : Math.max(s.w, s.h) > 256 ? [0] : null, scale))); }
-      if (kind === 'scene') { const sc = proj.getScene(id); const img = SC.render(proj, sc, { camX: params && params.camera || 0 }); return ok(text({ id: sc.id, name: sc.name, size: `${sc.w}×${sc.h}`, length: sc.length, layers: sc.layers.map((l) => ({ id: l.id, name: l.name, kind: l.kind, depth: l.depth, repeat: l.repeat || undefined })), note: 'Pass params:{camera:x} to look further along the scene.' }), image(sheets.scaleImage(img, Math.max(1, Math.min(4, Math.floor(960 / sc.w)))))); }
+      if (kind === 'character') {
+        const C = chars(); const c = C.get(id); const pr = params || {};
+        if (pr.rig || (!pr.anim && !pr.dir && !pr.sheet)) { const view = pr.view || Object.keys(c.views)[0]; const img = C.rigPicture(c.id, view, Math.max(3, Math.min(10, Math.floor(480 / Math.max(1, C.get(c.id) && proj.getSprite(c.views[view].sprite).h))))); return ok(text({ id: c.id, name: c.name, view, views: Object.keys(c.views), directions: CHR.directions(c).map((d) => d.dir + (d.mirror ? ' (mirrored ' + d.view + ')' : d.fallback ? ` (stand-in: ${d.view})` : '')), animations: c.animations.map((a) => `${a.name}${a.motion ? ` (${a.motion})` : ' (keyed)'} ${a.frames}f`), skins: c.skins.map((k) => k.name), skin: c.skin, attachments: (c.attachments || []).map((a) => `${a.name} on ${a.bone}`), joints: img.joints, note: 'Joints in picture pixels: red = near (_f) side, blue = far (_b), yellow = spine/head. Fix with set_joints. params {anim, dir} shows an animation; {sheet:true} every animation in one direction.' }), image(img)); }
+        if (pr.sheet) { const rows = c.animations.map((a) => { const r = C.preview(c.id, { anim: a.id, dir: pr.dir }); return { label: `${a.name} · ${r.dir}`, frames: r.frames, w: r.w, h: r.h }; }); return ok(text({ id: c.id, dir: pr.dir || 'right', animations: rows.length }), image(sheets.boardSheet(rows, { scale: pr.scale }))); }
+        const r = C.preview(c.id, { anim: pr.anim, dir: pr.dir, view: pr.view }); return ok(text({ id: c.id, anim: r.anim, dir: r.dir, view: r.view, stand_in: r.fallback || undefined, frames: r.frames.length, size: `${r.w}×${r.h}` }), image(sheets.contactSheet(r.frames, r.w, r.h, { title: `${c.name}: ${r.anim} (${r.dir})`, scale })));
+      }
+      if (kind === 'character') { const r = chars().preview(id, { anim: params && params.anim || (proj.getCharacter(id).animations[0] || {}).id, dir: params && params.dir }); return { name: `${proj.getCharacter(id).name} ${r.anim} ${r.dir}`, frames: r.frames, meta: { w: r.w, h: r.h, n: r.frames.length, durations: r.frames.map(() => Math.round(1000 / r.fps)), loop: true } }; }
+    if (kind === 'scene') { const sc = proj.getScene(id); const img = SC.render(proj, sc, { camX: params && params.camera || 0 }); return ok(text({ id: sc.id, name: sc.name, size: `${sc.w}×${sc.h}`, length: sc.length, layers: sc.layers.map((l) => ({ id: l.id, name: l.name, kind: l.kind, depth: l.depth, repeat: l.repeat || undefined })), note: 'Pass params:{camera:x} to look further along the scene.' }), image(sheets.scaleImage(img, Math.max(1, Math.min(4, Math.floor(960 / sc.w)))))); }
       if (kind === 'reference') { const r = proj.meta.refs.find((x) => x.id === id || x.title === id); if (!r) return err('No such reference. Use list_references.'); const img = ctx.decodeImage(proj.p('refs', r.file)); const s = Math.min(1, 1200 / Math.max(img.w, img.h)); return ok(text({ id: r.id, title: r.title, note: r.note }), image(s < 1 ? shrink(img, s) : img)); }
       if (kind === 'board') { const b = proj.getBoard(id || 'latest'); const rows = []; for (const eid of b.items) { try { const r = await renderEffect(proj, eid); rows.push({ label: `${r.e.name}${r.e.feedback?.verdict ? ' (' + r.e.feedback.verdict + ')' : ''}`, frames: r.frames, w: r.meta.w, h: r.meta.h }); } catch {} } return ok(text({ board: b.id, idea: b.idea }), rows.length ? image(sheets.boardSheet(rows)) : null); }
       if (kind === 'library') { return H.get_library_effect({ id }); }
       if (kind === 'clip') { if (!ctx.animate) return err('No clips here'); const r = ctx.animate.rawPreview(id, { count: 12, max: 160 }); return ok(text({ clip: r.clip.id, name: r.clip.name, frames: r.clip.n, fps: r.clip.fps, loop: r.clip.loop, next: 'Turn it into pixel art with clip_to_sprite (keep:false to preview first).' }), image(sheets.contactSheet(r.frames, r.w, r.h, { title: `${r.clip.name}: video frames` }))); }
-      return err('kind must be effect, sprite, scene, clip, reference, board or library');
+      return err('kind must be effect, sprite, character, scene, clip, reference, board or library');
     },
 
     list_references: ({ project }) => ok(text(P(project).meta.refs.map((r) => ({ id: r.id, title: r.title, note: r.note || undefined })))),
@@ -245,6 +254,7 @@ function makeHandlers(ctx) {
 
     export: async ({ kind = 'effect', id, format = 'sheet', dest, scale, cols, padding, project }) => {
       const proj = P(project);
+      if (kind === 'character') { const dir = dest ? home(dest) : path.join(proj.outDir('exports'), String(proj.getCharacter(id).name).replace(/[\\/:*?"<>|]+/g, ' ')); const files = chars().exportTo(id, dir, format === 'sheet' ? 'sheets' : format || 'all'); ctx.activity(`Exported character (${format || 'all'})`); return ok(text({ folder: dir, files: files.map((f) => path.relative(dir, f)), how: 'sheets: one PNG per direction (rows = animations) + JSON (pivot, hitboxes, attach points, events) + Godot SpriteFrames (.tres) + GIF previews. spine: JSON + atlas per view (Spine 4.1). godot: a .tscn per view (Node2D bones, Sprite2D parts, AnimationPlayer) — put the folder at res://characters/<name>/.' })); }
       if (kind === 'tileset' || kind === 'scene') { const dir = dest ? home(dest) : proj.outDir('exports'); fs.mkdirSync(dir, { recursive: true }); const files = kind === 'tileset' ? EX.writeTileset(dir, proj.getSprite(id), format) : EX.writeScene(dir, proj, proj.getScene(id), format, { scale }); ctx.activity(`Exported ${kind} (${format})`); return ok(text({ files })); } const { name, frames, meta, code } = await framesOf(proj, kind, id);
       const dir = dest ? home(dest) : proj.outDir('exports'); fs.mkdirSync(dir, { recursive: true }); let files;
       if (format === 'sheet') files = EX.writeSheet(dir, name, frames, meta.w, meta.h, { durations: meta.durations, cols, padding });
@@ -375,9 +385,43 @@ function makeHandlers(ctx) {
       const r = TL.renderMap(ts, rows, { edges: L.edges || 'open' }); return ok(text({ scene: sc.id, layer: L.id, cells: `${r.cells[0].length}×${r.cells.length}`, px: `${r.img.w}×${r.img.h}` }), image(sheets.scaleImage(SC.render(proj, sc), Math.max(1, Math.min(4, Math.floor(960 / sc.w))))));
     },
 
+    // ───────── 0.5: characters
+    create_character: async ({ name, sprite, frame, file, clip, view, pixel, height, directions, project }) => {
+      P(project); const r = await chars().create({ name, source: sprite ? { sprite, frame } : file ? { file: home(file) } : clip ? { clip, frame } : null, view: view || 'side', pixel: pixel !== false, height, directions: directions || 1, by: 'Claude' });
+      ctx.activity(`Made character “${r.character.name}”`); const img = chars().rigPicture(r.character.id, view || 'side', 6);
+      return ok(text({ character: r.character.id, view: view || 'side', notes: r.notes, animations: r.character.animations.map((a) => a.name), next: 'Check the joints in the picture (red near side, blue far side). Move any that are off with set_joints (it re-cuts the parts), then view kind "character" params {anim:"walk"} to see it move.' }), image(img));
+    },
+    set_joints: async ({ character, view, joints, recut, back_limbs, project }) => {
+      P(project); const c0 = chars().get(character); view = view || Object.keys(c0.views)[0];
+      const r = await chars().setJoints(c0.id, view, joints, { recut: recut !== false, backLimbs: back_limbs }); return ok(text({ character: r.character.id, view, notes: r.notes }), image(chars().rigPicture(r.character.id, view, 6)));
+    },
+    character_view: async ({ character, view, sprite, frame, file, clip, mirror_of, action, directions, picks, engine, project }) => {
+      P(project); const c0 = chars().get(character);
+      if (action === 'turnaround') { const clip2 = await chars().turnaround(c0.id, { engine }); return ok(text({ clip: clip2.id, frames: clip2.frames, next: `Look at it with view kind "clip", then character_view action:"pick" with picks {front: n, side: n, back: n, front34: n, back34: n} (frame numbers from 0) to make those views.` })); }
+      if (action === 'pick') { const r = await chars().viewsFromClip(c0.id, clip, picks); return ok(text({ character: c0.id, views: Object.keys(r.character.views), directions: r.character.directions, notes: r.notes }), image(sheets.boardSheet(Object.keys(r.character.views).map((v) => { const p = chars().preview(c0.id, { view: v }); return { label: v, frames: p.frames, w: p.w, h: p.h }; })))); }
+      if (action === 'directions') { const c = chars().get(c0.id); c.directions = directions; chars().save(c); return ok(text({ directions: CHR.directions(c) })); }
+      if (!view) return err('view: side, front, back, front34 or back34');
+      const r = await chars().addView(c0.id, view, mirror_of ? { mirrorOf: mirror_of } : sprite ? { sprite, frame } : file ? { file: home(file) } : clip ? { clip, frame } : {}, { directions });
+      return ok(text({ character: c0.id, view, notes: r.notes, directions: CHR.directions(r.character).map((d) => d.dir + ':' + d.view + (d.mirror ? ' mirrored' : '')) }), image(chars().rigPicture(c0.id, view, 6)));
+    },
+    character_animation: ({ character, action, name, anim, motion, frames, fps, loop, amp, view, frame, pose, events, project }) => {
+      P(project); const c = chars().animation(chars().get(character).id, { action: action || 'add', name, anim: anim || name, motion, frames, fps, loop, amp, view, frame, pose, events });
+      const a = c.animations.find((x) => x.name === (name || motion) || x.id === anim || x.name === anim);
+      if (!a || action === 'remove') return ok(text({ animations: c.animations.map((x) => x.name) }));
+      const r = chars().preview(c.id, { anim: a.id, view }); return ok(text({ character: c.id, anim: a.name, motion: a.motion, frames: a.frames, fps: a.fps, loop: a.loop, keyed_views: Object.keys(a.keys || {}), motions: Object.keys(CHR.MOTIONS) }), image(sheets.contactSheet(r.frames, r.w, r.h, { title: `${c.name}: ${a.name}` })));
+    },
+    motion_from_video: async ({ character, clip, file, name, view, frames, loop, start, end, in_place, project }) => {
+      P(project); const r = await chars().fromVideo(chars().get(character).id, { clip, file: file && home(file), name, view, frames, loop: loop !== false, start, end, inPlace: in_place !== false });
+      const pv = chars().preview(r.character.id, { anim: r.anim.id, view: view }); return ok(text({ character: r.character.id, anim: r.anim.name, frames: r.anim.frames, person_found_in: `${r.detected}/${r.of} frames`, mirrored_video: r.facingLeft, next: 'Tidy single frames with character_animation action:"pose".' }), image(sheets.contactSheet(pv.frames, pv.w, pv.h, { title: r.anim.name })));
+    },
+    character_skin: ({ character, action, name, recolor, sprite, bone, x, y, rot, px, py, z, label, id, frame, views, use, project }) => {
+      P(project); const c = chars().skin(chars().get(character).id, { action, name, recolor, sprite, bone, x, y, rot, px, py, z, label, id, frame, views, use, skin: action === 'attach' ? name : undefined });
+      const r = chars().preview(c.id, {}); return ok(text({ character: c.id, skin: c.skin, skins: c.skins.map((k) => ({ name: k.name, frame: k.frame, recolor: k.recolor || undefined })), attachments: c.attachments, note: action === 'add' ? `Skin parts are frame ${c.skins.find((k) => k.name === name).frame} of each view's parts sprite: draw replacement parts there (draw_sprite with frame and layer = the bone name); empty layers fall back to the default skin.` : undefined }), image(sheets.contactSheet(r.frames, r.w, r.h, { scale: 6 })));
+    },
+
     delete_item: ({ kind, id, project }) => {
       const proj = P(project);
-      if (kind === 'effect') { const m = proj.resolveEffect(id); proj.removeEffect(m.id); } else if (kind === 'sprite') proj.removeSprite(proj.getSprite(id).id); else if (kind === 'board') proj.removeBoard(id); else if (kind === 'scene') proj.removeScene(id); else return err('kind: effect, sprite, scene or board');
+      if (kind === 'effect') { const m = proj.resolveEffect(id); proj.removeEffect(m.id); } else if (kind === 'sprite') proj.removeSprite(proj.getSprite(id).id); else if (kind === 'board') proj.removeBoard(id); else if (kind === 'scene') proj.removeScene(id); else if (kind === 'character') chars().remove(id); else return err('kind: effect, sprite, character, scene or board');
       ctx.changed(kind, id); return ok(text({ deleted: id, note: 'Moved to the project’s .trash folder' }));
     },
   };
@@ -387,7 +431,7 @@ function makeHandlers(ctx) {
     if (kind === 'sprite') { const s = proj.getSprite(id); return { name: s.name, frames: SP.composeAll(s), meta: { w: s.w, h: s.h, n: s.frames.length, durations: s.frames.map((f) => f.duration), loop: true } }; }
     if (kind === 'scene') { const sc = proj.getScene(id); const r = SC.pan(proj, sc, { frames: 36 }); return { name: sc.name, frames: r.frames, meta: { w: r.w, h: r.h, n: r.frames.length, durations: r.durations, loop: true } }; }
     if (kind === 'library') { const l = LIB.find((x) => x.id === id); if (!l) throw new Error('No such library effect'); const r = await ctx.render(l.code); return { name: l.name, frames: r.frames, meta: r.meta, code: l.code }; }
-    throw new Error('kind must be effect, sprite, scene or library');
+    throw new Error('kind must be effect, sprite, scene, character or library');
   }
 
   return async (name, args, client) => {

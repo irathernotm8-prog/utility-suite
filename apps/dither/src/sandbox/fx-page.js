@@ -58,10 +58,38 @@ async function extract(bytes, mime, { fps = 24, maxFrames = 144, maxSize = 512 }
   URL.revokeObjectURL(url); return { frames: out, fps };
 }
 
+// pose landmarks (MediaPipe, bundled; files arrive from the main process as bytes and run from blob URLs — no network)
+let POSE = null;
+async function poseModel(files, mode) {
+  if (!POSE) {
+    const url = (data, type) => URL.createObjectURL(new Blob([data], { type }));
+    const vision = await import(url(files.bundle, 'text/javascript'));
+    const lm = await vision.PoseLandmarker.createFromOptions({ wasmLoaderPath: url(files.loader, 'text/javascript'), wasmBinaryPath: url(files.wasm, 'application/wasm') }, { baseOptions: { modelAssetBuffer: new Uint8Array(files.model), delegate: 'CPU' }, runningMode: 'IMAGE', numPoses: 1, outputSegmentationMasks: true, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
+    POSE = { lm, mode: 'IMAGE' };
+  }
+  if (POSE.mode !== mode) { await POSE.lm.setOptions({ runningMode: mode }); POSE.mode = mode; }
+  return POSE.lm;
+}
+async function pose(files, frames, { video = false, fps = 24, mask = false } = {}) {
+  const lm = await poseModel(files, video ? 'VIDEO' : 'IMAGE'); const out = []; const masks = [];
+  for (let i = 0; i < frames.length; i++) {
+    // the wasm aborts on sizes that aren't multiples of 4: pad right/bottom (landmarks stay in the original pixels)
+    const f = frames[i], W = Math.ceil(f.w / 4) * 4, H = Math.ceil(f.h / 4) * 4; let px = new Uint8ClampedArray(f.data);
+    if (W !== f.w || H !== f.h) { const q = new Uint8ClampedArray(W * H * 4).fill(255); for (let y = 0; y < f.h; y++) q.set(px.subarray(y * f.w * 4, (y + 1) * f.w * 4), y * W * 4); px = q; }
+    const img = new ImageData(px, W, H);
+    const r = video ? lm.detectForVideo(img, Math.round((i * 1000) / fps) + 1) : lm.detect(img);
+    out.push(r.landmarks && r.landmarks[0] ? r.landmarks[0].map((p) => [p.x * W, p.y * H, p.z, p.visibility ?? 1]) : null);
+    if (mask) { const m = r.segmentationMasks && r.segmentationMasks[0]; if (m) { const a = m.getAsFloat32Array(); const u = new Uint8Array(a.length); for (let k = 0; k < a.length; k++) u[k] = Math.round(Math.max(0, Math.min(1, a[k])) * 255); const cw = Math.round(m.width * f.w / W), ch = Math.round(m.height * f.h / H), cu = new Uint8Array(cw * ch); for (let y = 0; y < ch; y++) cu.set(u.subarray(y * m.width, y * m.width + cw), y * cw); masks.push({ w: cw, h: ch, data: cu.buffer }); } else masks.push(null); }
+    if (r.close) r.close();
+  }
+  return mask ? { poses: out, masks } : out;
+}
+
 bridge.onJob(async (job) => {
   try {
     if (job.kind === 'render') bridge.reply(job.id, await render(job.id, job.code, job.opts, job.timeoutMs || 10000));
     else if (job.kind === 'frames') { const r = await extract(job.bytes, job.mime, job.opts || {}); bridge.reply(job.id, { ok: true, ...r }); }
+    else if (job.kind === 'pose') { const r = await pose(job.files, job.frames, job.opts || {}); bridge.reply(job.id, Array.isArray(r) ? { ok: true, poses: r } : { ok: true, poses: r.poses, masks: r.masks }); }
     else if (job.kind === 'webm') bridge.reply(job.id, { ok: true, data: await webm(job.frames, job.w, job.h, job.durations, job.scale || 6, job.bg, job.loops || 3) });
   } catch (e) { bridge.reply(job.id, { ok: false, error: e.message || String(e) }); }
 });

@@ -29,7 +29,7 @@ const fail = (e) => toast('That didn’t work', e.message || String(e), 'bad', 8
 function go(view, arg) {
   const v0 = VIEWS[S.view]; if (v0 && v0.leave && (S.view !== view || S.arg !== arg)) v0.leave();
   S.view = view; S.arg = arg ?? null;
-  const navOf = { lab: 'effects', editor: 'sprites', scene: 'tiles' };
+  const navOf = { lab: 'effects', editor: 'sprites', scene: 'tiles', character: 'characters' };
   $$('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === (navOf[view] || view)));
   render();
 }
@@ -98,7 +98,7 @@ async function loadProject() {
   const drafts = effects.filter((e) => e.boardId && !e.feedback?.verdict).length;
   $('#draftCount').textContent = drafts || ''; $('#draftCount').classList.toggle('live', drafts > 0);
   $('#effectCount').textContent = effects.filter((e) => e.kept || !e.boardId).length || '';
-  $('#spriteCount').textContent = sprites.length || ''; call('clips:list').then((c) => { const el = $('#clipCount'); if (el) el.textContent = c.length || ''; }).catch(() => {}); $('#refCount').textContent = sum.refs.length || ''; const scc = $('#sceneCount'); if (scc) scc.textContent = (sum.counts.scenes || 0) + sprites.filter((x) => x.tileset).length || '';
+  $('#spriteCount').textContent = sprites.length || ''; call('clips:list').then((c) => { const el = $('#clipCount'); if (el) el.textContent = c.length || ''; }).catch(() => {}); $('#refCount').textContent = sum.refs.length || ''; const chc = $('#charCount'); if (chc) chc.textContent = sum.counts.characters || ''; const scc = $('#sceneCount'); if (scc) scc.textContent = (sum.counts.scenes || 0) + sprites.filter((x) => x.tileset).length || '';
 }
 const effectById = (id) => S.effects.find((e) => e.id === id);
 async function projectMenu(anchor) {

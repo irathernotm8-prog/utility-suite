@@ -29,6 +29,7 @@ const PRESETS = {
   jump: { label: 'Jump', loop: false, align: 'x', seconds: 2, text: 'crouches, jumps straight up and lands back on the same spot' },
   hurt: { label: 'Hurt', loop: false, align: 'feet', seconds: 2, text: 'flinches back from a hit, then recovers to the starting pose' },
   death: { label: 'Defeat', loop: false, align: 'feet', seconds: 3, text: 'staggers and collapses to the ground' },
+  turnaround: { label: 'Turnaround', loop: true, align: 'x', seconds: 4, text: 'slowly turns around on the spot through a full circle — front, side, back, other side, front — standing upright with arms relaxed a little away from the body, the feet stay on the same spot' },
 };
 const GUARD = 'The camera does not move or zoom. The plain flat green background stays exactly the same. No new shadows, no new objects, no text. The character keeps the same design, colours and size and stays fully inside the frame.';
 const NEGATIVE = 'camera movement, zoom, pan, shaky camera, background change, new shadows, new objects, extra limbs, morphing, blur, text, watermark, cropped body';
