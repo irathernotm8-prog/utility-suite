@@ -31,6 +31,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await win.locator('.layer').nth(1).dblclick(); await shot('code-editor', 900); await win.keyboard.press('Escape');
   // sheets
   await win.click('#exportBtn'); await shot('export'); await win.click('.prov[data-f=wordpress]'); await win.click('.sheet [data-yes]'); await shot('export-done', 2500); await win.keyboard.press('Escape');
+  await win.click('#exportBtn'); await win.click('.prov[data-f=pdf]'); await win.click('[data-pdev] [data-v=both]'); await shot('export-pdf-options', 500); await win.click('.sheet [data-yes]'); await win.waitForSelector('[data-openpdf]', { timeout: 120000 }); await shot('export-pdf-done', 300);
+  const pdfPath = await win.evaluate(() => document.querySelector('.sheet code').textContent); console.log('pdf (ui)', pdfPath); fs.copyFileSync(pdfPath.replace(/^~/, os.homedir()), path.join(OUT, 'ui-review.pdf')); await win.keyboard.press('Escape');
   await win.click('#auditBtn'); await shot('audit', 14000); await win.keyboard.press('Escape');
   await win.click('#historyBtn'); await shot('history'); await win.keyboard.press('Escape');
   await win.click('#publishBtn'); await shot('publish'); await win.keyboard.press('Escape');
@@ -54,6 +56,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (sc.result.content[1]) fs.writeFileSync(path.join(OUT, 'mcp-phone-shot.jpg'), Buffer.from(sc.result.content[1].data, 'base64'));
   const au = await rpc(6, 'tools/call', { name: 'audit', arguments: { page: 'index' } }); console.log('audit', au.result.content[0].text.slice(0, 200).replace(/\n/g, ' '));
   for (const f of ['static', 'wordpress', 'embed', 'weebly', 'single', 'backup']) { const r = await rpc(10 + f.length, 'tools/call', { name: 'export', arguments: { format: f } }); console.log('export', f, !r.result.isError); }
+  const pr = await rpc(40, 'tools/call', { name: 'export', arguments: { format: 'pdf', device: 'phone', pages: ['index', 'pricing'] } }); console.log('export pdf (mcp)', !pr.result.isError, pr.result.content[0].text.slice(0, 160).replace(/\n/g, ' '));
+  try { fs.copyFileSync(JSON.parse(pr.result.content[0].text).path, path.join(OUT, 'mcp-review.pdf')); } catch (e) { console.log('copy pdf failed', e.message); }
   mcp.kill();
   await shot('after-ai-add', 2500);
   console.log('ERRORS', errors.length ? errors.join('\n') : 'none');

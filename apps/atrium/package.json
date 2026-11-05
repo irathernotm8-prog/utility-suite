@@ -1,7 +1,7 @@
 {
   "name": "atrium",
   "productName": "Atrium",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Website builder for you and your AI: premium sections and themes, a live preview with click-to-edit, Claude, GPT, Gemini or a local model with full control of the site, audits, and exports to static hosting, WordPress, Weebly and any site builder.",
   "main": "src/main.js",
   "author": "Bilal",
@@ -15,17 +15,46 @@
     "dist:win": "electron-builder --win --x64"
   },
   "dependencies": {
+    "pdf-lib": "^1.17.1",
     "qrcode-generator": "^1.4.4"
   },
   "build": {
     "appId": "com.bilal.atrium",
     "productName": "Atrium",
     "copyright": "Personal use",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["src/**/*", "mcp/**/*", "build/icon.png", "package.json", "node_modules/qrcode-generator/**/*"],
-    "asarUnpack": ["mcp/**/*"],
-    "mac": { "target": ["dmg", "zip"], "icon": "build/icon.png", "category": "public.app-category.developer-tools", "darkModeSupport": true },
-    "win": { "target": ["zip"], "icon": "build/icon.png" }
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "mcp/**/*",
+      "build/icon.png",
+      "package.json",
+      "node_modules/qrcode-generator/**/*",
+      "node_modules/pdf-lib/**/*",
+      "node_modules/@pdf-lib/**/*",
+      "node_modules/pako/**/*",
+      "node_modules/tslib/**/*"
+    ],
+    "asarUnpack": [
+      "mcp/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "darkModeSupport": true
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    }
   },
   "devDependencies": {
     "electron": "44.7.0",

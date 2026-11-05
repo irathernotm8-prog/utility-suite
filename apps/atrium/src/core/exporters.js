@@ -6,6 +6,7 @@
 //   embed      — for site builders (Weebly, Wix, Squarespace, Webflow, Shopify, Google Sites, Carrd…): head code,
 //                whole-page snippets, per-section snippets and iframe-ready pages, with instructions per platform
 //   weebly     — Weebly theme files (header template with {menu}/{content}/{footer}, main.css, assets)
+//   pdf        — (src/pdf.js, needs the app's renderer) full-length page captures with section labels and notes
 //   backup     — a .atrium file (the site + assets) to move or share a site; imports back into Atrium
 'use strict';
 const fs = require('fs');
@@ -20,6 +21,7 @@ const { slugify } = require('./site');
 
 const FORMATS = [
   { id: 'static', name: 'Static website', blurb: 'HTML, CSS and JS for any host — Netlify, GitHub Pages, Vercel, cPanel, S3. Includes sitemap.xml and robots.txt.' },
+  { id: 'pdf', name: 'PDF for review', blurb: 'Every page as one full-length PDF page, exactly as it looks, with numbered sections and a notes column — for marking up changes and sharing feedback.' },
   { id: 'wordpress', name: 'WordPress theme', blurb: 'A block theme. Upload it, activate it, and it creates your pages and posts, sets the front page and wires up the contact form. Also a WXR file for Tools › Import.' },
   { id: 'embed', name: 'Site builders (Weebly, Wix, Squarespace…)', blurb: 'Head code plus page and section snippets for Embed / Custom HTML / Code blocks, with steps for each platform.' },
   { id: 'weebly', name: 'Weebly theme files', blurb: 'For Theme › Edit HTML/CSS: a header template using Weebly’s {menu}, {content} and {footer} tags, the stylesheet and assets.' },
@@ -448,6 +450,7 @@ function exportSite(site, format, opts = {}) {
       fs.mkdirSync(outRoot, { recursive: true }); const f = path.join(outRoot, `${name} ${stamp()}.atrium`); fs.writeFileSync(f, backupFile(site));
       return { path: f, format, count: 1, notes };
     }
+    case 'pdf': throw new Error('PDF export runs in the app (it renders every page); use the Export window or the export tool.');
     default: throw new Error(`Unknown format "${format}". Formats: ${FORMATS.map((x) => x.id).join(', ')}`);
   }
   if (opts.zip) { fs.mkdirSync(outRoot, { recursive: true }); const z = folder + '.zip'; fs.writeFileSync(z, makeZip(files)); return { path: z, format, count: files.length, notes }; }

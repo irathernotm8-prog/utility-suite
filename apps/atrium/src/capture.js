@@ -2,7 +2,7 @@
 // slices, or one section), in-page audits (contrast, overflow, tap targets…), reading other websites, and
 // parsing HTML for imports. Runs in its own session; remote pages get no Node and no access to the app.
 'use strict';
-const { BrowserWindow, session } = require('electron');
+const { BrowserWindow, session, nativeImage } = require('electron');
 
 const DEVICES = { desktop: 1440, laptop: 1280, tablet: 834, phone: 390 };
 let queue = Promise.resolve();
@@ -20,44 +20,85 @@ function makeWin(width, height, remote) {
 }
 async function load(w, url, timeout = 25000) {
   await Promise.race([w.loadURL(url).catch((e) => { if (!/ERR_ABORTED/.test(e.message)) throw e; }), sleep(timeout).then(() => { throw new Error('The page took too long to load'); })]);
+  await w.webContents.insertCSS('html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}html{scrollbar-width:none!important}').catch(() => {});
   await w.webContents.executeJavaScript(`(async()=>{document.documentElement.classList.add('at-no-reveal');document.querySelectorAll('[data-reveal]').forEach(e=>e.classList.add('at-in'));try{await Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,2500))])}catch(e){}
     document.querySelectorAll('img[loading=lazy]').forEach(i=>i.loading='eager');
     await Promise.race([Promise.all([...document.images].filter(i=>!i.complete).map(i=>new Promise(r=>{i.onload=i.onerror=r}))),new Promise(r=>setTimeout(r,4000))]);return true})()`).catch(() => {});
   await sleep(350);
 }
 
+// Capture [y0, y1) of the page (CSS px) without ever making the window taller than a real screen: scroll through
+// it in screen-height bands and stitch the bitmaps together on the CPU. (Growing a hidden window to the page height
+// breaks on Macs, where Retina doubles it past the GPU's texture limit, and stretches 100vh sections.) Fixed and
+// sticky elements are hidden after the first screen so a sticky header isn't repeated down the page.
+async function captureRange(w, width, vh, y0, y1) {
+  const parts = []; let hidden = false;
+  for (let y = y0; y < y1; y += vh) {
+    const h = Math.min(vh, y1 - y);
+    if (y > 0 && !hidden) { hidden = true; await w.webContents.executeJavaScript(`document.querySelectorAll('body *').forEach(e=>{const p=getComputedStyle(e).position;if(p==='fixed'||p==='sticky')e.style.setProperty('visibility','hidden','important')})`); }
+    const sy = await w.webContents.executeJavaScript(`new Promise(r=>{document.documentElement.style.setProperty('scroll-behavior','auto','important');window.scrollTo({top:${Math.round(y)},left:0,behavior:'instant'});requestAnimationFrame(()=>requestAnimationFrame(()=>r(window.scrollY)))})`);
+    await sleep(60);
+    const top = Math.max(0, Math.round(y - sy)); const hh = Math.max(1, Math.min(Math.round(h), vh - top));
+    const img = await w.webContents.capturePage({ x: 0, y: top, width, height: hh });
+    if (img.getSize().width) parts.push(img);
+  }
+  if (!parts.length) return null;
+  if (parts.length === 1) return parts[0];
+  const pw = parts[0].getSize().width; const bufs = []; let ph = 0;
+  for (const im of parts) { const sz = im.getSize(); const b = sz.width === pw ? im.toBitmap() : im.resize({ width: pw }).toBitmap(); bufs.push(b); ph += b.length / (pw * 4); }
+  return nativeImage.createFromBitmap(Buffer.concat(bufs), { width: pw, height: Math.round(ph) });
+}
+const pageHeight = (w) => w.webContents.executeJavaScript('Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)');
+const viewportFor = (width) => (width <= 500 ? 844 : width <= 900 ? 1112 : 900);
+
 // → [{ data: base64 jpeg, w, h, note }]
 function shoot(url, { width = 1440, fullPage = true, selector = null, outWidth, maxSlices = 4, sliceHeight, remote = false, quality = 78 } = {}) {
   return serial(async () => {
-    const vh = width <= 500 ? 844 : width <= 900 ? 1112 : 900;
+    const vh = viewportFor(width);
     const w = makeWin(width, vh, remote);
     try {
       await load(w, url);
-      let rect = null, total = vh;
+      let rect = null;
       if (selector) {
-        rect = await w.webContents.executeJavaScript(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return null;const r=e.getBoundingClientRect();return {x:0,y:Math.round(r.top+scrollY),w:innerWidth,h:Math.max(1,Math.round(r.height))}})()`);
+        rect = await w.webContents.executeJavaScript(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return null;const r=e.getBoundingClientRect();return {y:Math.round(r.top+scrollY),h:Math.max(1,Math.round(r.height))}})()`);
         if (!rect) throw new Error('That section isn’t on the page');
       }
-      if (fullPage || rect) total = await w.webContents.executeJavaScript('Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)');
-      const cap = 12000; const fullH = Math.min(cap, rect ? rect.y + rect.h : fullPage ? total : vh);
-      w.setContentSize(width, Math.max(vh, Math.min(fullH, cap)));
-      await sleep(250);
-      await w.webContents.executeJavaScript('window.scrollTo(0,0)');
+      const total = await pageHeight(w);
       const ow = outWidth || (width >= 1200 ? 1100 : width >= 700 ? 834 : 390);
       const scale = ow / width;
       const sh = sliceHeight || (width <= 500 ? 1500 : 1300) / scale;
-      const y0 = rect ? rect.y : 0; const y1 = rect ? rect.y + rect.h : fullH;
+      const y0 = rect ? rect.y : 0; const y1 = rect ? Math.min(total, rect.y + rect.h) : fullPage ? total : Math.min(total, vh);
       const out = [];
       for (let y = y0; y < y1 && out.length < maxSlices; y += sh) {
         const h = Math.min(sh, y1 - y); if (h < 2) break;
-        const img = await w.webContents.capturePage({ x: 0, y: Math.round(y), width, height: Math.round(h) });
-        const s = img.getSize(); if (!s.width) continue;
+        const img = await captureRange(w, width, vh, y, y + h); if (!img) continue;
         const r = img.resize({ width: Math.round(ow), quality: 'good' });
         out.push({ data: r.toJPEG(quality).toString('base64'), w: r.getSize().width, h: r.getSize().height, y: Math.round(y) });
       }
       const more = y1 - y0 > sh * maxSlices;
       if (out.length) out[out.length - 1].note = more ? `Showing the top ${Math.round(sh * maxSlices)}px of ${Math.round(y1 - y0)}px. Ask for a section to see the rest.` : '';
       return { slices: out, height: Math.round(total), width };
+    } finally { try { w.destroy(); } catch {} }
+  });
+}
+
+// full-resolution capture for the PDF export: the whole page in 2000px bands (CSS-pixel positions), plus where each
+// section sits so the PDF can label it
+function captureForPdf(url, { width = 1440, quality = 86 } = {}) {
+  return serial(async () => {
+    const vh = viewportFor(width);
+    const w = makeWin(width, vh, false);
+    try {
+      await load(w, url);
+      const total = Math.min(30000, await pageHeight(w));
+      const sections = await w.webContents.executeJavaScript(`[...document.querySelectorAll('[data-s]')].filter(e=>!e.parentElement.closest('[data-s]')).map(e=>{const r=e.getBoundingClientRect();return {id:e.getAttribute('data-s'),top:Math.round(r.top+scrollY),height:Math.round(r.height)}})`);
+      const out = []; const band = 2000;
+      for (let y = 0; y < total; y += band) {
+        const h = Math.min(band, total - y);
+        const img = await captureRange(w, width, vh, y, y + h); if (!img) continue;
+        out.push({ jpeg: img.toJPEG(quality), y, h });
+      }
+      return { slices: out, height: total, width, sections };
     } finally { try { w.destroy(); } catch {} }
   });
 }
@@ -146,4 +187,4 @@ function parseHtml(html) {
 
 function clearRemote() { try { session.fromPartition('atrium-remote').clearStorageData(); } catch {} }
 
-module.exports = { shoot, thumb, auditPage, readUrl, parseHtml, clearRemote, DEVICES };
+module.exports = { captureForPdf, shoot, thumb, auditPage, readUrl, parseHtml, clearRemote, DEVICES };

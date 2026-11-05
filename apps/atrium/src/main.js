@@ -23,6 +23,7 @@ const connectors = require('./connectors');
 const ai = require('./ai');
 const llm = require('./llm');
 const publish = require('./publish');
+const pdf = require('./pdf');
 const assets = require('./assets');
 const { makeImporter } = require('./importer');
 const { makeHandlers } = require('./mcp-handlers');
@@ -73,7 +74,7 @@ async function makeThumb(site) { try { const b = await capture.thumb(preview.pag
 const preview = new Preview({ getSite: () => current, overlayDir: path.join(__dirname, 'renderer'), onVisit: (v) => send('lan:visit', v) });
 const activity = (msg, ref) => send('ai:activity', { msg, ref: ref || null, at: Date.now() });
 const importer = makeImporter({ lib, capture });
-const handle = makeHandlers({ lib, active, setActive, capture, preview, selection: () => selection, activity, publish, assets, importer, settings: () => ({ netlifyToken: () => dec(settings.netlify) }) });
+const handle = makeHandlers({ pdf, lib, active, setActive, capture, preview, selection: () => selection, activity, publish, assets, importer, settings: () => ({ netlifyToken: () => dec(settings.netlify) }) });
 
 // ───────── window
 function createWindow() {
@@ -174,7 +175,7 @@ h('selection:set', (sel) => { selection = sel; return true; });
 // quality, export, publish
 h('audit:run', (page) => viaTool('audit', { page: page || 'all' }));
 h('export:formats', () => EX.FORMATS);
-h('export:run', async (format, opts = {}) => { if (opts.ask) { const r = await dialog.showOpenDialog(win, { title: 'Export to…', properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; opts.dest = r.filePaths[0]; } return EX.exportSite(S(), format, opts); });
+h('export:run', async (format, opts = {}) => { if (opts.ask) { const r = await dialog.showOpenDialog(win, { title: 'Export to…', properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; opts.dest = r.filePaths[0]; } if (format === 'pdf') return pdf.exportPdf({ site: S(), preview, capture, opts, onStep: (m) => send('export:step', m) }); return EX.exportSite(S(), format, opts); });
 h('publish:netlify', () => publish.netlify(S(), dec(settings.netlify), (m) => send('publish:step', m)));
 h('publish:github', (repo) => publish.github(S(), { repo }, (m) => send('publish:step', m)));
 h('publish:status', () => ({ gh: !!ai.cli('gh'), git: !!ai.which('git'), netlify: !!settings.netlify, published: S().data.settings.publish || {} }));

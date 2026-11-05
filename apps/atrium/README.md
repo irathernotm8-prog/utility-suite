@@ -41,6 +41,7 @@ A website builder for you and your AI. Premium sections and themes, a live previ
 
 | Format | What you get |
 |---|---|
+| PDF for review | Every page as one full-length PDF page, exactly as it renders (desktop, tablet, phone or combinations), with numbered sections (§1, §2…) in a left margin and a ruled notes column on the right, plus a contents page. For marking up changes and sending feedback. |
 | Static website | HTML/CSS/JS for any host, plus sitemap.xml, robots.txt and 404.html |
 | WordPress theme | A block theme `.zip`. Activating it creates the pages and posts (never overwrites), sets the front page and "Post name" links, and makes contact forms email the admin. Menus, post cards and assets resolve live through `{{atrium:…}}` tokens in `functions.php`. Also a WXR file for Tools › Import. |
 | Site builders | For Weebly, Wix, Squarespace, Webflow, Shopify, Google Sites, Carrd and others: `head-code.html`, whole-page and per-section snippets (scoped inside `.atrium-embed` so they don't restyle the host site), iframe-ready pages, and steps for each platform |
@@ -77,6 +78,7 @@ src/llm.js             in-app agent loop: Anthropic Messages + OpenAI-compatible
 src/ai.js              finds Claude Code / Codex / gh; runs Claude Code with --resume per site
 src/connectors.js      installs the MCP server into Claude Desktop / Claude Code / Codex; the local bridge
 src/publish.js         Netlify and GitHub Pages
+src/pdf.js             PDF for review (full-page captures + section labels + notes column, assembled with pdf-lib)
 src/assets.js          image import + web resizing, favicon
 src/importer.js        static-site and .atrium import
 src/core/site.js       sites on disk: pages, sections, theme, settings, posts, assets, versions, undo

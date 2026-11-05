@@ -31,7 +31,7 @@ function checkSection({ html, css }) {
 }
 
 function makeHandlers(deps) {
-  const { lib, active, setActive, capture, preview, selection, activity = () => {}, publish, assets, importer, settings } = deps;
+  const { pdf, lib, active, setActive, capture, preview, selection, activity = () => {}, publish, assets, importer, settings } = deps;
   const ok = (o) => ({ content: [{ type: 'text', text: typeof o === 'string' ? o : JSON.stringify(o, null, 2) }] });
   const withImages = (o, slices = [], label) => ({ content: [{ type: 'text', text: typeof o === 'string' ? o : JSON.stringify(o, null, 2) }, ...slices.flatMap((s, i) => [...(label && slices.length > 1 ? [{ type: 'text', text: `${label} ${i + 1}/${slices.length}${s.note ? ' — ' + s.note : ''}` }] : s.note ? [{ type: 'text', text: s.note }] : []), { type: 'image', data: s.data, mimeType: 'image/jpeg' }])] });
   const siteOf = (a) => (a && a.site ? lib.get(a.site) : active());
@@ -175,7 +175,9 @@ function makeHandlers(deps) {
     },
     async fetch_url(a) { const r = await capture.readUrl(a.url, { look: a.look !== false, width: a.width || 1440 }); const { slices, ...info } = r; return withImages(info, slices, 'Screenshot'); },
     async import_html(a) { const s = await importer(a.path.replace(/^~/, os.homedir()), a.name); setActive(s.dir); return ok({ imported: sum(s), outline: outline(s), next: 'screenshot the pages; imported sections keep their original CSS in customCss — consider rebuilding key sections with the theme tokens.' }); },
-    async export(a) { const s = siteOf(a); const r = EX.exportSite(s, a.format, { zip: a.zip, assetBase: a.asset_base, dest: a.dest && a.dest.replace(/^~/, os.homedir()) }); activity(`Exported ${a.format}`, { path: r.path }); return ok(r); },
+    async export(a) { const s = siteOf(a);
+      if (a.format === 'pdf') { const r = await pdf.exportPdf({ site: s, preview, capture, opts: { device: a.device, pages: a.pages, posts: a.posts, labels: a.labels, notes: a.notes, dest: a.dest && a.dest.replace(/^~/, os.homedir()) }, onStep: (m) => activity(m) }); activity('Exported a PDF', { path: r.path }); return ok(r); }
+      const r = EX.exportSite(s, a.format, { zip: a.zip, assetBase: a.asset_base, dest: a.dest && a.dest.replace(/^~/, os.homedir()) }); activity(`Exported ${a.format}`, { path: r.path }); return ok(r); },
     async publish(a) { const s = siteOf(a); const r = a.target === 'github' ? await publish.github(s, { repo: a.repo }, (m) => activity(m)) : await publish.netlify(s, settings().netlifyToken(), (m) => activity(m)); activity(`Published to ${r.url}`); return ok(r); },
     async history(a) { const s = siteOf(a); return ok(s.versions().slice(0, 60).map((v) => ({ id: v.id, at: new Date(v.at).toLocaleString(), label: v.label, by: v.by }))); },
     async restore_version(a) { const s = siteOf(a); s.restore(a.id); return ok({ restored: a.id, outline: outline(s) }); },

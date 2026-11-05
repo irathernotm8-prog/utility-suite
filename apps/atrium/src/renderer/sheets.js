@@ -60,22 +60,32 @@ function openCode(id) {
 // ───────── export
 function exportSheet() {
   const F = S.lib.formats; let fmt = 'static';
-  const s = sheet({ title: 'Export', wide: true, body: `<div class="prov-list" style="grid-template-columns:1fr 1fr">${F.map((f) => `<div class="prov ${f.id === fmt ? 'on' : ''}" data-f="${f.id}" style="align-items:flex-start;flex-direction:column;gap:4px"><b>${icon({ static: 'globe', wordpress: 'wordpress', embed: 'code', weebly: 'layers', single: 'file', backup: 'archive' }[f.id] || 'file', 15)} ${esc(f.name)}</b><span class="tiny muted">${esc(f.blurb)}</span></div>`).join('')}</div>
+  const s = sheet({ title: 'Export', wide: true, body: `<div class="prov-list" style="grid-template-columns:1fr 1fr">${F.map((f) => `<div class="prov ${f.id === fmt ? 'on' : ''}" data-f="${f.id}" style="align-items:flex-start;flex-direction:column;gap:4px"><b>${icon({ pdf: 'fileText', static: 'globe', wordpress: 'wordpress', embed: 'code', weebly: 'layers', single: 'file', backup: 'archive' }[f.id] || 'file', 15)} ${esc(f.name)}</b><span class="tiny muted">${esc(f.blurb)}</span></div>`).join('')}</div>
+    <div class="col" data-pdfw hidden style="gap:10px;padding:12px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--line-2)">
+      <div class="kv"><label>View</label><div class="seg sm" data-pdev>${[['desktop', 'Desktop'], ['tablet', 'Tablet'], ['phone', 'Phone'], ['both', 'Desktop + phone'], ['all', 'All three']].map(([v, n], i) => `<button data-v="${v}" class="${i === 0 ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+      <div class="kv"><label>Pages</label><div class="seg sm" data-ppages><button data-v="all" class="on">Every page</button><button data-v="current">Only ${esc(curPage() ? curPage().title : 'this page')}</button></div></div>
+      <div class="row" style="flex-wrap:wrap;gap:14px"><label class="chk"><input type="checkbox" data-plabels checked> Number the sections</label><label class="chk"><input type="checkbox" data-pnotes checked> Notes column</label>${S.site.posts.length ? '<label class="chk"><input type="checkbox" data-pposts> Include blog posts</label>' : ''}</div>
+      <span class="hint">Each page comes out full length, exactly as it looks, with §1, §2… beside every section so feedback can point at it.</span></div>
     <div class="row" data-opts style="flex-wrap:wrap;gap:14px"><label class="chk" data-zipw><input type="checkbox" data-zip> One .zip file</label><div class="row" data-basew hidden><span class="small">Asset address</span><input class="input sm" style="width:300px" data-base placeholder="https://cdn.example.com (optional)"></div><label class="chk"><input type="checkbox" data-ask> Choose where to save</label></div>
     <div data-result></div>`, foot: '<button class="btn" data-no>Close</button><button class="btn primary" data-yes>Export</button>' });
-  const sync = () => { $('[data-zipw]', s.el).style.display = ['static', 'single', 'embed', 'weebly'].includes(fmt) ? '' : 'none'; $('[data-basew]', s.el).hidden = fmt !== 'embed'; };
+  const segPick = (sel) => { $$(sel + ' button', s.el).forEach((b) => b.onclick = () => $$(sel + ' button', s.el).forEach((x) => x.classList.toggle('on', x === b))); }; segPick('[data-pdev]'); segPick('[data-ppages]');
+  const segVal = (sel) => ($(sel + ' button.on', s.el) || {}).dataset.v;
+  const sync = () => { $('[data-pdfw]', s.el).hidden = fmt !== 'pdf'; $('[data-zipw]', s.el).style.display = ['static', 'single', 'embed', 'weebly'].includes(fmt) ? '' : 'none'; $('[data-basew]', s.el).hidden = fmt !== 'embed'; };
   $$('[data-f]', s.el).forEach((b) => b.onclick = () => { fmt = b.dataset.f; $$('[data-f]', s.el).forEach((x) => x.classList.toggle('on', x === b)); sync(); }); sync();
   $('[data-no]', s.el).onclick = () => s.close();
   $('[data-yes]', s.el).onclick = async () => {
     const btn = $('[data-yes]', s.el); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Exporting…';
+    const offStep = A.on('export:step', (m) => { btn.innerHTML = `<span class="spin"></span> ${esc(m)}`; });
     try {
-      const r = await call('export:run', fmt, { zip: $('[data-zip]', s.el).checked, assetBase: $('[data-base]', s.el).value.trim() || undefined, ask: $('[data-ask]', s.el).checked });
+      const pdfOpts = fmt === 'pdf' ? { device: segVal('[data-pdev]'), pages: segVal('[data-ppages]') === 'current' ? [S.page] : undefined, labels: $('[data-plabels]', s.el).checked, notes: $('[data-pnotes]', s.el).checked, posts: !!($('[data-pposts]', s.el) && $('[data-pposts]', s.el).checked) } : {};
+      const r = await call('export:run', fmt, { ...pdfOpts, zip: $('[data-zip]', s.el).checked, assetBase: $('[data-base]', s.el).value.trim() || undefined, ask: $('[data-ask]', s.el).checked });
       if (!r) return;
-      $('[data-result]', s.el).innerHTML = `<div class="card" style="gap:8px"><b>${icon('check', 15)} Exported ${plural(r.count, 'file')}</b><code class="ellip">${esc(tildify(r.path))}</code>${(r.notes || []).map((n) => `<span class="hint">${esc(n)}</span>`).join('')}<div class="row"><button class="btn sm" data-reveal>Show in Finder</button>${r.index ? '<button class="btn sm" data-openi>Open in browser</button>' : ''}${r.theme ? '<button class="btn sm" data-howto>How to install on WordPress</button>' : ''}</div></div>`;
+      $('[data-result]', s.el).innerHTML = `<div class="card" style="gap:8px"><b>${icon('check', 15)} ${r.format === 'pdf' ? `PDF ready · ${plural(r.count, 'page')}, ${(r.bytes / 1048576).toFixed(1)} MB` : `Exported ${plural(r.count, 'file')}`}</b><code class="ellip">${esc(tildify(r.path))}</code>${(r.notes || []).map((n) => `<span class="hint">${esc(n)}</span>`).join('')}<div class="row"><button class="btn sm" data-reveal>Show in Finder</button>${r.index ? '<button class="btn sm" data-openi>Open in browser</button>' : ''}${r.format === 'pdf' ? '<button class="btn sm primary" data-openpdf>Open PDF</button>' : ''}${r.theme ? '<button class="btn sm" data-howto>How to install on WordPress</button>' : ''}</div></div>`;
       $('[data-reveal]', s.el).onclick = () => call('shell:reveal', r.theme || r.path);
       if ($('[data-openi]', s.el)) $('[data-openi]', s.el).onclick = () => call('shell:open', r.index);
+      if ($('[data-openpdf]', s.el)) $('[data-openpdf]', s.el).onclick = () => call('shell:open', r.path);
       if ($('[data-howto]', s.el)) $('[data-howto]', s.el).onclick = () => call('shell:open', r.path + '/HOW TO INSTALL.txt');
-    } catch (e) { fail(e); } finally { btn.disabled = false; btn.textContent = 'Export'; }
+    } catch (e) { fail(e); } finally { offStep(); btn.disabled = false; btn.textContent = 'Export'; }
   };
 }
 

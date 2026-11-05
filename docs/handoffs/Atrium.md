@@ -47,6 +47,21 @@ Pull before starting work. Stay inside `apps/atrium`. `tools/`, `suite.json` and
   6. **Model IDs** default to `claude-sonnet-5-5`, `gpt-5`, `gemini-2.5-pro`, and so on. Each provider has "Load models" in Settings › AI if a default is retired.
   7. **Photo search** uses the Openverse API without a key, which is rate-limited. If it starts failing, add a registered client later.
 
+## 0.2.0 — PDF for review
+
+- **Export › PDF for review** (and the `export` tool with `format: "pdf"`, plus `device`, `pages`, `posts`, `labels` and `notes`):
+  - Each website page becomes one full-length PDF page: desktop 1440px at 0.5pt/px, tablet 834px at 0.75, phone 390px at 1.
+  - Pages over about 14,000pt continue onto extra PDF pages.
+  - Section labels (§n plus the section name) sit in a left margin, and a ruled notes column sits on the right. Both carry each section boundary.
+  - A contents page lists every page and view.
+- `src/capture.js` `captureForPdf` captures the page at full resolution in 2000px bands, plus each section's position. `src/pdf.js` assembles the PDF with **pdf-lib** (pure JS; its deps are `@pdf-lib/*`, `pako` and `tslib`, all listed in `build.files`).
+- **Capture rewrite (applies to the AI's screenshots too):** the hidden window stays at a real screen size (1440×900, 834×1112 or 390×844). `captureRange` scrolls through the page with instant scrolling (sites set `scroll-behavior: smooth`), captures one screen at a time and stitches the bitmaps on the CPU. Fixed and sticky elements are hidden after the first screen, and scrollbars are hidden.
+  - The old approach grew the window to the page height. That failed on the Mac with `UnknownVizError`, because Retina doubles the height past the GPU's texture limit, and it also stretched `vh`-sized heroes.
+- **Images, not print layout.** The PDF uses captures rather than `printToPDF`, because print layout breaks 100vh heroes and sticky headers. Text in the PDF isn't selectable as a result; the section names are.
+- **Verified:**
+  - The e2e run here exports a desktop + phone PDF from the Export window (11 pages, with contents) and a phone PDF through the MCP tool.
+  - On the Mac (through Bench), the Lyte Fiber concept site's home page exported on desktop and phone in 4.7 s, with real photos, labels and notes. The pages were checked by eye.
+
 ## How it fits together
 
 - **A section is `{ html, css, js }`.** The html has one root element, and the renderer adds `data-s="<id>"` to it. CSS is scoped by `src/core/scope.js`, where `&` is the root. JS runs as `(function(root){…})`. `CONTRACT.md` is the full content contract: tokens, base classes, placeholders (`data-at-nav`, `data-at-logo`, `data-at-posts`, `data-at-form`, `data-count`, `<i data-icon>`), and placeholder art at `assets/ph/WxH-N.svg`.
@@ -62,4 +77,4 @@ Pull before starting work. Stay inside `apps/atrium`. `tools/`, `suite.json` and
 - New sections go in `src/core/sections/*.js` and must pass `node test/content-check.js`: one root, known icons, balanced CSS, theme tokens only.
 - Template `replace` keys must match the section html exactly; the check enforces this.
 - The preview, screenshots and exports must stay identical. Never special-case the preview in `render.js` beyond `ctx.mode === 'preview'`, which exists only for forms, the empty-page hint and analytics.
-- No native modules. The only dependency is `qrcode-generator`, which is pure JS.
+- No native modules. Dependencies are `qrcode-generator` and `pdf-lib`, both pure JS.
