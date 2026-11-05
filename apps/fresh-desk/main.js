@@ -70,6 +70,7 @@ function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTi
 
 app.whenReady().then(async () => {
   if (isMac) app.dock.setIcon(path.join(__dirname, 'build/icon.png'));
+  setTimeout(() => { try { beamConn(); } catch {} }, 1500); // find Beam in the background
   protocol.handle('fdfile', req => {
     // fdfile://f/<encoded absolute path> — local previews (images, video, audio).
     const u = new URL(req.url);
@@ -84,6 +85,7 @@ app.whenReady().then(async () => {
   await createWindow();
 });
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => { try { beamLink?.stop(); } catch {} });
 app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
 
 // ---------- menu (macOS); Windows/Linux use in-window shortcuts ----------
@@ -92,7 +94,7 @@ function buildMenu() {
   const cmd = (label, id, accelerator, extra = {}) => ({label, accelerator: accelerator || undefined, click: () => send('command', id), ...extra});
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {role: 'appMenu', submenu: [{role: 'about'}, {type: 'separator'}, cmd('Settings…', 'settings', 'Cmd+,'), {type: 'separator'}, {role: 'services'}, {type: 'separator'}, {role: 'hide'}, {role: 'hideOthers'}, {role: 'unhide'}, {type: 'separator'}, {role: 'quit'}]},
-    {label: 'File', submenu: [cmd('New Tab', 'newTab', 'Cmd+T'), cmd('New Folder', 'newFolder', 'Cmd+Shift+N'), cmd('New Text File', 'newFile', 'Cmd+Alt+N'), {type: 'separator'}, cmd('Open', 'open', 'Cmd+O'), cmd('Open in Terminal', 'terminal', 'Ctrl+`'), cmd('Open in Editor', 'editor', 'Cmd+Shift+E'), cmd('Show in Finder', 'reveal', 'Cmd+Alt+R'), {type: 'separator'}, cmd('Rename', 'rename', ''), cmd('Duplicate', 'duplicate', 'Cmd+D'), cmd('Compress', 'compress', ''), cmd('Copy Path', 'copyPath', 'Cmd+Alt+C'), {type: 'separator'}, cmd('Move to Trash', 'trash', 'Cmd+Backspace', {registerAccelerator: false}), {type: 'separator'}, cmd('Close Tab', 'closeTab', 'Cmd+W')]},
+    {label: 'File', submenu: [cmd('New Tab', 'newTab', 'Cmd+T'), cmd('New Folder', 'newFolder', 'Cmd+Shift+N'), cmd('New Text File', 'newFile', 'Cmd+Alt+N'), {type: 'separator'}, cmd('Open', 'open', 'Cmd+O'), cmd('Open in Terminal', 'terminal', 'Ctrl+`'), cmd('Open in Editor', 'editor', 'Cmd+Shift+E'), cmd('Show in Finder', 'reveal', 'Cmd+Alt+R'), {type: 'separator'}, cmd('Rename', 'rename', ''), cmd('Duplicate', 'duplicate', 'Cmd+D'), cmd('Compress', 'compress', ''), cmd('Share…', 'share', 'Cmd+Shift+S'), cmd('Copy Path', 'copyPath', 'Cmd+Alt+C'), {type: 'separator'}, cmd('Move to Trash', 'trash', 'Cmd+Backspace', {registerAccelerator: false}), {type: 'separator'}, cmd('Close Tab', 'closeTab', 'Cmd+W')]},
     {label: 'Edit', submenu: [cmd('Undo', 'undo', 'Cmd+Z'), {role: 'redo'}, {type: 'separator'}, cmd('Cut', 'cut', 'Cmd+X'), cmd('Copy', 'copy', 'Cmd+C'), cmd('Paste', 'paste', 'Cmd+V'), cmd('Select All', 'selectAll', 'Cmd+A'), {type: 'separator'}, cmd('Find', 'find', 'Cmd+F'), cmd('Command Palette…', 'palette', 'Cmd+K')]},
     {label: 'View', submenu: [cmd('as List', 'viewList', 'Cmd+1'), cmd('as Grid', 'viewGrid', 'Cmd+2'), cmd('as Columns', 'viewColumns', 'Cmd+3'), {type: 'separator'}, cmd('Show Preview', 'togglePreview', 'Cmd+Shift+P'), cmd('Show Hidden Files', 'toggleHidden', 'Cmd+Shift+.'), {type: 'separator'}, cmd('Tidy This Folder', 'tidy', 'Cmd+Shift+Y'), {type: 'separator'}, {role: 'zoomIn'}, {role: 'zoomOut'}, {role: 'resetZoom'}, {type: 'separator'}, {role: 'togglefullscreen'}, ...(app.isPackaged ? [] : [{role: 'toggleDevTools'}])]},
     {label: 'Go', submenu: [cmd('Back', 'back', 'Cmd+['), cmd('Forward', 'forward', 'Cmd+]'), cmd('Enclosing Folder', 'up', 'Cmd+Up', {registerAccelerator: false}), {type: 'separator'}, cmd('Home', 'goHome', 'Cmd+Shift+H'), cmd('Desktop', 'goDesktop', 'Cmd+Shift+D'), cmd('Downloads', 'goDownloads', 'Cmd+Alt+L'), {type: 'separator'}, cmd('Go to Folder…', 'goto', 'Cmd+Shift+G')]},
@@ -279,9 +281,46 @@ handle('watch', async dirs => {
 // Native context menu built from the renderer's item list.
 handle('menu', async items => new Promise(resolve => {
   let chosen = null;
-  const build = list => list.map(it => it.type === 'separator' ? {type: 'separator'} : {label: it.label, enabled: it.enabled !== false, accelerator: it.accel || undefined, registerAccelerator: false, type: it.checked !== undefined ? 'checkbox' : 'normal', checked: !!it.checked, ...(it.submenu ? {submenu: build(it.submenu)} : {click: () => { chosen = it.id; }})});
+  const build = list => list.map(it => it.type === 'separator' ? {type: 'separator'}
+    // macOS share sheet (AirDrop, Messages, Mail, Notes…) as a submenu.
+    : it.type === 'share' ? (isMac ? {label: it.label || 'Share', role: 'shareMenu', sharingItem: {filePaths: asPaths(it.paths)}} : {type: 'separator'})
+    : {label: it.label, enabled: it.enabled !== false, accelerator: it.accel || undefined, registerAccelerator: false, type: it.checked !== undefined ? 'checkbox' : 'normal', checked: !!it.checked, ...(it.submenu ? {submenu: build(it.submenu)} : {click: () => { chosen = it.id; }})});
   Menu.buildFromTemplate(build(items)).popup({window: win, callback: () => setTimeout(() => resolve(chosen), 0)});
 }));
+
+// ---------- Beam (the suite's AirDrop) over the Utility Suite link ----------
+const suitelink = require('./lib/suitelink');
+let beamLink = null;
+const beamConn = () => (beamLink ||= suitelink.connect('beam', {retryMs: 5000, timeout: 8000}));
+async function beamApp() {
+  const local = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
+  const candidates = isMac ? ['/Applications/Beam.app', path.join(app.getPath('home'), 'Applications', 'Beam.app')]
+    : isWin ? [path.join(local, 'Programs', 'Utility Suite', 'Beam', 'Beam.exe'), path.join(local, 'Programs', 'Beam', 'Beam.exe')] : [];
+  for (const c of candidates) { try { await fs.access(c); return c; } catch {} }
+  return null;
+}
+handle('beamStatus', async () => {
+  const l = beamConn();
+  const installed = !!(await beamApp());
+  if (!l.up) { l.poke(); await new Promise(r => { const t = setTimeout(r, 250); l.once('up', () => { clearTimeout(t); r(); }); }); }
+  if (!l.up) return {installed, running: false, peers: []};
+  const peers = await l.call('peers').catch(() => []);
+  return {installed: true, running: true, peers: Array.isArray(peers) ? peers.slice(0, 40).map(p => ({id: String(p.id), name: String(p.name || 'Device'), os: p.os, dev: p.dev, trusted: !!p.trusted})) : []};
+});
+handle('beamSend', async (peerId, paths) => {
+  const l = beamConn();
+  if (!l.up) throw Error('Beam isn’t running. Open Beam and try again.');
+  await l.call('send', String(peerId), asPaths(paths));
+});
+// Hands the files to Beam's own window to pick a device (works even when Beam is closed).
+handle('beamOpen', async paths => {
+  asPaths(paths);
+  const exe = await beamApp();
+  if (!exe) throw Error('Beam isn’t installed on this computer. Install it from Utility Hub.');
+  if (isMac) await launch.run('/usr/bin/open', ['-a', exe, ...paths]);
+  else { const {spawn} = require('node:child_process'); spawn(exe, ['--send', ...paths], {detached: true, stdio: 'ignore'}).unref(); }
+  setTimeout(() => beamConn().poke(), 1500);
+});
 
 // ---------- Tidy (organizer) ----------
 let plan = null, busy = false, cancelScan = false, aiRequest = null, aiProposals = [];

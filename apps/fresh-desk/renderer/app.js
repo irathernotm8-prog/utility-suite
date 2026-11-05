@@ -377,7 +377,11 @@ async function sizeFolders(t) {
   for (const id of S.sizeJobs || []) desk.cancel(id);
   S.sizeJobs = new Set();
   const dirs = t.listing.entries.filter(e => e.isDir && !(S.dirSizes.get(e.path)?.mtime === e.mtime));
-  const repaint = U.debounce(() => { if (tab() === t) { refreshItems(t); renderContent(); } }, 250);
+  const repaint = U.debounce(() => {
+    if (tab() !== t) return;
+    if (S.renaming) { document.querySelectorAll('#content .row').forEach(r => { const e = t.items[+r.dataset.i]; if (e?.isDir) r.querySelector('.c-size').textContent = dirSizeText(e); }); return; }
+    refreshItems(t); renderContent();
+  }, 250);
   const next = async () => {
     while (dirs.length && run === sizeRun) {
       const e = dirs.shift();
@@ -433,7 +437,7 @@ function thumbFor(e, size) {
 }
 function gridTile(t, e, i, size) {
   const sel = t.sel.has(e.path);
-  const tile = el('div', {class: 'tile' + (sel ? ' sel' : '') + (t.cursor === e.path ? ' cursor' : '') + (S.clip?.mode === 'cut' && S.clip.paths.includes(e.path) ? ' cut' : '') + (e.hidden ? ' hidden-file' : ''), dataset: {i}, draggable: 'true', 'aria-selected': String(sel)});
+  const tile = el('div', {class: 'tile' + (sel ? ' sel' : '') + (t.cursor === e.path ? ' cursor' : '') + (S.clip?.mode === 'cut' && S.clip.paths.includes(e.path) ? ' cut' : '') + (e.hidden ? ' hidden-file' : ''), dataset: {i}, draggable: S.renaming === e.path ? 'false' : 'true', 'aria-selected': String(sel)});
   const box = el('div', {class: 'tile-img'}, thumbFor(e, size)); box.style.height = `${size}px`;
   tile.append(box, S.renaming === e.path ? renameInput(e) : el('div', {class: 'tile-name', text: e.name}));
   if (e.isDir) dropTarget(tile, () => e.path);
@@ -468,7 +472,7 @@ async function renderColumns(root, t) {
   if (!t.items.length) last.append(emptyState(t));
   t.items.forEach((e, i) => {
     const sel = t.sel.has(e.path);
-    const r = el('div', {class: 'crow' + (sel ? ' sel' : '') + (t.cursor === e.path ? ' cursor' : '') + (S.clip?.mode === 'cut' && S.clip.paths.includes(e.path) ? ' cut' : ''), dataset: {i}, draggable: 'true'},
+    const r = el('div', {class: 'crow' + (sel ? ' sel' : '') + (t.cursor === e.path ? ' cursor' : '') + (S.clip?.mode === 'cut' && S.clip.paths.includes(e.path) ? ' cut' : ''), dataset: {i}, draggable: S.renaming === e.path ? 'false' : 'true'},
       iconFor(e, 16), S.renaming === e.path ? renameInput(e) : el('span', {class: 'nm', text: e.name}), e.isDir ? el('span', {class: 'ic chev', html: I.chevron}) : null);
     if (e.isDir) dropTarget(r, () => e.path);
     last.append(r);
@@ -666,7 +670,7 @@ async function renderPreview() {
     const total = sel.reduce((n, e) => n + (e.size || 0), 0);
     box.replaceChildren(el('div', {class: 'pv-stack'}, sel.slice(0, 3).map(e => iconFor(e, 72))), el('h2', {class: 'pv-name', text: `${sel.length} items`}),
       el('p', {class: 'pv-kind', text: `${sel.filter(e => e.isDir).length} folders · ${sel.filter(e => !e.isDir).length} files · ${bytes(total)}`}),
-      el('div', {class: 'pv-actions'}, btn('Compress', () => command('compress')), btn('Move to Trash', () => command('trash'))));
+      el('div', {class: 'pv-actions'}, btn('Share', () => shareMenu()), btn('Compress', () => command('compress')), btn('Move to Trash', () => command('trash'))));
     return;
   }
   const e = sel[0] || (t.listing ? {name: U.basename(t.path) || t.path, path: t.path, isDir: true, kind: 'Folder', self: true} : null);
@@ -694,7 +698,7 @@ async function renderPreview() {
     actions.append(btn(e.self ? 'Open in Terminal' : 'Open', () => e.self ? desk.terminal(e.path).catch(err) : navigate(e.path)), btn('Terminal', () => desk.terminal(e.path).catch(err), 'ghost'));
     if (e.self) actions.firstChild.remove(), actions.prepend(btn('Tidy this folder', () => window.Tidy?.open(e.path)));
   } else {
-    actions.append(btn('Open', () => openEntry(e)), btn('Quick Look', () => quickLook(), 'ghost'));
+    actions.append(btn('Open', () => openEntry(e)), btn('Share', () => shareMenu([e.path]), 'ghost'), btn('Quick Look', () => quickLook(), 'ghost'));
   }
 }
 function btn(label, fn, cls = '') { return el('button', {class: 'btn ' + cls, text: label, onclick: fn}); }
@@ -769,24 +773,48 @@ async function newFile() {
   try { const p = await desk.newFile(tab().path); await load(tab(), {keep: true}); select(p); startRename(p); } catch (e) { err(e); }
 }
 function select(p) { const t = tab(); t.sel = new Set([p]); t.cursor = t.anchor = p; scrollIntoView(t, p); repaintSelection(); }
+// Inline rename. The field survives re-renders (scrolling, folder sizes, live
+// refresh) by keeping its draft in S, and it won't give up just because a menu
+// closing or the window refocusing briefly stole focus.
 function startRename(p) {
-  S.renaming = p; renderContent();
-  requestAnimationFrame(() => { const i = document.querySelector('#content .rename'); if (i) { i.focus(); const dot = i.value.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 && !tab().items.find(e => e.path === p)?.isDir ? dot : i.value.length); } });
+  S.renaming = p; S.renameDraft = null; S.renameStarted = Date.now();
+  renderContent();
+  const focusIt = (tries = 0) => {
+    const i = document.querySelector('#content input.rename');
+    if (!i) { if (tries < 20) setTimeout(() => focusIt(tries + 1), 25); return; }
+    i.focus();
+    const isDir = tab().items.find(e => e.path === p)?.isDir;
+    const dot = i.value.lastIndexOf('.');
+    i.setSelectionRange(0, dot > 0 && !isDir ? dot : i.value.length);
+  };
+  // After a context menu closes, the window hands focus back a moment later — wait for that.
+  setTimeout(() => requestAnimationFrame(() => focusIt()), 60);
 }
 function renameInput(e) {
-  const input = el('input', {class: 'rename', value: e.name, spellcheck: 'false', 'aria-label': 'New name'});
-  let done = false;
+  const input = el('input', {class: 'rename', value: S.renameDraft ?? e.name, spellcheck: 'false', autocomplete: 'off', 'aria-label': 'New name'});
   const finish = async commit => {
-    if (done) return; done = true;
-    const name = input.value; S.renaming = null;
-    if (commit && name !== e.name) {
-      try { const to = await desk.rename(e.path, name); await load(tab(), {keep: true}); select(to); return; } catch (x) { err(x); }
+    if (S.renaming !== e.path) return;
+    const name = (S.renameDraft ?? input.value);
+    S.renaming = null; S.renameDraft = null;
+    if (commit && name.trim() && name !== e.name) {
+      try { const to = await desk.rename(e.path, name); await load(tab(), {keep: true}); select(to); $('content').focus(); return; } catch (x) { err(x); }
     }
     renderContent(); $('content').focus();
   };
-  input.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); });
-  input.addEventListener('blur', () => finish(true));
-  input.addEventListener('mousedown', ev => ev.stopPropagation());
+  input.addEventListener('input', () => { S.renameDraft = input.value; });
+  input.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } if (ev.key === 'Escape') { ev.preventDefault(); finish(false); } });
+  input.addEventListener('keyup', ev => ev.stopPropagation());
+  input.addEventListener('blur', () => setTimeout(() => {
+    // Removed by a re-render (Chromium can report the blur before the node is gone): the new field takes over.
+    if (!input.isConnected || S.renaming !== e.path) return;
+    if (document.activeElement?.classList?.contains('rename')) return;
+    // Focus bounced away right after starting (menu closing, window refocus): take it back.
+    if (Date.now() - (S.renameStarted || 0) < 800 && S.renameDraft == null) { input.focus(); return; }
+    finish(true);
+  }, 0));
+  for (const ev of ['mousedown', 'click', 'dblclick', 'dragstart']) input.addEventListener(ev, x => { x.stopPropagation(); if (ev === 'dragstart') x.preventDefault(); });
+  // Rebuilt while renaming (scroll, refresh): keep typing where you were.
+  if (S.renameDraft != null) requestAnimationFrame(() => { if (input.isConnected && document.activeElement !== input) { input.focus(); const n = input.value.length; input.setSelectionRange(n, n); } });
   return input;
 }
 async function trash(paths = targetsOrCurrent()) {
@@ -832,6 +860,8 @@ async function itemMenu() {
     {id: 'reveal', label: `Show in ${term}`},
     {id: 'quicklook', label: 'Quick Look', accel: 'Space'},
     {type: 'separator'},
+    ...(await shareItems(sel.map(e => e.path))),
+    {type: 'separator'},
     {id: 'rename', label: one ? 'Rename…' : `Rename ${sel.length} Items…`, accel: isMac() ? 'Enter' : 'F2'},
     {id: 'duplicate', label: 'Duplicate', accel: isMac() ? 'Cmd+D' : 'Ctrl+D'},
     {id: 'compress', label: one ? `Compress “${one.name}”` : `Compress ${sel.length} items`},
@@ -844,11 +874,43 @@ async function itemMenu() {
     {id: 'trash', label: isWin() ? 'Delete (Recycle Bin)' : 'Move to Trash', accel: isMac() ? 'Cmd+Backspace' : 'Delete'},
   ].filter(Boolean);
   const id = await desk.menu(items);
+  if (await handleShare(id, sel.map(e => e.path))) return;
   if (id === 'openTab') navigate(one.path, {newTab: true});
   else if (id === 'pin') pin(one.path);
   else if (id === 'extract') extract(one);
   else if (id) command(id);
 }
+// ---------- sharing: the Mac share sheet (AirDrop, Messages, Mail…) and Beam
+async function shareItems(paths) {
+  const items = [];
+  if (isMac()) items.push({type: 'share', label: 'Share', paths});
+  const b = (await desk.beamStatus().catch(() => null)) || {installed: false, running: false, peers: []};
+  const what = paths.length === 1 ? '' : ` ${paths.length} Items`;
+  if (b.running) {
+    const devices = b.peers.map(p => ({id: 'beam:' + p.id, label: `${p.name}${p.os ? ` · ${({mac: 'Mac', windows: 'PC', linux: 'Linux', ios: 'iPhone', android: 'Android'})[p.os] || p.os}` : ''}`}));
+    items.push({label: `Beam${what} To`, submenu: [...(devices.length ? devices : [{label: 'No devices nearby', enabled: false}]), {type: 'separator'}, {id: 'beamOpen', label: 'Open in Beam…'}]});
+  } else if (b.installed) items.push({id: 'beamOpen', label: `Send${what} with Beam…`});
+  else if (!isMac()) items.push({label: 'Send with Beam (install Beam from Utility Hub)', enabled: false});
+  return items;
+}
+async function handleShare(id, paths) {
+  if (!id) return false;
+  if (id.startsWith('beam:')) {
+    try { await desk.beamSend(id.slice(5), paths); toast(`Sending ${paths.length === 1 ? '“' + U.basename(paths[0]) + '”' : paths.length + ' items'} with Beam`); }
+    catch (e) { err(e); }
+    return true;
+  }
+  if (id === 'beamOpen') { try { await desk.beamOpen(paths); } catch (e) { err(e); } return true; }
+  return false;
+}
+async function shareMenu(paths = selected().map(e => e.path)) {
+  if (!paths.length) return toast('Select something to share first');
+  const items = await shareItems(paths);
+  // On a Mac the share sheet is the first entry; open the menu with it ready.
+  const id = await desk.menu(items.length ? items : [{label: 'Nothing to share with', enabled: false}]);
+  await handleShare(id, paths);
+}
+
 async function folderMenu() {
   const t = tab();
   const id = await desk.menu([
@@ -942,6 +1004,7 @@ function command(id) {
     case 'viewColumns': return setView('columns');
     case 'togglePreview': S.prefs.showPreview = !S.prefs.showPreview; render(); return savePrefsSoon();
     case 'toggleHidden': S.prefs.showHidden = !S.prefs.showHidden; savePrefsSoon(); toast(S.prefs.showHidden ? 'Showing hidden files' : 'Hiding hidden files'); return reload();
+    case 'share': return shareMenu();
     case 'folderSizes': S.prefs.folderSizes = !S.prefs.folderSizes; savePrefsSoon(); if (S.prefs.folderSizes) sizeFolders(t); return renderContent();
     case 'pinHere': return pin(t.path);
     case 'batchRename': return sel.length ? (sel.length > 1 ? Extras.batchRename(sel) : startRename(sel[0].path)) : toast('Select some files first');
@@ -993,7 +1056,7 @@ document.addEventListener('keydown', e => {
     const combos = {
       'C-t': 'newTab', 'C-w': 'closeTab', 'C-S-n': 'newFolder', 'C-A-n': 'newFile', 'C-o': 'open', 'C-d': 'duplicate', 'C-x': 'cut', 'C-c': 'copy', 'C-v': 'paste', 'C-z': 'undo',
       'C-a': 'selectAll', 'C-f': 'find', 'C-k': 'palette', 'C-l': 'goto', 'C-S-g': 'goto', 'C-1': 'viewList', 'C-2': 'viewGrid', 'C-3': 'viewColumns', 'C-S-p': 'togglePreview', 'C-h': 'toggleHidden',
-      'C-S-.': 'toggleHidden', 'C-S-e': 'editor', 'C-A-c': 'copyPath', 'C-S-y': 'tidy', 'C-,': 'settings', 'C-`': 'terminal', 'C-Tab': 'nextTab', 'C-S-Tab': 'prevTab', 'A-ArrowLeft': 'back', 'A-ArrowRight': 'forward', 'A-ArrowUp': 'up',
+      'C-S-.': 'toggleHidden', 'C-S-e': 'editor', 'C-S-s': 'share', 'C-A-c': 'copyPath', 'C-S-y': 'tidy', 'C-,': 'settings', 'C-`': 'terminal', 'C-Tab': 'nextTab', 'C-S-Tab': 'prevTab', 'A-ArrowLeft': 'back', 'A-ArrowRight': 'forward', 'A-ArrowUp': 'up',
       'F5': 'refresh', 'F2': 'rename', 'Delete': 'trash', 'C-r': 'refresh',
     };
     // Match by physical key so Caps Lock, Shift and keyboard layouts don't change the shortcut.
@@ -1032,7 +1095,7 @@ window.addEventListener('mouseup', e => { if (e.button === 3) { e.preventDefault
 const PALETTE_COMMANDS = [
   ['newFolder', 'New folder', '⌘⇧N'], ['newFile', 'New text file', '⌘⌥N'], ['newTab', 'New tab', '⌘T'], ['terminal', 'Open in Terminal', '⌃`'], ['editor', 'Open in code editor', '⌘⇧E'],
   ['reveal', 'Show in Finder / Explorer', ''], ['copyPath', 'Copy path', '⌘⌥C'], ['tidy', 'Tidy this folder', '⌘⇧Y'], ['toggleHidden', 'Show / hide hidden files', '⌘⇧.'],
-  ['togglePreview', 'Show / hide preview', '⌘⇧P'], ['toggleRecents', 'Show / hide recent folders in sidebar', ''], ['folderSizes', 'Show / hide folder sizes', ''], ['pinHere', 'Add this folder to Favorites', ''], ['batchRename', 'Rename selected items…', ''], ['viewList', 'View as list', '⌘1'], ['viewGrid', 'View as grid', '⌘2'], ['viewColumns', 'View as columns', '⌘3'],
+  ['togglePreview', 'Show / hide preview', '⌘⇧P'], ['toggleRecents', 'Show / hide recent folders in sidebar', ''], ['folderSizes', 'Show / hide folder sizes', ''], ['pinHere', 'Add this folder to Favorites', ''], ['batchRename', 'Rename selected items…', ''], ['share', 'Share / AirDrop / Beam selection…', '⌘⇧S'], ['viewList', 'View as list', '⌘1'], ['viewGrid', 'View as grid', '⌘2'], ['viewColumns', 'View as columns', '⌘3'],
   ['undo', 'Undo last change', '⌘Z'], ['history', 'Recent changes (undo any)', ''], ['compress', 'Compress selection', ''], ['duplicate', 'Duplicate selection', '⌘D'],
   ['trash', 'Move selection to Trash', '⌘⌫'], ['goto', 'Go to folder by path…', '⌘⇧G'], ['settings', 'Settings', '⌘,'], ['refresh', 'Refresh', ''],
 ];
@@ -1257,5 +1320,5 @@ async function start() {
   render();
   $('content').focus();
 }
-window.App = {S, tab, navigate, render, renderStatus, renderPlaces, savePrefsSoon, pin, pinPath, favorites, toast, err, reload, iconFor, btn, command, isMac, isWin, sep, selected, refreshItems, short};
+window.App = {shareItems, S, tab, navigate, render, renderStatus, renderPlaces, savePrefsSoon, pin, pinPath, favorites, toast, err, reload, iconFor, btn, command, isMac, isWin, sep, selected, refreshItems, short};
 start().catch(e => { document.body.textContent = 'Fresh Desk could not start: ' + e.message; });

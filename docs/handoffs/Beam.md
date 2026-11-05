@@ -47,4 +47,5 @@ Beam now offers a few things to other suite apps (Atoll's add-ons) over the **Ut
 
 - Offers: `peers`, `transfers`, `send(peerId, paths)`, `sendText(peerId, text)`, `open`; events `peers` and `transfers` (at most twice a second).
 - Nothing changes when no other app is connected: events are only sent while something is listening.
-- If you rename or remove one of these, tell the Utility Package chat so Atoll keeps working.
+- **Fresh Desk (1.1.1+) also uses `peers` and `send`** for its Share › Beam To menu, and launches Beam with files (`open -a Beam <files>` on a Mac, `Beam.exe --send <files>` on Windows) when Beam isn't running.
+- If you rename or remove one of these, tell the Utility Package chat so Atoll and Fresh Desk keep working.

@@ -21,6 +21,7 @@ A fast, no-bloat file explorer for Mac and Windows, with **Tidy** built in. Part
 - Drag a box over files to select them (start on empty space, or beside a name in list view; hold ⌘/Ctrl to add or remove).
 - Cut / copy / paste, and native drag and drop to and from Finder, Explorer and other apps (hold ⌥/Alt to copy).
 - **Open in Terminal** (⌃\`), open in your code editor, Open With…, Show in Finder/Explorer. Pick the terminal (Terminal, iTerm, Warp, Ghostty, Windows Terminal, PowerShell…) and editor in Settings.
+- **Share** (right-click, the Share button in the preview, or ⌘⇧S / Ctrl+Shift+S): on a Mac the system share menu — AirDrop, Messages, Mail, Notes… — and on both Mac and Windows **Beam To ›** your nearby devices when Beam is running (or Send with Beam… to open Beam with the files).
 - Move to Trash / Recycle Bin. Nothing is ever deleted permanently.
 - **Undo (⌘Z / Ctrl+Z)** for moves, renames, copies, new items and Tidy runs — it survives restarts. "Recent changes" in the ⋯ menu undoes any earlier one.
 
@@ -60,10 +61,10 @@ Type a few letters to jump to a file.
 ```bash
 npm install
 npm start
-npm test      # 48 tests: file operations, undo history, Tidy, rules, AI adapters, renderer smoke tests
+npm test      # 49 tests: file operations, undo history, Tidy, rules, AI adapters, renderer smoke tests
 ```
 
-Layout: `main.js` (window, menus, IPC), `preload.js` (the `desk` bridge), `lib/fsops.js` (explorer file operations), `lib/history.js` (one undo history), `lib/launch.js` (terminals, editors, zip), `lib/docpreview.js` + `lib/doc-worker.js` (document previews in a worker thread), `lib/organizer.js` + `lib/rules.js` + `lib/content*.js` + `lib/ai.js` (Tidy), `renderer/` (UI: `app.js` explorer, `docview.js` document previews (pdf.js for PDFs), `extras.js` favorite editor and batch rename, `glyphs.js` favorite icons, `tidy.js` Tidy, `review-model.js` shared plan helpers).
+Layout: `main.js` (window, menus, IPC), `preload.js` (the `desk` bridge), `lib/fsops.js` (explorer file operations), `lib/history.js` (one undo history), `lib/launch.js` (terminals, editors, zip), `lib/suitelink.js` (copy of the Utility Package's `tools/suitelink.js` — keep identical; used to talk to Beam), `lib/docpreview.js` + `lib/doc-worker.js` (document previews in a worker thread), `lib/organizer.js` + `lib/rules.js` + `lib/content*.js` + `lib/ai.js` (Tidy), `renderer/` (UI: `app.js` explorer, `docview.js` document previews (pdf.js for PDFs), `extras.js` favorite editor and batch rename, `glyphs.js` favorite icons, `tidy.js` Tidy, `review-model.js` shared plan helpers).
 
 ## Privacy and data
 

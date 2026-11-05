@@ -146,3 +146,15 @@ test('adding a favorite asks for an icon and remembers it', async t => {
   assert.equal(w.App.favorites().find(f => f.path === '/u/Projects').icon, 'rocket');
   assert.ok([...d.querySelectorAll('.place-name')].some(n => n.textContent === 'Projects'), 'shows in the sidebar');
 });
+
+test('share menu offers Beam devices when Beam is running', async t => {
+  const {w} = await setup(t);
+  w.desk.beamStatus = async () => ({installed: true, running: true, peers: [{id: 'pc1', name: 'Bilal’s PC', os: 'windows'}]});
+  const items = await w.App.shareItems(['/u/Downloads/a-notes.txt']);
+  const beam = items.find(i => i.submenu);
+  assert.equal(beam.label, 'Beam To');
+  assert.equal(beam.submenu[0].id, 'beam:pc1');
+  assert.equal(beam.submenu[0].label, 'Bilal’s PC · PC');
+  w.desk.beamStatus = async () => ({installed: true, running: false, peers: []});
+  assert.equal((await w.App.shareItems(['/a', '/b'])).find(i => i.id === 'beamOpen').label, 'Send 2 Items with Beam…');
+});
