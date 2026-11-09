@@ -285,6 +285,14 @@
       "exclude": [
         "test/e2e-out"
       ]
+    },
+    {
+      "id": "mixer",
+      "name": "Mixer",
+      "description": "Music studio for you and your AI: compose instrumental tracks with synthesized instruments and drum kits, edit and remix recordings, mix with effects and automation, measure loudness, key and balance, export WAV/MP3 and stems — with a Claude/Codex plugin.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": []
     }
   ],
   "updates": {

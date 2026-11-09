@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; media-src blob: file: data:">
+  <title>Mixer</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <div class="side-drag"></div>
+      <div class="brand"><img src="../../build/icon.png" alt=""><div><b>Mixer</b><span>Music studio</span></div></div>
+      <button id="songBtn" class="proj-btn"><span class="proj-dot"></span><span class="grow ellip"><span id="songName">Song</span><span class="proj-sub" id="songSub"></span></span><span data-icon="chevronDown" data-size="14"></span></button>
+      <nav id="nav">
+        <button data-view="arrange" class="on"><span class="nav-ic" data-icon="arrange"></span>Arrange<span class="nav-count" id="trackCount"></span></button>
+        <button data-view="mix"><span class="nav-ic" data-icon="mixer"></span>Mix</button>
+        <button data-view="sounds"><span class="nav-ic" data-icon="sounds"></span>Sounds</button>
+        <button data-view="songs"><span class="nav-ic" data-icon="folder"></span>Songs<span class="nav-count" id="songCount"></span></button>
+        <div class="nav-sep"></div>
+        <button data-view="connections"><span class="nav-ic" data-icon="plug"></span>Connections<span class="nav-dot" id="aiDot"></span></button>
+        <button data-view="settings"><span class="nav-ic" data-icon="gear"></span>Settings</button>
+      </nav>
+      <div class="side-fill"></div>
+      <div id="aiCard" class="ai-card"></div>
+    </aside>
+    <main id="main">
+      <header id="head"><div id="headLeft"></div><div id="headRight"></div></header>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div id="sheetHost"></div>
+  <div id="popHost"></div>
+  <div id="toasts"></div>
+  <div class="drop-veil">Drop audio to import it</div>
+  <script src="../core/theory.js"></script>
+  <script src="../core/sounds.js"></script>
+<script src="../core/levels.js"></script>
+  <script src="../core/song.js"></script>
+  <script src="../core/analysis.js"></script>
+  <script src="../core/stretch.js"></script>
+  <script src="../audio/fx.js"></script>
+  <script src="../audio/synth.js"></script>
+  <script src="../audio/drums.js"></script>
+  <script src="../audio/engine.js"></script>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="transport.js"></script>
+  <script src="arrange.js"></script>
+  <script src="editors.js"></script>
+  <script src="mix.js"></script>
+  <script src="views.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

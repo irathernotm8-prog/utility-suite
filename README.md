@@ -22,6 +22,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Helm** | Runs the whole computer from a controller (PS5 DualSense, PS4, Xbox): a smooth pointer, a touchpad that clicks, scrolls and swipes between desktops, an on-screen keyboard, a quick panel and a hold-R2 command layer; steps aside while a game plays | `apps/helm` |
 | **Kiln** | Stable Diffusion apps, models, profiles and prompts (replaces Stability Matrix) | `apps/kiln` |
 | **Lumen** | Ads and analytics: Meta first, with Google, YouTube and Salesforce, plus an AI you can ask | `apps/lumen` |
+| **Mixer** | Music studio for you and your AI: compose instrumental tracks with 43 synthesized instruments and 8 drum kits (chords by name or numeral, drum grooves, a piano roll and drum grid), import and edit recordings (tempo and key detection, cut, fade, pitch, stretch, reverse), a console with 12 effects incl. sidechain ducking, automation, Check mix (LUFS, peaks, balance, width), WAV/MP3/stem export; a Claude/Codex plugin that measures and sees what it makes | `apps/mixer` |
 | **Onward** | Job hunting with your AI plugged in | `apps/onward` |
 | **RO2** | Quick, easy designs and photo edits (a lighter Canva): shapes, icons, text, free photos, any size or aspect ratio, export to PNG/JPG/WebP/SVG/PDF, and on-device AI: background remover, magic eraser, magic grab, magic expand | `apps/ro2` |
 | **RO3** | Photo editing, video editing and file conversion | `apps/ro3` |
@@ -76,6 +77,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Facet | `~/Documents/Facet` (one folder per model: `model.glb`, pictures, `facet.json`; change in Settings). Its app-data folder holds `Models/` (3D and image models, 2–20 GB) and `Engine/` (private Python and PyTorch, 1.5–5 GB) |
 | Glean | `~/Pictures/Glean` (one folder per account, each with `captions.csv`, `glean.json` and `.glean/posters`; change it in Settings) |
 | Helm | its app-data folder: `settings.json`, `helm-input.js` (the Mac input helper) and `bin/` (the Windows input helper, compiled on the PC) |
+| Mixer | `~/Documents/Mixer` (one folder per song: `song.json`, `audio/` with copies of imported files, `exports/`, `history/`; change in Settings). Its app-data folder holds `settings.json`, `bridge.json` (the plugin's private connection) and `mcp/` |
 | RO2 | `~/Documents/RO2` (one `.ro2` file per design, pictures inside; change in Settings). Its app-data folder holds `Models/` (the AI models, 300–500 MB, downloaded on first use), `settings.json` and `index.json` (Home thumbnails) |
 | Vitals | its app-data folder (`focus/` holds one small file per day of time tracking) |
 | Vantage | its app-data folder: `vantage-data.json` (settings, bookmarks, open tabs, downloads list), `history.json`, `vantage-vault.json` (encrypted), filter lists, `bin/wireproxy` (VPN engine, downloaded on first connect), browser profiles. The Library uses Relay's `~/Downloads/Relay/Relay Files` when it exists, otherwise `~/Downloads/Vantage/Vantage Files` |

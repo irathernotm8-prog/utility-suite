@@ -1,0 +1,57 @@
+{
+  "name": "mixer",
+  "productName": "Mixer",
+  "version": "0.1.0",
+  "description": "Music studio for you and your AI: compose instrumental tracks with synthesized instruments and drum kits, edit and remix recordings, mix with effects and automation, measure loudness/key/tempo/balance, export WAV/MP3 and stems \u2014 with a Claude/Codex plugin that measures and sees what it makes.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "e2e": "electron test/e2e-main.js",
+    "shots": "electron test/shots.js",
+    "calibrate": "electron test/calibrate.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {},
+  "build": {
+    "appId": "com.bilal.mixer",
+    "productName": "Mixer",
+    "copyright": "Personal use",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "mcp/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "mcp/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.music",
+      "darkModeSupport": true
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.18.0"
+  }
+}

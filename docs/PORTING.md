@@ -42,6 +42,7 @@
 | Glean | `apps/glean` | `docs/handoffs/Glean.md` |
 | Kiln | `apps/kiln` | `docs/handoffs/Kiln.md` |
 | Lumen | `apps/lumen` | `docs/handoffs/Lumen.md` |
+| Mixer | `apps/mixer` | `docs/handoffs/Mixer.md` (MCP plugin for Claude/Codex; no dependencies, no native modules; MP3 encoder vendored in `src/vendor/lamejs`; audio engine runs in a hidden window) |
 | Onward | `apps/onward` | `docs/handoffs/Onward.md` |
 | RO3 | `apps/ro3` | `docs/handoffs/RO3.md` |
 | Relay | `apps/relay` | `docs/handoffs/Relay.md` |
