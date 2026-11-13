@@ -33,6 +33,20 @@
   }
   const clipRates = (c) => { const pr = Math.pow(2, (c.pitch || 0) / 12); return { F: (c.stretch || 1) * pr, R: (c.speed || 1) * pr }; };
 
+  // chip chords: notes that start together are played one after another, very fast, on a single voice (NES style)
+  const arpCache = new WeakMap();
+  function chipArp(c, step) {
+    const hit = arpCache.get(c.notes); if (hit && hit.step === step && hit.len === c.length) return hit.out;
+    const groups = new Map(); for (const n of c.notes) { const k = Math.round(n.t * 1000); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(n); }
+    const out = [];
+    for (const g of groups.values()) {
+      if (g.length < 2) { out.push(g[0]); continue; }
+      const ps = g.map((n) => n.p).sort((a, b) => a - b); const t0 = g[0].t, d = Math.min(...g.map((n) => n.d)), v = Math.max(...g.map((n) => n.v));
+      for (let k = 0, t = t0; t < t0 + d - 1e-6; k++, t += step) out.push({ p: ps[k % ps.length], t: +t.toFixed(5), d: Math.min(step * 0.98, t0 + d - t), v });
+    }
+    out.sort((a, b) => a.t - b.t); arpCache.set(c.notes, { step, len: c.length, out }); return out;
+  }
+
   // ───── a playing (or rendering) song
   class Session {
     constructor(ctx, assets, { destination, meters = false, onEnd } = {}) { this.trash = []; this.ctx = ctx; this.assets = assets; this.dest = destination || ctx.destination; this.meters = meters; this.tracks = new Map(); this.voices = new Set(); this.mono = new Map(); this.onEnd = onEnd; this.song = null; }
@@ -86,7 +100,8 @@
         for (const c of s.clips) {
           if (c.track !== t.id) continue; const cEnd = SG.clipEnd(s, c); if (cEnd <= b0 || c.start >= b1 + (enter ? 0 : 0)) continue;
           if (c.file) { const startsIn = c.start >= b0 - 1e-9 && c.start < b1; const inside = enter && c.start < b0 && cEnd > b0 + 1e-6; if (startsIn || inside) this.playAudio(t, T, c, Math.max(c.start, b0), tOf); continue; }
-          for (const n of c.notes) {
+          const PI = t.kind === 'drums' ? null : SND.instrument(t.sound); const notes = PI && PI.arp ? chipArp(c, (PI.arp.ms / 1000) / spb) : c.notes;
+          for (const n of notes) {
             const nb = c.start + n.t; if (nb < b0 - 1e-9 || nb >= b1 || n.t >= c.length - 1e-9) continue; const time = tOf(nb);
             if (t.kind === 'drums') { const pad = t.pads && t.pads[n.p] && t.pads[n.p].file ? { ...t.pads[n.p], buffer: this.assets.raw.get(t.pads[n.p].file) } : null; this.bin(DR.hit(this.ctx, T.input, t.sound, n.p, time, n.v, { bpm: s.bpm, pad })); duckAt(t.id, n.p, time); continue; }
             const P = SND.instrument(t.sound) || SND.INSTRUMENTS[0]; const midi = n.p + 12 * (t.octave || 0); const dur = Math.min(n.d, c.length - n.t) * spb;
@@ -126,10 +141,10 @@
   // ───── live transport for the window
   class Player {
     constructor(assets) { this.assets = assets; this.ctx = null; this.sess = null; this.playing = false; this.song = null; this.metronome = false; this.listeners = new Set(); this.pos = 0; }
-    ensure() { if (!this.ctx) { this.ctx = new AudioContext({ latencyHint: 'interactive' }); this.out = this.ctx.createGain(); this.out.connect(this.ctx.destination); } if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; }
+    ensure() { if (!this.ctx) { this.ctx = new AudioContext({ latencyHint: 'interactive' }); this.out = this.ctx.createGain(); this.out.connect(this.ctx.destination); FX.prepare(this.ctx); } if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; }
     setSong(song) { this.song = song; if (this.sess) { const r = this.sess.update(song); if (r === 'restart' && this.playing) this.play(this.position()); } }
     async play(fromBeat = 0) {
-      const ctx = this.ensure(); await this.assets.need(this.song);
+      const ctx = this.ensure(); await FX.prepare(ctx); await this.assets.need(this.song);
       if (this.sess) { this.sess.stopAll(); this.sess.dispose(); }
       this.sess = new Session(ctx, this.assets, { destination: this.out, meters: true }); this.sess.live = true; this.sess.load(this.song);
       const s = this.song; this.spb = SG.spb(s); this.t0 = ctx.currentTime + 0.08; this.lin = 0; this.anchor = [{ lin: 0, beat: fromBeat }]; this.cur = fromBeat; this.playing = true; this.firstEnter = true; this.clickNext = Math.ceil(fromBeat - 1e-6);
@@ -172,6 +187,7 @@
     await assets.need(song);
     const spb = SG.spb(song); const end = to != null ? to : SG.songEnd(song); const len = Math.max(0.1, (end - from) * spb + (to != null ? 0 : tail));
     const ctx = new OfflineAudioContext(channels, Math.ceil(len * sr), sr);
+    await FX.prepare(ctx);
     const sess = new Session(ctx, assets); if (tracks) sess.only = new Set(tracks.map((r) => SG.findTrack(song, r).id)); sess.noMasterFx = !master; sess.load(song);
     if (!master) sess.master.vol.gain.value = 1;
     // schedule in 2-second slices just ahead of the render (suspend/resume), so only the notes about to sound exist in

@@ -172,8 +172,8 @@
   // ───── for pictures
   function peaks(x, cols, from = 0, to = x.length) { const out = new Float32Array(cols * 2); const span = (to - from) / cols; for (let c = 0; c < cols; c++) { let lo = 1, hi = -1; const a = Math.floor(from + c * span), b = Math.max(a + 1, Math.floor(from + (c + 1) * span)); for (let i = a; i < b && i < x.length; i++) { const v = x[i]; if (v < lo) lo = v; if (v > hi) hi = v; } if (lo > hi) lo = hi = 0; out[c * 2] = lo; out[c * 2 + 1] = hi; } return out; }
   // log-frequency spectrogram, rows from 30 Hz (bottom) to 16 kHz (top), values in dB
-  function spectrogram(x, sr, cols, rows) {
-    const n = 2048; const hop = Math.max(256, Math.floor((x.length - n) / Math.max(1, cols))); const out = new Float32Array(cols * rows).fill(-120);
+  function spectrogram(x, sr, cols, rows, n = 2048, minHop = 256) {
+    if (x.length < n) { const y = new Float32Array(n); y.set(x); x = y; } const hop = Math.max(minHop, Math.floor((x.length - n) / Math.max(1, cols))); const out = new Float32Array(cols * rows).fill(-120);
     const fLo = 30, fHi = Math.min(16000, sr / 2); const binOf = (r) => (fLo * Math.pow(fHi / fLo, r / rows) * n) / sr;
     let c = 0; stft(x, n, hop, (mag) => { if (c >= cols) return; for (let r = 0; r < rows; r++) { const k0 = Math.floor(binOf(r)), k1 = Math.max(k0 + 1, Math.floor(binOf(r + 1))); let m = 0; for (let k = k0; k < k1 && k < mag.length; k++) m = Math.max(m, mag[k]); out[(rows - 1 - r) * cols + c] = db(m / (n / 4)); } c++; });
     return { data: out, cols: c, rows };

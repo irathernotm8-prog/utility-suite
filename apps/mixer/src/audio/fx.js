@@ -82,7 +82,15 @@
     const set = (q) => { setP(sideW.gain, clamp(+q.width, 0, 2), ctx); setP(hp.frequency, Math.max(1, +q.monoBelow || 1), ctx); }; set(p);
     return { input: inp, output: mg, set };
   };
-  B.crush = (ctx, p) => { const inp = g(ctx), out = g(ctx), dry = g(ctx), wet = g(ctx), ws = ctx.createWaveShaper(); inp.connect(dry); dry.connect(out); inp.connect(ws); ws.connect(wet); wet.connect(out); const set = (q) => { ws.curve = curve(ctx, 'crush', clamp(Math.round(q.bits), 2, 16)); setP(wet.gain, clamp(q.mix, 0, 1), ctx); setP(dry.gain, 1 - clamp(q.mix, 0, 1), ctx); }; set(p); return { input: inp, output: out, set }; };
+  // the crush effect uses an audio worklet (bit depth + sample rate); prepare(ctx) loads it once per context
+  const BASE = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : null;
+  function prepare(ctx) { if (ctx._mxReady) return ctx._mxReady; ctx._mxReady = ctx.audioWorklet && BASE ? ctx.audioWorklet.addModule(new URL('worklets.js', BASE).href).then(() => { ctx._mxw = true; }).catch((e) => { console.warn('worklet', e); }) : Promise.resolve(); return ctx._mxReady; }
+  B.crush = (ctx, p) => {
+    if (ctx._mxw) { const inp = g(ctx), out = g(ctx), dry = g(ctx), wet = g(ctx); const w = new AudioWorkletNode(ctx, 'mx-crush', { outputChannelCount: [2] }); inp.connect(dry); dry.connect(out); inp.connect(w); w.connect(wet); wet.connect(out);
+      const set = (q) => { w.parameters.get('bits').value = clamp(Math.round(q.bits), 1, 16); w.parameters.get('rate').value = clamp(+q.rate || 44100, 500, 96000); setP(wet.gain, clamp(q.mix, 0, 1), ctx); setP(dry.gain, 1 - clamp(q.mix, 0, 1), ctx); }; set(p); return { input: inp, output: out, set }; }
+    return crushShaper(ctx, p);
+  };
+  const crushShaper = (ctx, p) => { const inp = g(ctx), out = g(ctx), dry = g(ctx), wet = g(ctx), ws = ctx.createWaveShaper(); inp.connect(dry); dry.connect(out); inp.connect(ws); ws.connect(wet); wet.connect(out); const set = (q) => { ws.curve = curve(ctx, 'crush', clamp(Math.round(q.bits), 2, 16)); setP(wet.gain, clamp(q.mix, 0, 1), ctx); setP(dry.gain, 1 - clamp(q.mix, 0, 1), ctx); }; set(p); return { input: inp, output: out, set }; };
   B.tremolo = (ctx, p, env) => { const inp = g(ctx), amp = g(ctx), pan = ctx.createStereoPanner(), o = lfo(ctx, 4), d = g(ctx, 0), dp = g(ctx, 0); inp.connect(amp); amp.connect(pan); o.connect(d); d.connect(amp.gain); o.connect(dp); dp.connect(pan.pan);
     const set = (q) => { const r = toHz(q.rate, env.bpm) || 4; setP(o.frequency, r, ctx); const dep = clamp(+q.depth, 0, 1); if (+q.pan) { setP(d.gain, 0, ctx); setP(amp.gain, 1, ctx); setP(dp.gain, dep, ctx); } else { setP(dp.gain, 0, ctx); setP(amp.gain, 1 - dep / 2, ctx); setP(d.gain, dep / 2, ctx); } }; set(p); return { input: inp, output: pan, set }; };
   B.duck = (ctx, p) => { const n = g(ctx); let q = p; const set = (x) => { q = x; }; set(p); return { input: n, output: n, set, trigger: (t) => { const low = dbToGain(clamp(+q.amount, -40, 0)); n.gain.setTargetAtTime(low, Math.max(0, t - 0.002), 0.004); n.gain.setTargetAtTime(1, t + 0.03, clamp(+q.release, 0.02, 1) / 3); }, follows: () => q }; };
@@ -90,5 +98,5 @@
     const set = (q) => { const ceil = dbToGain(clamp(+q.ceiling, -12, 0)); setP(pre.gain, dbToGain(clamp(+q.gain, 0, 30)), ctx); setP(c.threshold, clamp(+q.ceiling, -12, 0) - 2.5, ctx); setP(post.gain, 1, ctx); ws.curve = curve(ctx, 'clip', Math.round(ceil * 1000) / 1000); }; set(p); return { input: pre, output: ws, set, node: c }; };
 
   function build(ctx, fx, env) { const b = B[fx.type]; if (!b) throw new Error('Unknown effect ' + fx.type); const u = b(ctx, fx, env); u.type = fx.type; u.id = fx.id; return u; }
-  root.MXFx = { build, toSeconds, toHz, noteBeats, dbToGain, curve, impulse, ctxCache };
+  root.MXFx = { build, prepare, toSeconds, toHz, noteBeats, dbToGain, curve, impulse, ctxCache };
 })(typeof self !== 'undefined' ? self : this);

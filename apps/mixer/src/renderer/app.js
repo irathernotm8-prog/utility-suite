@@ -132,15 +132,20 @@ const clip = (id) => S.song.clips.find((c) => c.id === id);
 async function songMenu(anchor) {
   const { list, active } = await call('songs:list');
   menu(anchor, [{ header: true, label: 'Songs' }, ...list.slice(0, 12).map((p) => ({ label: p.name, on: p.id === active, hint: `${p.bpm} · ${p.key}`, run: () => openSong(p.id) })), ...(list.length > 12 ? [{ label: 'All songs…', icon: 'folder', run: () => go('songs') }] : []), '-',
-    { label: 'New song…', icon: 'plus', run: newSong }, { label: 'Rename…', icon: 'edit', run: renameSong }, { label: 'Duplicate', icon: 'dup', run: async () => { applySnapshot(await call('songs:duplicate')); render(); } }, { label: 'Show the song folder', icon: 'folder', run: () => call('songs:reveal') }], { width: 300 });
+    { label: 'New song…', icon: 'plus', run: newSong }, { label: 'Rename…', icon: 'edit', run: renameSong }, { label: 'Duplicate', icon: 'dup', run: async () => { applySnapshot(await call('songs:duplicate')); render(); } }, { label: 'Make it 8-bit…', icon: 'chip', run: make8bit }, { label: 'Show the song folder', icon: 'folder', run: () => call('songs:reveal') }], { width: 300 });
 }
 async function openSong(id) { applySnapshot(await call('songs:open', id)); go(S.view === 'songs' ? 'arrange' : S.view); }
 async function renameSong() { const n = await promptBox({ title: 'Rename song', value: S.song.name, ok: 'Rename' }); if (n) edit('Rename song', (s) => { s.name = n.slice(0, 80); }); }
 async function newSong() {
   const keys = []; for (const n of ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']) keys.push(`${n} major`, `${n} minor`);
-  const r = await promptBox({ title: 'New song', ok: 'Create', fields: [{ key: 'name', label: 'Name', placeholder: 'e.g. Night Drive' }, { key: 'bpm', label: 'Tempo (BPM)', type: 'number', value: 110, min: 30, max: 300 }, { key: 'key', label: 'Key', value: 'A minor', options: keys.map((k) => ({ value: k, label: k })) }, { key: 'ts', label: 'Time signature', value: '4/4', options: ['4/4', '3/4', '6/8', '5/4', '7/8'].map((x) => ({ value: x, label: x })) }] });
+  const r = await promptBox({ title: 'New song', ok: 'Create', fields: [{ key: 'name', label: 'Name', placeholder: 'e.g. Night Drive' }, { key: 'bpm', label: 'Tempo (BPM)', type: 'number', value: 110, min: 30, max: 300 }, { key: 'key', label: 'Key', value: 'A minor', options: keys.map((k) => ({ value: k, label: k })) }, { key: 'ts', label: 'Time signature', value: '4/4', options: ['4/4', '3/4', '6/8', '5/4', '7/8'].map((x) => ({ value: x, label: x })) }, { key: 'style', label: 'Start with', value: '', options: [{ value: '', label: 'An empty song' }, { value: 'chiptune', label: '8-bit: NES channels (2 pulses, triangle, noise)' }, { value: 'gameboy', label: '8-bit: Game Boy channels' }] }] });
   if (!r) return; const [a, b] = r.ts.split('/').map(Number);
-  applySnapshot(await call('songs:create', { name: r.name || 'Untitled song', bpm: +r.bpm || 110, key: r.key, timeSig: [a, b], bars: 16 })); go('arrange');
+  applySnapshot(await call('songs:create', { name: r.name || 'Untitled song', bpm: +r.bpm || 110, key: r.key, timeSig: [a, b], bars: 16, template: r.style || null })); go('arrange');
+}
+
+async function make8bit() {
+  const r = await promptBox({ title: 'Make it 8-bit', text: 'Every instrument becomes a console channel by its role — bass → triangle, chords → arpeggiated pulse, melodies → pulses — and the drums become the console’s kit. Reverb and chorus come off. Audio tracks stay as they are. You can undo it.', ok: 'Make it 8-bit', fields: [{ key: 'console', label: 'Console', value: 'nes', options: [{ value: 'nes', label: 'NES' }, { value: 'gameboy', label: 'Game Boy' }] }, { key: 'crush', label: 'Grit', value: '', options: [{ value: '', label: 'Clean' }, { value: '1', label: 'Add 8-bit crush on the master' }] }] });
+  if (!r) return; try { await commitChain; const c = await call('song:chipify', { console: r.console, crush: !!r.crush }); toast('Now 8-bit', `${plural(c.length, 'track')} converted`, 'ok', 3500); } catch (e) { fail(e); }
 }
 
 // ───────── Claude card + Ask Claude

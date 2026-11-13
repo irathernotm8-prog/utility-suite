@@ -14,6 +14,7 @@ const engine = require('./enginehost');
 const connectors = require('./connectors');
 const ai = require('./ai');
 const { makeHandlers } = require('./mcp-handlers');
+const { SfxLib, exportPack } = require('./sfxlib');
 
 const IS_MAC = process.platform === 'darwin';
 if (process.env.MIXER_USER_DATA) app.setPath('userData', process.env.MIXER_USER_DATA);
@@ -26,11 +27,12 @@ if (!process.env.MIXER_E2E && !app.requestSingleInstanceLock()) { app.quit(); pr
 // ───────────────────────── settings
 const USER = app.getPath('userData');
 const SETTINGS = path.join(USER, 'settings.json');
-const DEFAULTS = { theme: 'system', songsDir: '', activeSong: null, askProvider: 'auto', exportFormat: 'wav', exportBits: 24, exportKbps: 320, exportRate: 44100, normalize: -14, metronome: false, snap: 0.25, zoom: 1, onboarded: false };
+const DEFAULTS = { theme: 'system', songsDir: '', activeSong: null, askProvider: 'auto', exportFormat: 'wav', exportBits: 24, exportKbps: 320, exportRate: 44100, normalize: -14, metronome: false, snap: 0.25, zoom: 1, onboarded: false, activeSfxPack: null };
 let settings = { ...DEFAULTS, ...readJSON(SETTINGS, {}) };
 const saveSettings = () => writeJSON(SETTINGS, settings);
 const songsRoot = () => settings.songsDir || process.env.MIXER_SONGS || path.join(app.getPath('documents'), 'Mixer');
 const lib = new Library(songsRoot());
+const sfx = new SfxLib(songsRoot);
 
 let win = null;
 const send = (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send(ch, data); };
@@ -49,7 +51,8 @@ engine.setProgress((e) => send('engine:progress', e));
 // (absolute paths are allowed for audio files only: analyze can measure any file the user points Claude at)
 ipcMain.handle('audio:read', async (e, rel) => { try { const f = path.isAbsolute(String(rel)) && AUDIO_EXT.test(rel) && fs.existsSync(rel) ? rel : active().audioPath(rel); return { ok: true, data: fs.readFileSync(f) }; } catch (err) { return { ok: false, error: err.message }; } });
 
-const handle = makeHandlers({ lib, active, setActive, engine, changed, activity, transport: (cmd) => { if (cmd.action === 'play') showWindow(); send('transport', cmd); }, settings: () => settings });
+const handle = makeHandlers({ lib, active, setActive, engine, changed, activity, transport: (cmd) => { if (cmd.action === 'play') showWindow(); send('transport', cmd); }, settings: () => settings,
+  sfx, sfxChanged: (pack, sound, by) => send('sfx:changed', { pack, sound, by }), sfxPlay: (pack, sound) => send('sfx:play', { pack, sound }), setSetting: (patch) => { settings = { ...settings, ...patch }; saveSettings(); } });
 
 // ───────────────────────── window
 function createWindow() {
@@ -77,7 +80,7 @@ function appMenu() {
     ...(IS_MAC ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, { label: 'Settings…', accelerator: 'Cmd+,', click: go('settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     { label: 'File', submenu: [{ label: 'New song…', accelerator: 'CmdOrCtrl+N', click: go('new-song') }, { label: 'Import audio…', accelerator: 'CmdOrCtrl+I', click: go('import') }, { label: 'Export…', accelerator: 'CmdOrCtrl+E', click: go('export') }, { type: 'separator' }, IS_MAC ? { role: 'close' } : { role: 'quit' }] },
     { label: 'Edit', submenu: [{ label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('nav', 'undo') }, { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: () => send('nav', 'redo') }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-    { label: 'View', submenu: [{ label: 'Arrange', accelerator: 'CmdOrCtrl+1', click: go('arrange') }, { label: 'Mix', accelerator: 'CmdOrCtrl+2', click: go('mix') }, { label: 'Sounds', accelerator: 'CmdOrCtrl+3', click: go('sounds') }, { label: 'Songs', accelerator: 'CmdOrCtrl+4', click: go('songs') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: 'View', submenu: [{ label: 'Arrange', accelerator: 'CmdOrCtrl+1', click: go('arrange') }, { label: 'Mix', accelerator: 'CmdOrCtrl+2', click: go('mix') }, { label: 'Sounds', accelerator: 'CmdOrCtrl+3', click: go('sounds') }, { label: 'Songs', accelerator: 'CmdOrCtrl+4', click: go('songs') }, { label: 'Sound FX', accelerator: 'CmdOrCtrl+5', click: go('sfx') }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(t));
@@ -89,11 +92,12 @@ const P = () => active();
 
 h('app:info', () => ({ version: app.getVersion(), platform: process.platform, home: os.homedir(), userData: USER, songsRoot: songsRoot(), sounds: { instruments: SND.INSTRUMENTS.map(({ id, name, cat, desc }) => ({ id, name, cat, desc })), kits: SND.KITS.map(({ id, name, desc }) => ({ id, name, desc })), effects: SND.EFFECTS, cats: SND.CATS }, rhythms: Object.fromEntries(Object.entries(TH.RHYTHMS).map(([k, v]) => [k, v.desc])), grooves: Object.fromEntries(Object.entries(TH.GROOVES).map(([k, v]) => [k, v.desc])) }));
 h('settings:get', () => settings);
-h('settings:set', (patch) => { settings = { ...settings, ...patch }; saveSettings(); if ('theme' in patch) applyTheme(); if ('songsDir' in patch) { lib.setRoot(songsRoot()); settings.activeSong = null; send('song:switched', snapshot(active())); } return settings; });
+h('settings:set', (patch) => { settings = { ...settings, ...patch }; saveSettings(); if ('theme' in patch) applyTheme(); if ('songsDir' in patch) { lib.setRoot(songsRoot()); sfx.cache.clear(); settings.activeSfxPack = null; settings.activeSong = null; send('song:switched', snapshot(active())); } return settings; });
 
 // songs
 h('songs:list', () => ({ list: lib.list(), active: P().id }));
-h('songs:create', (o) => { const p = lib.create(o || {}); setActive(p.id); return snapshot(p); });
+h('songs:create', (o = {}) => { const p = lib.create(o); if (o.template) p.edit((s) => { SG.chipTemplate(s, { console: o.template === 'gameboy' ? 'gameboy' : 'nes' }); }, { label: '8-bit channels' }); setActive(p.id); return snapshot(p); });
+h('song:chipify', async (o) => { const r = await handle('make_8bit', o, 'you'); if (r.isError) throw new Error(r.content[0].text.replace(/^Error: /, '')); return JSON.parse(r.content[0].text).changed; });
 h('songs:open', (id) => snapshot(setActive(id)));
 h('songs:rename', (id, name) => { lib.rename(id || P().id, name); if (!id || id === P().id) changed('you', 'Rename'); return true; });
 h('songs:duplicate', (id) => snapshot(setActive(lib.duplicate(id || P().id).id)));
@@ -136,6 +140,18 @@ h('shell:open', async (p) => { if (/^https?:/.test(p)) return shell.openExternal
 h('shell:reveal', (p) => { shell.showItemInFolder(p); return true; });
 h('clipboard:write', (t) => { clipboard.writeText(String(t)); return true; });
 h('isAudio', (p) => AUDIO_EXT.test(p));
+
+// game sound effects (packs live in <songs folder>/Sound FX)
+const packData = (p) => ({ id: p.id, name: p.name, dir: p.dir, exportDir: p.exportDir, sounds: p.sounds });
+h('sfx:packs', () => ({ list: sfx.list(), active: sfx.ensure(settings.activeSfxPack).id }));
+h('sfx:open', (id) => { const p = sfx.ensure(id || settings.activeSfxPack); settings.activeSfxPack = p.id; saveSettings(); return packData(p); });
+h('sfx:create', (name) => { const p = sfx.create(name); settings.activeSfxPack = p.id; saveSettings(); return packData(p); });
+h('sfx:rename', (id, name) => packData(sfx.rename(id, name)));
+h('sfx:save', (id, sound) => sfx.get(id).upsert(sound));
+h('sfx:remove', (id, soundId) => { sfx.get(id).remove(soundId); return true; });
+h('sfx:reveal', (id) => { shell.openPath(sfx.get(id).dir); return true; });
+h('sfx:export', async (o) => { const p = sfx.get(o.pack); let folder = o.folder || null; if (o.ask) { const r = await dialog.showOpenDialog(win, { title: 'Export sounds to…', defaultPath: p.exportDir || path.join(p.dir, 'exports'), properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; folder = r.filePaths[0]; } const r = exportPack(p, { ids: o.ids, format: o.format || 'wav', folder, variations: o.variations || 0 }); if (folder) { p.exportDir = folder; p.save(); } return r; });
+h('sfx:toSong', async (o) => { const r = await handle('sfx_to_song', o, 'you'); if (r.isError) throw new Error(r.content[0].text.replace(/^Error: /, '')); return JSON.parse(r.content[0].text); });
 
 // ───────────────────────── lifecycle
 app.on('second-instance', (e, argv) => { if (!argv.includes('--hidden')) showWindow(); });

@@ -16,7 +16,31 @@
     brass: (n) => (n > 30 ? 0 : 1 / Math.pow(n, 0.85)),
     pulse: (n) => (2 / (n * Math.PI)) * Math.sin(n * Math.PI * 0.25),
   };
+  // 8-bit consoles: single-cycle shapes, turned into band-limited waves with 256 harmonics so the steps and edges
+  // that give the NES and Game Boy their buzz survive (the NES triangle is 32 steps of 4-bit volume)
+  const NES_TRI = Array.from({ length: 32 }, (_, i) => (i < 16 ? 15 - i : i - 16));
+  const GB_WAVE = [0, 2, 4, 6, 8, 10, 12, 14, 15, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 3, 1];
+  const CHIP = {
+    pulse12: (ph) => (ph < 0.125 ? 1 : -1), pulse25c: (ph) => (ph < 0.25 ? 1 : -1), pulse50: (ph) => (ph < 0.5 ? 1 : -1),
+    tri4: (ph) => NES_TRI[Math.floor(ph * 32) % 32] / 7.5 - 1, gbwave: (ph) => GB_WAVE[Math.floor(ph * 32) % 32] / 7.5 - 1,
+    saw4: (ph) => Math.floor(ph * 16) / 7.5 - 1, // a 4-bit stepped saw (SID-ish)
+  };
+  function chipWave(ctx, name) {
+    const C = FX.ctxCache(ctx); const k = 'cw' + name; if (C[k]) return C[k];
+    const M = 1024, H = 256, f = CHIP[name], x = new Float32Array(M); let mean = 0; for (let i = 0; i < M; i++) { x[i] = f((i + 0.5) / M); mean += x[i] / M; }
+    const re = new Float32Array(H), im = new Float32Array(H);
+    for (let n = 1; n < H; n++) { let a = 0, b = 0; for (let i = 0; i < M; i++) { const th = (2 * Math.PI * n * i) / M; a += (x[i] - mean) * Math.cos(th); b += (x[i] - mean) * Math.sin(th); } re[n] = (2 * a) / M; im[n] = (2 * b) / M; }
+    return (C[k] = ctx.createPeriodicWave(re, im));
+  }
+  // NES-style noise: a 15-bit shift register, one step per sample; "short" mode loops after 93 steps and sounds metallic
+  function lfsr(ctx, short) {
+    const C = FX.ctxCache(ctx); const k = short ? 'lfsrS' : 'lfsrL'; if (C[k]) return C[k];
+    const n = short ? 93 * 64 : 32767 * 2; const b = ctx.createBuffer(1, n, ctx.sampleRate); const d = b.getChannelData(0); let r = 1;
+    for (let i = 0; i < n; i++) { const fb = (r & 1) ^ ((r >> (short ? 6 : 1)) & 1); r = (r >> 1) | (fb << 14); d[i] = r & 1 ? -1 : 1; }
+    return (C[k] = b);
+  }
   function wave(ctx, name) {
+    if (CHIP[name]) return chipWave(ctx, name);
     const C = FX.ctxCache(ctx); const k = 'pw' + name; if (C[k]) return C[k];
     const N = 64, re = new Float32Array(N), im = new Float32Array(N); for (let n = 1; n < N; n++) { if (name === 'pulse') re[n] = TABLES.pulse(n); else im[n] = TABLES[name](n); }
     return (C[k] = ctx.createPeriodicWave(re, im));
@@ -86,6 +110,8 @@
     const pitchParams = [];
     // plucked string
     if (P.model === 'ks') { const k = ksBuffer(ctx, P, midi, A.d + A.r); const s = ctx.createBufferSource(); s.buffer = k.buffer; s.playbackRate.value = k.rate; const sg = ctx.createGain(); sg.gain.value = 1; s.connect(sg); sg.connect(pre); srcs.push(s); }
+    // 8-bit noise channel: the note sets how fast the shift register is clocked
+    if (P.model === 'lfsr') { const s = ctx.createBufferSource(); s.buffer = lfsr(ctx, P.lfsr && P.lfsr.short); s.loop = true; s.playbackRate.value = clamp((f * ((P.lfsr && P.lfsr.mul) || 16)) / ctx.sampleRate, 0.002, 16); const sg = ctx.createGain(); sg.gain.value = 0.5; s.connect(sg); sg.connect(pre); srcs.push(s); if (P.bend) { s.playbackRate.setValueAtTime(s.playbackRate.value * Math.pow(2, P.bend.semis / 12), t); s.playbackRate.setTargetAtTime(s.playbackRate.value, t, P.bend.time / 2); } }
     // FM modulators
     let fmOut = null;
     if (P.model === 'fm' && P.fm) {
@@ -124,5 +150,5 @@
     for (const s of srcs) { try { if (s._off != null) s.start(t, s._off); else s.start(t); s.stop(end); } catch {} }
     return { amp, node: vg, end, srcs, cut(at) { amp.gain.cancelScheduledValues(at); amp.gain.setTargetAtTime(0, at, 0.006); for (const s of srcs) { try { s.stop(at + 0.05); } catch {} } } };
   }
-  root.MXSynth = { playNote, mtof, wave, noise, ksBuffer };
+  root.MXSynth = { playNote, mtof, wave, noise, ksBuffer, lfsr, CHIP };
 })(typeof self !== 'undefined' ? self : this);

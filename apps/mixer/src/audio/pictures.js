@@ -89,5 +89,20 @@
   function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   function hexA(hex, a) { const h = String(hex || '#3ec8ff').replace('#', ''); const n = parseInt(h.length === 3 ? h.split('').map((x) => x + x).join('') : h, 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
   function fmtTime(s) { return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`; }
-  root.MXPictures = { waveform, arrangement, pianoRoll, hexA, fmtTime };
+  // game sounds: one row per sound — name and facts, waveform, and a spectrogram that shows the pitch moving
+  function sfxSheet(items) {
+    const W = 1200, RH = 150, top = 46, H = top + items.length * RH + 10; const { c, g } = canvas(W, H); title(g, W, items.length === 1 ? items[0].name : `${items.length} sounds`, 'waveform (left) and spectrogram 30 Hz–16 kHz (right) · time runs left to right');
+    items.forEach((it, i) => {
+      const y0 = top + i * RH; const y = it.y; const secs = y.length / 44100; const L = 210, ww = 470, sw = W - L - ww - 40;
+      g.fillStyle = C.text; g.font = '700 13px system-ui'; g.fillText(String(it.name).slice(0, 26), 16, y0 + 20); g.font = '12px system-ui'; g.fillStyle = C.mut;
+      (it.lines || [`${secs.toFixed(2)} s`]).forEach((l, k) => g.fillText(String(l).slice(0, 30), 16, y0 + 42 + k * 17)); g.font = FONT;
+      g.fillStyle = C.panel; g.fillRect(L, y0 + 6, ww, RH - 14); g.fillRect(L + ww + 20, y0 + 6, sw, RH - 14);
+      const pk = A.peaks(y, ww); const mid = y0 + 6 + (RH - 14) / 2; g.fillStyle = C.wave; for (let x = 0; x < ww; x++) { const lo = pk[2 * x], hi = pk[2 * x + 1]; g.fillRect(L + x, mid - hi * (RH - 18) / 2, 1, Math.max(1, (hi - lo) * (RH - 18) / 2)); }
+      const S = A.spectrogram(y, 44100, sw, 96, 512, 16); // short sounds: a small FFT and a fine hop, stretched to fit
+      if (S.cols) { const tmp = document.createElement('canvas'); tmp.width = S.cols; tmp.height = S.rows; const tg = tmp.getContext('2d'); const img = tg.createImageData(S.cols, S.rows); let mx = -120; for (const v of S.data) if (v > mx) mx = v; for (let k = 0; k < S.rows * S.cols; k++) { const r = Math.floor(k / S.cols), cc = k % S.cols; const [a, b2, d] = heat((S.data[r * sw + cc] - (mx - 70)) / 70); img.data.set([a, b2, d, 255], k * 4); } tg.putImageData(img, 0, 0); g.drawImage(tmp, L + ww + 20, y0 + 6, sw, RH - 14); }
+      g.fillStyle = C.mut; g.font = '11px system-ui'; g.fillText(`${secs.toFixed(2)} s`, L + ww - 44, y0 + RH - 14); g.font = FONT;
+    });
+    return png(c);
+  }
+  root.MXPictures = { sfxSheet, waveform, arrangement, pianoRoll, hexA, fmtTime };
 })(typeof self !== 'undefined' ? self : this);

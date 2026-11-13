@@ -50,6 +50,20 @@ app.whenReady().then(async () => {
   await call('add_track', { kind: 'drums', sound: '909', name: 'Drums' }); await call('write_drums', { track: 'Drums', style: 'house', bars: 4 });
   await wait(800);
   await js(`(() => { const c = S.song.clips.find((c) => c.file); S.sel = { track: c.track, clip: c.id }; S.editor = c.id; render(); })()`); await shot('audio-editor', 1500);
+  // 8-bit song
+  await call('new_song', { name: 'Castle Theme', template: 'chiptune', bpm: 150, key: 'E minor', bars: 8 });
+  await call('write_notes', { track: 'Pulse 1', name: 'Theme', notes: ['E5', 'G5', 'B5', 'A5', 'G5', 'F#5', 'E5', 'D5', 'E5', 'B4', 'E5', 'G5', 'F#5', 'D5', 'E5', 'E5'].map((x, i) => ({ note: x, beat: i * 0.5, length: 0.45 })) });
+  await call('write_chords', { track: 'Pulse 2', progression: 'Em C D Bm', beats_per_chord: 2, repeat: 2 }); await call('write_chords', { track: 'Triangle', progression: 'Em C D Bm', rhythm: 'bass-chip', beats_per_chord: 2, repeat: 2 }); await call('write_drums', { track: 'Noise', style: 'chiptune', bars: 4, fill: true });
+  await wait(600); await js(`S.editor = null; go('arrange')`); await shot('chip-song');
+  await js(`(() => { const c = S.song.clips.find((c) => track(c.track).name.startsWith('Pulse 2')); S.sel = { track: c.track, clip: c.id }; S.editor = c.id; render(); })()`); await shot('chip-chords');
+  await js(`S.editor = null; S.sndCat = 'Chip'; go('sounds')`); await shot('sounds-chip');
+  // game sound effects
+  await call('new_sfx_pack', { name: 'Skyline Protocol' });
+  for (const k of ['coin', 'jump', 'laser', 'powerup', 'hit', 'big-explosion', 'level-up']) await call('make_sfx', { kind: k, name: { coin: 'Coin', jump: 'Jump', laser: 'Laser', powerup: 'Power-up', hit: 'Hurt', 'big-explosion': 'Boss explodes', 'level-up': 'Level up' }[k], seed: 7, play: false });
+  await js(`FXS.pack = null; FXS.sel = null; go('sfx')`); await shot('sfx', 1500);
+  await js(`(async () => { FXS.sel = FXS.pack.sounds.find((s) => s.name === 'Boss explodes').id; FXS.layer = 1; render(); })()`); await shot('sfx-layers', 1200);
+  await js(`document.querySelector('#sfxVars').click()`); await shot('sfx-variations', 900);
+  await js(`sfxExportSheet()`); await shot('sfx-export'); await js(`closeSheet()`);
   // light theme
   await js(`S.settings.theme = 'light'; applyThemeNow(); render()`); await shot('light-arrange', 1200);
   await call('open_song', { song: 'Night Drive' }); await wait(500); await js(`go('mix')`); await shot('light-mix');

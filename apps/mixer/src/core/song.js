@@ -161,6 +161,35 @@
   function setAutomation(s, ref, param, points) { const t = findTrack(s, ref); if (!AUTO[param]) throw new Error(`Automate volume, pan or cutoff (the first filter/EQ on the track).`); t.automation = t.automation || {}; if (!points || !points.length) delete t.automation[param]; else t.automation[param] = points.map(([b, v]) => [r4(+b), clamp(+v, AUTO[param][0], AUTO[param][1])]).sort((a, b) => a[0] - b[0]); return t; }
   function autoValue(points, beat) { if (!points || !points.length) return null; if (beat <= points[0][0]) return points[0][1]; for (let i = 1; i < points.length; i++) if (beat <= points[i][0]) { const [b0, v0] = points[i - 1], [b1, v1] = points[i]; return v0 + ((v1 - v0) * (beat - b0)) / Math.max(1e-6, b1 - b0); } return points[points.length - 1][1]; }
 
+  // ───── 8-bit: a console-style channel set, and turning an existing song into one
+  function chipTemplate(s, { console: con = 'nes' } = {}) {
+    const gb = con === 'gameboy' || con === 'gb';
+    const made = [
+      addTrack(s, { kind: 'instrument', sound: 'nes-pulse-25', name: 'Pulse 1 (lead)', effects: [] }),
+      addTrack(s, { kind: 'instrument', sound: gb ? 'gb-chord' : 'chip-chord', name: 'Pulse 2 (chords)', effects: [], volume: -4 }),
+      addTrack(s, { kind: 'instrument', sound: gb ? 'gb-wave' : 'nes-triangle', name: gb ? 'Wave (bass)' : 'Triangle (bass)', effects: [] }),
+      addTrack(s, { kind: 'drums', sound: gb ? 'gameboy' : 'nes', name: 'Noise (drums)', effects: [] }),
+    ];
+    return made;
+  }
+  function chipify(s, { console: con = 'nes', crush = false, keepEffects = false } = {}) {
+    const gb = con === 'gameboy' || con === 'gb'; const changes = []; let leads = 0;
+    for (const t of s.tracks) {
+      if (t.kind === 'audio') { changes.push({ track: t.name, kept: 'audio (unchanged)' }); continue; }
+      const before = t.sound; let to;
+      if (t.kind === 'drums') to = gb ? 'gameboy' : 'nes';
+      else {
+        const P = SND.instrument(t.sound) || {}; const ns = s.clips.filter((c) => c.track === t.id && !c.file).flatMap((c) => c.notes.map((n) => ({ p: n.p, t: c.start + n.t }))); const avg = ns.length ? ns.reduce((a, n) => a + n.p, 0) / ns.length : 60;
+        const chordy = ns.length > 3 && ns.filter((n, i) => ns.some((m, j) => j !== i && Math.abs(m.t - n.t) < 1e-3)).length > ns.length * 0.4;
+        if (P.cat === 'Chip') to = t.sound; else if (P.cat === 'FX') to = 'chip-noise'; else if (P.cat === 'Bass' || avg < 50) to = gb ? 'gb-wave' : 'nes-triangle'; else if (chordy) to = gb ? 'gb-chord' : 'chip-chord'; else to = ['nes-pulse-25', 'nes-pulse-12', 'nes-square'][leads++ % 3];
+      }
+      t.sound = to; if (!keepEffects) t.effects = t.effects.filter((f) => !['reverb', 'chorus', 'width'].includes(f.type));
+      changes.push({ track: t.name, from: before, to });
+    }
+    if (crush && !s.master.effects.some((f) => f.type === 'crush')) addEffect(s, 'master', { type: 'crush', bits: 8, rate: gb ? 16384 : 22050, mix: 1 });
+    return changes;
+  }
+
   // ───── a readable summary for Claude and the window
   function summary(s, { notes = false, track = null } = {}) {
     const B = bpb(s);
@@ -176,5 +205,5 @@
   }
   function fxBrief(f) { const o = { id: f.id, type: f.type }; if (!f.on) o.on = false; const spec = SND.EFFECTS[f.type].params; for (const k of Object.keys(spec)) if (f[k] !== spec[k][2]) o[k] = f[k]; return o; }
 
-  return { uid, newSong, hydrate, bpb, spb, barToBeat, beatToBar, fmtPos, findTrack, addTrack, updateTrack, removeTrack, fxList, addEffect, updateEffect, removeEffect, findEffect, isAudio, clipLength, clipEnd, songEnd, fitBars, findClip, clipsOn, addMidiClip, setNotes, addAudioClip, updateClip, removeClip, slice, splitClip, duplicateClip, copySection, clearRange, deleteSection, insertBars, setAutomation, autoValue, summary, normNote, AUTO };
+  return { chipTemplate, chipify, uid, newSong, hydrate, bpb, spb, barToBeat, beatToBar, fmtPos, findTrack, addTrack, updateTrack, removeTrack, fxList, addEffect, updateEffect, removeEffect, findEffect, isAudio, clipLength, clipEnd, songEnd, fitBars, findClip, clipsOn, addMidiClip, setNotes, addAudioClip, updateClip, removeClip, slice, splitClip, duplicateClip, copySection, clearRange, deleteSection, insertBars, setAutomation, autoValue, summary, normNote, AUTO };
 });

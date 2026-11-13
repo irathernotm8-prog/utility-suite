@@ -54,13 +54,39 @@ app.whenReady().then(async () => {
     x = await call('analyze', { file: rec }); check(x.j && x.j.tempo.bpm === 120, 'analyze a file');
     x = await call('undo', { steps: 2 }); check(x.j && x.j.undone.length === 2, 'undo');
     x = await call('view', { kind: 'arrangement' });
+    // 8-bit music
+    x = await call('new_song', { name: 'Castle Theme', template: 'chiptune', bpm: 150, key: 'E minor', bars: 8 }); check(x.j && x.j.tracks.length === 4, '8-bit template: ' + (x.j && x.j.tracks.map((t) => t.sound).join(', ')));
+    x = await call('write_notes', { track: 'Pulse 1', name: 'Theme', notes: ['E5', 'G5', 'B5', 'A5', 'G5', 'F#5', 'E5', 'D5', 'E5', 'B4', 'E5', 'G5', 'F#5', 'D5', 'E5', 'E5'].map((n, i) => ({ note: n, beat: i * 0.5, length: 0.45 })) });
+    x = await call('write_chords', { track: 'Pulse 2', progression: 'Em C D Bm', rhythm: 'block', beats_per_chord: 2, repeat: 2 }); check(x.j && x.j.chords.length === 4, 'chip chords');
+    x = await call('write_chords', { track: 'Triangle', progression: 'Em C D Bm', rhythm: 'bass-chip', beats_per_chord: 2, repeat: 2 });
+    x = await call('add_track', { kind: 'instrument', sound: 'chip-arp', name: 'Arp' }); x = await call('write_chords', { track: 'Arp', progression: 'Em C D Bm', rhythm: 'chip-arp', beats_per_chord: 2, repeat: 2, octave: 5 });
+    x = await call('write_drums', { track: 'Noise', style: 'chip-drive', bars: 4, fill: true }); check(x.j && x.j.clip.notes > 20, 'chip drums');
+    x = await call('set_effects', { target: 'master', add: { type: 'crush', bits: 8, rate: 22050 } }); check(x.j && x.j.effects.some((f) => f.type === 'crush' && f.rate === 22050), 'crush with sample rate');
+    x = await call('analyze', { target: 'mix' }); check(x.j && x.j.loudness_lufs > -24 && x.j.loudness_lufs < -6 && x.j.peak_dbfs <= -0.5, `8-bit mix ${x.j && x.j.loudness_lufs} LUFS, peak ${x.j && x.j.peak_dbfs}`);
+    x = await call('open_song', { song: 'Night Drive' }); x = await call('make_8bit', { console: 'gameboy' }); check(x.j && x.j.changed.some((c) => c.to === 'gameboy') && x.j.changed.some((c) => c.to === 'gb-wave'), 'make_8bit: ' + (x.j && x.j.changed.map((c) => c.to).join(', ')));
+    x = await call('analyze', { target: 'mix', bars: 4 }); check(x.j && x.j.loudness_lufs > -40, 'Game Boy version renders');
+    // game sound effects
+    x = await call('new_sfx_pack', { name: 'Skyline Protocol' }); check(x.j && x.j.created === 'Skyline Protocol', 'new pack');
+    x = await call('make_sfx', { kind: 'coin', name: 'Coin', variations: 3 }); check(x.j && x.j.sounds.length === 3 && x.r.content.some((c) => c.type === 'image'), 'coin variations + picture');
+    x = await call('make_sfx', { kind: 'big-explosion', name: 'Boss explodes' }); check(x.j && x.j.sounds[0].layers.length === 3 && x.j.sounds[0].seconds > 0.4, 'layered explosion ' + (x.j && x.j.sounds[0].seconds) + 's');
+    x = await call('make_sfx', { name: 'Laser', layers: [{ kind: 'laser' }, { params: { wave: 'noise', freq: 0.7, sustain: 0.05, decay: 0.15 }, gain: -6 }], retro: true }); check(x.j && x.j.sounds[0].bits === 8 && x.j.sounds[0].layers.length === 2, 'custom layered retro laser');
+    x = await call('edit_sfx', { sound: 'Coin A', params: { freq: 0.7 }, add_layer: { kind: 'blip', delay: 0.05, gain: -8, pitch: 12 }, name: 'Coin' }); check(x.j && x.j.sound.layers.length === 2, 'edit + add layer');
+    x = await call('edit_sfx', { sound: 'Coin B', remove: true }); x = await call('edit_sfx', { sound: 'Coin C', mutate: 0.4, play: false });
+    x = await call('list_sfx', { picture: true }); check(x.j && x.j.sounds.length === 4, 'list ' + (x.j && x.j.sounds.map((s) => s.name).join(', ')));
+    const sfxDir = path.join(OUT, 'game', 'assets', 'sfx');
+    x = await call('export_sfx', { format: 'all', folder: sfxDir, variations: 2 }); check(x.j && x.j.files.includes('coin.wav') && x.j.files.includes('coin_2.mp3') && x.j.files.some((f) => f.endsWith('.js')), 'export pack: ' + (x.j && x.j.files.length) + ' files');
+    x = await call('open_song', { song: 'Castle Theme' });
+    x = await call('sfx_to_song', { sound: 'Coin', at_bar: 2, beat: 1 }); check(x.j && x.j.bar > 2, 'sfx as clip at bar ' + (x.j && x.j.bar));
+    x = await call('sfx_to_song', { sound: 'Boss explodes', pad: 'crash' }); check(x.j && x.j.pad === 'crash', 'sfx on a drum pad');
+    x = await call('analyze', { target: 'mix', bars: 4 }); check(x.j && x.j.loudness_lufs > -30, 'song with sfx renders');
+    x = await call('play_sfx', { sound: 'Laser', pack: 'Skyline Protocol' }); check(!x.r.isError, 'play_sfx');
     // plugin script over stdio → bridge → app
     const { spawn } = require('child_process'); const conn = require('../src/connectors'); conn.installScript(); const e = conn.connectorStatus().entry;
-    const child = spawn(e.command, e.args, { env: { ...process.env, ...e.env } }); let buf = ''; const got = new Promise((res) => child.stdout.on('data', (d) => { buf += d; if (buf.split('\n').filter(Boolean).length >= 3) res(); }));
+    const child = spawn(e.command, e.args, { env: { ...process.env, ...e.env } }); let buf = ''; const got = new Promise((res) => child.stdout.on('data', (d) => { buf += d; if (buf.endsWith('\n') && buf.split('\n').filter(Boolean).length >= 3) res(); }));
     const w = (m) => child.stdin.write(JSON.stringify(m) + '\n'); w({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { clientInfo: { name: 'claude-code' } } }); w({ jsonrpc: '2.0', id: 2, method: 'tools/list' }); w({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_song', arguments: { picture: true } } });
     await Promise.race([got, new Promise((r) => setTimeout(r, 30000))]); child.kill();
     const lines = buf.split('\n').filter(Boolean).map((l) => JSON.parse(l)); const tl = lines.find((m) => m.id === 2); const gs = lines.find((m) => m.id === 3);
-    check(tl && tl.result.tools.length >= 20, 'MCP tools/list ' + (tl && tl.result.tools.length)); check(gs && gs.result.content.some((c) => c.type === 'image'), 'MCP get_song via bridge returns a picture');
+    check(tl && tl.result.tools.length >= 30, 'MCP tools/list ' + (tl && tl.result.tools.length)); check(gs && gs.result.content.some((c) => c.type === 'image'), 'MCP get_song via bridge returns a picture');
   } catch (e) { fails++; console.log('CRASH', e.stack); }
   console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); fs.writeFileSync(path.join(OUT, 'result.txt'), fails ? 'fail' : 'ok');
   if (process.env.MIXER_SHOTS) return; app.exit(fails ? 1 : 0);

@@ -6,8 +6,10 @@ const path = require('path');
 const SG = require('./core/song');
 const SND = require('./core/sounds');
 const T = require('./core/theory');
+const X = require('./core/sfx');
+const { exportPack, hydrate: hydrateSfx } = require('./sfxlib');
 
-function makeHandlers({ lib, active, setActive, engine, changed, activity, transport, settings }) {
+function makeHandlers({ lib, active, setActive, engine, changed, activity, transport, settings, sfx, sfxChanged = () => {}, sfxPlay = () => {}, setSetting = () => {} }) {
   const text = (o) => ({ type: 'text', text: typeof o === 'string' ? o : JSON.stringify(o, null, 1) });
   const img = (u) => (u ? { type: 'image', data: String(u).split(',')[1], mimeType: 'image/png' } : null);
   const ok = (o, ...pics) => ({ content: [text(o), ...pics.map(img).filter(Boolean)] });
@@ -45,7 +47,7 @@ function makeHandlers({ lib, active, setActive, engine, changed, activity, trans
     mixer_guide: () => ok(guide()),
     async get_song(a) { const s = SG.summary(song(), { notes: !!a.notes, track: a.track || null }); return ok({ song_id: active().id, ...s }, a.picture === false ? null : await pic('arrangement')); },
     list_songs() { return ok({ open: active().id, songs: lib.list().map((x) => ({ id: x.id, name: x.name, bpm: x.bpm, key: x.key, bars: x.bars, tracks: x.tracks })) }); },
-    async new_song(a, by) { const p = lib.create({ name: a.name || 'Untitled song', bpm: a.bpm || 120, key: a.key || 'C major', timeSig: a.time_signature ? parseSig(a.time_signature) : [4, 4], bars: a.bars || 16 }); setActive(p.id); if (by && by !== 'you') activity(`Started “${p.name}”`); return ok({ opened: p.id, ...SG.summary(p.song) }); },
+    async new_song(a, by) { const tpl = String(a.template || '').toLowerCase(); const chip = /chip|nes|8|game ?boy|gb/.test(tpl); const p = lib.create({ name: a.name || 'Untitled song', bpm: a.bpm || (chip ? 140 : 120), key: a.key || 'C major', timeSig: a.time_signature ? parseSig(a.time_signature) : [4, 4], bars: a.bars || 16 }); if (chip) p.edit((x) => { SG.chipTemplate(x, { console: /game ?boy|gb/.test(tpl) ? 'gameboy' : 'nes' }); }, { label: '8-bit channels', by: who(by) }); setActive(p.id); if (by && by !== 'you') activity(`Started “${p.name}”`); return ok({ opened: p.id, ...SG.summary(p.song) }); },
     open_song(a) { const p = setActive(lib.get(a.song).id); return ok({ opened: p.id, ...SG.summary(p.song) }); },
     set_song(a, by) {
       edit(by, 'Song settings', (s) => {
@@ -179,6 +181,63 @@ function makeHandlers({ lib, active, setActive, engine, changed, activity, trans
     async export(a, by) { const r = await exportSong(a); if (by && by !== 'you') activity(`Exported ${r.files.map((f) => path.basename(f)).join(', ')}`); return ok(r); },
     undo(a, by) { const p = active(); const d = a.redo ? p.doRedo(a.steps || 1) : p.doUndo(a.steps || 1); changed(who(by), (a.redo ? 'Redo ' : 'Undo ') + (d[0] || '')); return ok({ [a.redo ? 'redone' : 'undone']: d, can_undo: p.undo.length, can_redo: p.redo.length }); },
   };
+  // ───── game sound effects
+  const packOf = (ref) => { const p = sfx.ensure(ref || (settings && settings().activeSfxPack)); setSetting({ activeSfxPack: p.id }); return p; };
+  const facts = (snd) => { const d = X.describe(snd); return [`${d.seconds}s · ${d.layers} layer${d.layers > 1 ? 's' : ''}`, `${d.wave}${d.start_hz ? ` from ${d.start_hz} Hz` : ''}`, `${snd.bits < 16 ? snd.bits + '-bit ' : ''}${snd.rate < 44100 ? Math.round(snd.rate / 100) / 10 + ' kHz' : ''}`.trim()].filter(Boolean); };
+  async function sfxPic(list) { try { return (await engine.job('sfx', { items: list.map((x) => ({ name: x.name, sound: x, lines: facts(x) })) }, { timeout: 60 })).picture; } catch { return null; } }
+  const sfxBrief = (snd) => ({ id: snd.id, name: snd.name, kind: snd.kind, ...X.describe(snd), gain_db: snd.gain || undefined, bits: snd.bits !== 16 ? snd.bits : undefined, rate: snd.rate !== 44100 ? snd.rate : undefined, layers: snd.layers.map((L, i) => ({ n: i + 1, on: L.on === false ? false : undefined, delay: L.delay || undefined, gain_db: L.gain || undefined, pitch: L.pitch || undefined, params: Object.fromEntries(Object.entries(L.params).filter(([k, v]) => v !== X.PARAMS[k][2]).map(([k, v]) => [k, k === 'wave' ? X.WAVES[v] : +(+v).toFixed(3)])) })) });
+  function applyLayer(L, o) { if (!o) return L; const n = { ...L }; if (o.kind) n.params = X.generate(o.kind, o.seed || Date.now()).layers[0].params; if (o.params) n.params = X.norm({ ...n.params, ...o.params }); for (const k of ['delay', 'gain', 'pitch', 'on', 'seed']) if (o[k] != null) n[k] = o[k]; return n; }
+  Object.assign(H, {
+    async make_sfx(a, by) {
+      const p = packOf(a.pack); const n = Math.max(1, Math.min(8, Math.round(a.variations || 1))); const made = []; const seed0 = a.seed || (Date.now() % 1e6);
+      for (let i = 0; i < n; i++) {
+        let snd;
+        if (a.layers && a.layers.length) snd = { kind: 'custom', layers: a.layers.map((L, k) => applyLayer({ on: true, delay: 0, gain: 0, pitch: 0, seed: k + 1, params: X.defaults() }, { ...L, seed: L.seed || seed0 + i * 101 + k })) };
+        else { snd = X.generate(a.kind || 'random', seed0 + i * 7919); if (a.params) snd.layers[0].params = X.norm({ ...snd.layers[0].params, ...a.params }); }
+        snd.name = p.uniqueName(a.name ? (n > 1 ? `${a.name} ${String.fromCharCode(65 + i)}` : a.name) : (X.KINDS[snd.kind] || 'Sound') + (n > 1 ? ` ${String.fromCharCode(65 + i)}` : ''));
+        for (const k of ['gain', 'bits', 'rate']) if (a[k] != null) snd[k] = a[k]; if (a.retro) { snd.bits = 8; snd.rate = 22050; }
+        made.push(p.upsert(snd));
+      }
+      sfxChanged(p.id, made[0].id, who(by)); if (by && by !== 'you') activity(`Made ${made.map((x) => x.name).join(', ')}`); if (a.play !== false) sfxPlay(p.id, made[0].id);
+      return ok({ pack: p.name, sounds: made.map(sfxBrief), tip: n > 1 ? 'Variations are saved side by side; remove the ones the user doesn’t want with edit_sfx remove:true.' : undefined }, await sfxPic(made));
+    },
+    async edit_sfx(a, by) {
+      const p = packOf(a.pack); const s0 = p.find(a.sound);
+      if (a.remove) { p.remove(s0.id); sfxChanged(p.id, null, who(by)); return ok({ removed: s0.name }); }
+      let snd = JSON.parse(JSON.stringify(s0));
+      if (a.duplicate) { snd.id = undefined; snd.name = p.uniqueName(a.name || s0.name + ' copy'); }
+      else if (a.name) snd.name = p.uniqueName(a.name) === a.name || a.name.toLowerCase() === s0.name.toLowerCase() ? a.name : p.uniqueName(a.name);
+      if (a.params) snd.layers[0].params = X.norm({ ...snd.layers[0].params, ...a.params });
+      if (a.layer) { const i = Math.max(0, (a.layer.n || a.layer.index || 1) - 1); if (!snd.layers[i]) throw new Error(`No layer ${i + 1}; this sound has ${snd.layers.length}.`); snd.layers[i] = applyLayer(snd.layers[i], a.layer); }
+      if (a.add_layer) { if (snd.layers.length >= 4) throw new Error('Four layers at most.'); snd.layers.push(applyLayer({ on: true, delay: 0, gain: 0, pitch: 0, seed: snd.layers.length + 1, params: X.defaults() }, a.add_layer)); }
+      if (a.remove_layer) { if (snd.layers.length < 2) throw new Error('A sound needs at least one layer.'); snd.layers.splice(a.remove_layer - 1, 1); }
+      if (a.mutate) snd = X.mutateSound(snd, typeof a.mutate === 'number' ? a.mutate : 0.3, Date.now() % 1e6);
+      for (const k of ['gain', 'bits', 'rate']) if (a[k] != null) snd[k] = a[k]; if (a.retro === true) { snd.bits = 8; snd.rate = 22050; } if (a.retro === false) { snd.bits = 16; snd.rate = 44100; }
+      const saved = p.upsert(snd); sfxChanged(p.id, saved.id, who(by)); if (by && by !== 'you') activity(`${a.duplicate ? 'Copied' : 'Changed'} ${saved.name}`); if (a.play !== false) sfxPlay(p.id, saved.id);
+      return ok({ pack: p.name, sound: sfxBrief(saved) }, await sfxPic([saved]));
+    },
+    async list_sfx(a) {
+      if (a.pack === undefined && a.all) return ok({ packs: sfx.list() });
+      const p = packOf(a.pack); return ok({ pack: p.name, folder: p.dir, packs: sfx.list().map((x) => x.name), sounds: p.sounds.map((x) => ({ id: x.id, name: x.name, kind: x.kind, seconds: X.describe(x).seconds, layers: x.layers.length })), kinds: X.KINDS }, a.picture && p.sounds.length ? await sfxPic(p.sounds.slice(0, 12)) : null);
+    },
+    new_sfx_pack(a, by) { const p = sfx.create(a.name || 'Sound pack'); setSetting({ activeSfxPack: p.id }); sfxChanged(p.id, null, who(by)); return ok({ created: p.name, folder: p.dir }); },
+    play_sfx(a) { const p = packOf(a.pack); const s = p.find(a.sound); sfxPlay(p.id, s.id); return ok(`Playing “${s.name}” in Mixer.`); },
+    async export_sfx(a, by) {
+      const p = packOf(a.pack); const f = (a.format || 'wav').toLowerCase(); if (!['wav', 'mp3', 'js', 'all'].includes(f)) throw new Error('format is wav, mp3, js or all.');
+      const folder = a.folder ? path.resolve(String(a.folder).replace(/^~(?=$|[\\/])/, require('os').homedir())) : null;
+      const r = exportPack(p, { ids: a.sounds, format: f, folder, variations: a.variations || 0, amount: a.variation_amount || 0.25 });
+      if (folder) { p.exportDir = folder; p.save(); } if (by && by !== 'you') activity(`Exported ${r.files.length} files from ${p.name}`);
+      return ok({ pack: p.name, folder: r.folder, files: r.files.map((x) => path.basename(x)) });
+    },
+    async sfx_to_song(a, by) {
+      const p = packOf(a.pack); const snd = p.find(a.sound); const y = X.render(snd); const tmp = path.join(require('os').tmpdir(), `${require('./sfxlib').fileSafe(snd.name)}.wav`); fs.writeFileSync(tmp, Buffer.from(X.wav(y)));
+      const pr = active(); const rel = pr.importAudio(tmp); try { fs.unlinkSync(tmp); } catch {}
+      if (a.pad) { const voice = T.voiceName(a.pad); if (!voice) throw new Error('pad is a drum voice: ' + T.DRUM_VOICES.join(', ')); const t = edit(by, `“${snd.name}” on the ${voice} pad`, (s) => { const tr = a.track ? SG.findTrack(s, a.track) : s.tracks.find((x) => x.kind === 'drums'); if (!tr || tr.kind !== 'drums') throw new Error('No drum track to put it on. Add one or name it with track.'); tr.pads = { ...(tr.pads || {}), [voice]: { file: rel, gain: 0, tune: 0 } }; return tr; }); return ok({ track: t.name, pad: voice, file: rel }); }
+      const c = edit(by, `Placed “${snd.name}”`, (s) => { let t = a.track ? SG.findTrack(s, a.track) : s.tracks.find((x) => x.kind === 'audio' && /sfx|sound/i.test(x.name)); if (t && t.kind !== 'audio') throw new Error(`“${t.name}” isn’t an audio track.`); if (!t) t = SG.addTrack(s, { kind: 'audio', name: 'SFX' }); return SG.addAudioClip(s, { track: t.id, start: SG.barToBeat(s, bar(a.at_bar)) + (+a.beat || 0), file: rel, srcDur: y.length / X.SR, name: snd.name }); });
+      return ok({ clip: c.id, bar: SG.beatToBar(song(), c.start), file: rel });
+    },
+    make_8bit(a, by) { const ch = edit(by, 'Made it 8-bit', (s) => SG.chipify(s, { console: a.console || 'nes', crush: !!a.crush, keepEffects: !!a.keep_effects })); return ok({ changed: ch, tip: 'Chords on a Chip Chord track are arpeggiated automatically. Bass sounds best on the triangle/wave channel kept in octave 2–3. For more grit add crush (bits 8, rate 11025–22050) on the master.' }); },
+  });
   function brief(f) { const spec = SND.EFFECTS[f.type].params; const o = { id: f.id, type: f.type }; if (!f.on) o.on = false; for (const k of Object.keys(spec)) o[k] = f[k]; return o; }
   async function clipResult(c) {
     const s = song(); const t = SG.findTrack(s, c.track); const sum = SG.summary(s, { track: t.id }).tracks[0]; const me = sum.clips.find((x) => x.id === c.id);
@@ -237,6 +296,19 @@ MIXING — WHAT GOOD LOOKS LIKE
 
 CHECKING YOUR WORK
 You can't hear, so measure. analyze renders exactly what the user will hear and returns numbers plus a waveform/spectrogram with bar numbers: silence where you expected sound means a muted track or a wrong bar; a dense red top edge means clipping; a bright band at the bottom across everything means too much low end. view kind "notes" shows a piano roll (rows tinted in the key) or drum grid to check rhythm and pitches. get_song lists every clip with its bar.
+
+8-BIT MUSIC (chiptune)
+• new_song with template "chiptune" (NES) or "gameboy" sets up the console's channels: Pulse 1 (lead), Pulse 2 (chords, arpeggiated), Triangle/Wave (bass), Noise (drums). make_8bit converts an existing song.
+• Chip instruments: nes-pulse-12 / nes-pulse-25 (leads with delayed vibrato), nes-square (harmony), nes-triangle (bass, no volume control — vary rhythm, not velocity), chip-chord and gb-chord (write block chords and they play as a fast arpeggio, the NES trick), chip-echo (copy a lead 1/8 later at −8 dB for the fake echo), gb-wave, sid-saw, chip-noise and chip-noise-metal (pitched noise). Kits: nes, gameboy (triangle kicks, noise snares/hats with stepped decays).
+• Rhythms: chip-arp (1/32 chord tones up two octaves), chip-arp16 (triplets), bass-chip (root-octave bounce), bass-gallop. Grooves: chiptune, chip-drive, chip-march.
+• Style: 130–170 BPM, keys like E/A/D minor or C major, short catchy 2–4 bar motifs, call-and-response between pulses, a fast arp for harmony, few simultaneous notes per channel (they're mono), no reverb. Optional grit: a crush effect (bits 8, rate 11025–22050) on the master.
+
+GAME SOUND EFFECTS
+• make_sfx builds sounds from a kind and saves them in a pack (~/Documents/Mixer/Sound FX/<pack>): ${Object.entries(X.KINDS).map(([k, v]) => `${k} (${v.toLowerCase()})`).join(', ')}. variations: 2–8 makes alternatives side by side to choose from. retro:true gives 8-bit / 22 kHz output.
+• Every sound is the classic sfxr synth in up to 4 layers (each with delay s, gain dB, pitch semitones). Parameters (layer.params): ${Object.entries(X.PARAMS).map(([k, v]) => `${k} ${v[0]}..${v[1]}`).join(', ')}. wave: 0 square, 1 saw, 2 sine, 3 noise, 4 triangle. freq 0.3 ≈ 230 Hz, 0.5 ≈ 650 Hz, 0.7 ≈ 1.3 kHz; slide < 0 falls, > 0 rises; sustain/decay ~0.3 ≈ 0.2 s; repeat retriggers (alarms, power-ups); arpMod > 0 jumps up (coins), < 0 down.
+• Layer to add weight: a sine thud an octave down under an explosion, a noise whoosh before a sword hit, a short high blip on top of a pickup.
+• You can't hear them: the picture shows each sound's waveform (length, punch, fade) and spectrogram (pitch going up or down, noise vs tone). Keep UI sounds under 0.15 s, pickups 0.2–0.5 s, explosions 0.6–1.5 s.
+• export_sfx writes WAV or MP3 files (+ sounds.json), or a JavaScript module that synthesizes the pack in the browser (play('coin')) — tiny, good for web games. variations:n adds name_1…name_n so repeated sounds don't feel robotic. sfx_to_song places a sound in the song or on a drum pad.
 
 LIMITS
 Instruments are synthesized (no sampled orchestras). No vocals or speech. Imported files are mixes, not stems. Pitch/stretch on audio is good for ±3 semitones and 0.75–1.33× before it sounds processed.`;

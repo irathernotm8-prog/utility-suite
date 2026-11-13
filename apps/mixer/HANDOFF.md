@@ -11,7 +11,7 @@ tools, code map and data folders.
 cd ~/Downloads/Utility\ Package/apps/mixer
 npm install
 npm start
-npm test                                        # 19 Node checks, no network
+npm test                                        # 25 Node checks, no network
 xvfb-run -a npx electron test/e2e-main.js /tmp/e2e    # (Linux) every plugin tool through the real engine + the MCP stdio → bridge path
 xvfb-run -a npx electron test/shots.js /tmp/shots     # (Linux) every screen, playback, no window errors
 npx electron test/calibrate.js                  # after changing an instrument or kit: regenerates src/core/levels.js
@@ -51,6 +51,19 @@ Pull before starting work. Stay inside `apps/mixer`. `tools/`, `suite.json` and 
   key (Krumhansl–Kessler on a chromagram), band balance %, stereo width / low-end width, per-bar energy → sections, and
   a mix check with fixes, plus a waveform/spectrogram picture with bar numbers. `write_notes`/`write_chords`/
   `write_drums` return a piano roll or drum grid; `get_song`/`arrange` return the arrangement.
+
+## 0.2.0 — 8-bit music and game sound effects
+
+- **Chip voices** (`src/audio/synth.js`): new osc types `pulse12`, `pulse25c`, `pulse50`, `tri4` (NES 32-step triangle), `gbwave`, `saw4` — single-cycle tables turned into 256-harmonic PeriodicWaves so the steps survive; `model: 'lfsr'` plays a 15-bit shift-register noise buffer (long, or short/93-step "metallic") at a clock set by the note. 11 Chip-category instruments; `chip-lead`/`chip-arp` moved into Chip.
+- **Chip chords**: an instrument with `arp: { ms }` (Chip Chord, Game Boy Chord) plays notes that start together as a fast single-voice arpeggio (`chipArp` in `src/audio/engine.js`, cached per clip).
+- **NES / Game Boy kits** (`chip: 'nes'|'gb'` in `sounds.js`): every voice is built from the triangle and noise channels with stepped 4-bit decays (`CHIPV` in `drums.js`).
+- **8-bit crush**: `crush` gained `rate` (sample-and-hold) via the `mx-crush` AudioWorklet (`src/audio/worklets.js`); `MXFx.prepare(ctx)` loads it for playback, preview and offline renders; without it the old WaveShaper (bits only) is used.
+- **Song helpers** (`song.js`): `chipTemplate` (Pulse 1 lead, Pulse 2 chip chords, Triangle/Wave bass, Noise drums) and `chipify` (by role: bass/low → triangle, chordy (simultaneous notes, absolute time) → chip chord, others → pulses; drums → console kit; strips reverb/chorus/width; optional master crush). Theory: `chip-arp`, `chip-arp16`, `bass-chip`, `bass-gallop`; grooves `chiptune`, `chip-drive`, `chip-march`.
+- **Game sound effects** (`src/core/sfx.js`): the sfxr algorithm, sample-exact at 44.1 kHz with 8× oversampling, seeded (variation N is repeatable), up to 4 layers (delay/gain/pitch), normalised to −3 dBFS then `gain`, `bits`/`rate` output crush, 30 kinds (`KINDS`; layered ones in `LAYERED`). Packs: `src/sfxlib.js` (`Sound FX/<Pack>/pack.json`); exports WAV (16-bit mono 44.1k), MP3 (lamejs loaded with `vm` in the main process), `sounds.json`, and a JS module that embeds `sfx.js` and synthesizes at runtime. The window's **Sound FX** view is `src/renderer/sfx.js`; it renders and plays sounds itself (no engine round trip).
+- Plugin: 8 new tools (30 total) — see README. `new_song` takes `template`.
+- Levels re-calibrated for the new instruments and kits (`test/calibrate.js`).
+- Verified here: 25 Node checks (incl. sfx kinds/levels/seeding/slides/layers/8-bit output, pack export and the JS module producing identical audio, chip presets/rhythms/template/chipify); the e2e run adds an NES song from the template (−10 LUFS, peak under the ceiling, crush at 22 kHz), make_8bit to Game Boy, a sound pack with variations, layered/custom/retro sounds, edits, a 26-file export (WAV + MP3 + extra takes + JS), sounds placed as a clip and on a pad, and the MCP stdio path (30 tools); screenshots of the 8-bit song, chip chords, the Chip sounds, Sound FX (layers, variations, export), no window errors.
+- Check first on the Mac: the AudioWorklet loads from `app.asar` in a packaged build (if not, crush falls back to bits only — no rate reduction); and that exported JS modules play in a real browser game (the module needs a user gesture before audio, like any web audio).
 
 ## State at first release (0.1.0)
 

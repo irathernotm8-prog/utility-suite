@@ -52,6 +52,31 @@
   };
   const MAP = { kick: 'kick', snare: 'snare', clap: 'clap', rim: 'rim', hat: 'hat', openhat: 'hat', tom_low: 'tom', tom_mid: 'tom', tom_high: 'tom', crash: 'cymbal', ride: 'cymbal', shaker: 'shaker', cowbell: 'cowbell', perc: 'perc', snap: 'snap', riser: 'riser', downlifter: 'downlifter', impact: 'impact' };
 
+  // ───── 8-bit kits: drums built only from what an NES / Game Boy has — the triangle channel and the noise channel —
+  // with stepped (4-bit) volume decays
+  function stepEnv(ctx, t, peak, dur, attack = 0) {
+    const gn = ctx.createGain(); const n = 48, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1); const lvl = attack && x < attack ? x / attack : Math.exp(-(x - attack) * 4.2) * (i === n - 1 ? 0 : 1); c[i] = (Math.round(lvl * 15) / 15) * peak; }
+    gn.gain.setValueAtTime(0, Math.max(0, t - 0.001)); gn.gain.setValueCurveAtTime(c, t, Math.max(0.01, dur)); return gn;
+  }
+  function chipTri(ctx, out, t, f0, f1, dur, peak) { const o = ctx.createOscillator(); o.setPeriodicWave(SY.wave(ctx, 'tri4')); o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur * 0.8); const e = stepEnv(ctx, t, peak, dur); o.connect(e); e.connect(out); o.start(t); o.stop(t + dur + 0.02); }
+  function chipNoise(ctx, out, t, rate, dur, peak, { short = false, to = null, attack = 0 } = {}) { const s = ctx.createBufferSource(); s.buffer = SY.lfsr(ctx, short); s.loop = true; const r0 = clamp(rate / ctx.sampleRate, 0.01, 16); s.playbackRate.setValueAtTime(r0, t); if (to) s.playbackRate.exponentialRampToValueAtTime(clamp(to / ctx.sampleRate, 0.01, 16), t + dur); const e = stepEnv(ctx, t, peak, dur, attack); s.connect(e); e.connect(out); s.start(t, Math.random()); s.stop(t + dur + 0.02); }
+  const CHIPV = {
+    kick: (c, o, t, v, k) => { chipTri(c, o, t, 240 * k.f, 50 * k.f, 0.13, v); chipNoise(c, o, t, 18000 * k.f, 0.025, v * 0.35); },
+    snare: (c, o, t, v, k) => { chipNoise(c, o, t, 120000 * k.f, 0.15 * k.d, v * 0.75); chipTri(c, o, t, 230, 140, 0.06, v * 0.5); },
+    clap: (c, o, t, v, k) => { chipNoise(c, o, t, 80000 * k.f, 0.03, v * 0.7); chipNoise(c, o, t + 0.022, 80000 * k.f, 0.12 * k.d, v * 0.7); },
+    rim: (c, o, t, v) => chipTri(c, o, t, 950, 800, 0.035, v * 0.8),
+    hat: (c, o, t, v, k) => chipNoise(c, o, t, 330000 * k.f, 0.035 * k.d, v * 0.55),
+    openhat: (c, o, t, v, k) => chipNoise(c, o, t, 300000 * k.f, 0.22 * k.d, v * 0.5),
+    tom_low: (c, o, t, v) => chipTri(c, o, t, 150, 70, 0.2, v), tom_mid: (c, o, t, v) => chipTri(c, o, t, 210, 100, 0.17, v), tom_high: (c, o, t, v) => chipTri(c, o, t, 290, 140, 0.14, v),
+    crash: (c, o, t, v, k) => chipNoise(c, o, t, 190000 * k.f, 0.9 * k.d, v * 0.55), ride: (c, o, t, v, k) => chipNoise(c, o, t, 160000 * k.f, 0.55 * k.d, v * 0.4, { short: true }),
+    shaker: (c, o, t, v, k) => chipNoise(c, o, t, 360000 * k.f, 0.06, v * 0.4, { attack: 0.3 }), cowbell: (c, o, t, v, k) => chipNoise(c, o, t, 52000 * k.f, 0.16, v * 0.5, { short: true }),
+    perc: (c, o, t, v) => chipTri(c, o, t, 520, 380, 0.08, v * 0.8), snap: (c, o, t, v, k) => chipNoise(c, o, t, 220000 * k.f, 0.045, v * 0.6),
+    riser: (c, o, t, v, k, P, b) => { const L = (P.len * 60) / (b || 120); chipNoise(c, o, t, 6000, L, v * 0.5, { to: 320000, attack: 0.9 }); },
+    downlifter: (c, o, t, v, k, P, b) => { const L = (P.len * 60) / (b || 120); chipNoise(c, o, t, 300000, L, v * 0.5, { to: 5000 }); },
+    impact: (c, o, t, v, k) => { chipTri(c, o, t, 120, 30, 0.6, v); chipNoise(c, o, t, 26000 * k.f, 1.2, v * 0.6); },
+  };
+  const CHIPK = { nes: { f: 1, d: 1 }, gb: { f: 0.75, d: 0.8 } };
+
   // a hit: kitId + voice name, or a sample pad { buffer, gain, tune }
   function hit(ctx, out, kitId, voice, t, vel, o = {}) {
     const pad = o.pad;
@@ -59,7 +84,9 @@
     const fn = V[MAP[voice]]; if (!fn) return null; const P = SND.kitVoice(kitId, voice);
     if (kitId === 'fx' && voice === 'crash') P.decay = 3.2;
     const hg = ctx.createGain(); hg.connect(out); // one node per hit to disconnect when it's over
-    const L = root.MXLevels && root.MXLevels.kit[kitId] && root.MXLevels.kit[kitId][voice]; fn(ctx, hg, t, clamp(vel, 0.02, 1) * (L || LEVEL), P, o);
+    const L = root.MXLevels && root.MXLevels.kit[kitId] && root.MXLevels.kit[kitId][voice]; const kit = SND.kit(kitId);
+    if (kit && kit.chip && CHIPV[voice]) { CHIPV[voice](ctx, hg, t, clamp(vel, 0.02, 1) * (L || LEVEL), CHIPK[kit.chip] || CHIPK.nes, P, o.bpm); return { node: hg, end: t + Math.max(1.4, P.len ? (P.len * 60) / (o.bpm || 120) + 0.1 : 0) }; }
+    fn(ctx, hg, t, clamp(vel, 0.02, 1) * (L || LEVEL), P, o);
     const len = P.len ? (P.len * 60) / (o.bpm || 120) : 0;
     return { node: hg, end: t + Math.max(len, (Math.max(P.decay || 0, P.noiseDecay || 0, P.toneDecay || 0) * 1.6) + 0.15, 0.3) };
   }

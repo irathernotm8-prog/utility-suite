@@ -242,3 +242,34 @@ input[type=range]:focus { outline: none; } input[type=range]:focus-visible::-web
 .strip.master .mleft { min-height: 0; display: flex; flex-direction: column; gap: 8px; } .strip.master .check { flex: 1; min-height: 0; overflow: auto; padding-right: 2px; }
 .strip.master .mright { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 0; } .strip.master .mright .st-fader { flex: 1; min-height: 0; width: 100%; }
 .strip.master .fxl { min-height: 0; }
+
+/* ── Sound FX */
+.sfx { flex: 1; display: grid; grid-template-columns: 260px 1fr; min-height: 0; }
+.sfx-list { border-right: 1px solid var(--line); background: var(--bg-side); padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.sfx-items { overflow: auto; display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+.sfx-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+.sfx-item:hover { background: var(--panel-2); } .sfx-item.on { background: color-mix(in srgb, var(--acc) 11%, var(--panel)); border-color: color-mix(in srgb, var(--acc) 35%, transparent); }
+.sfx-item b { font-size: 13px; font-weight: 650; }
+.sfx-main { overflow: auto; padding: 14px 20px 30px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.kinds { display: flex; flex-direction: column; gap: 6px; }
+.kind-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; } .kind-h { width: 62px; font-size: 11px; font-weight: 750; color: var(--mut); text-transform: uppercase; letter-spacing: .05em; }
+.kind { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); color: var(--fg-2); font-size: 12px; font-weight: 600; }
+.kind:hover { border-color: var(--acc); color: var(--fg); background: color-mix(in srgb, var(--acc) 10%, var(--panel)); }
+.sfx-stage { position: relative; height: 190px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line-2); background: var(--lane); flex: none; cursor: pointer; }
+.sfx-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sfx-stage.pulse { animation: sfxpulse .35s ease-out; } @keyframes sfxpulse { from { box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 60%, transparent); } to { box-shadow: 0 0 0 0 transparent; } }
+.sfx-play { position: absolute; left: 14px; top: 12px; width: 46px; height: 46px; border-radius: 14px; border: 0; display: grid; place-items: center; background: var(--acc-grad); color: var(--on-acc); box-shadow: 0 8px 22px color-mix(in srgb, var(--acc) 30%, transparent); }
+.sfx-facts { position: absolute; right: 12px; top: 10px; display: flex; gap: 5px; }
+.sfx-tools, .layers { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn.on-acc { border-color: color-mix(in srgb, var(--acc) 60%, transparent); color: var(--acc); background: color-mix(in srgb, var(--acc) 12%, var(--panel-2)); }
+.sfx-params { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.pg { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.pg-h { font-size: 11px; font-weight: 750; color: var(--mut); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.kv.sp { grid-template-columns: 110px 1fr 40px; font-size: 12px; }
+.vars { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line-2); }
+.var-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.var { border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); padding: 6px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; }
+.var.on { border-color: var(--acc); } .var-cv { position: relative; height: 48px; } .var-cv canvas { position: absolute; inset: 0; display: block; }
+.style-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.style-pick button { text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--panel-2); display: flex; flex-direction: column; gap: 2px; }
+.style-pick button.on { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, var(--panel-2)); } .style-pick b { font-size: 13px; } .style-pick span { font-size: 11.5px; color: var(--mut); }

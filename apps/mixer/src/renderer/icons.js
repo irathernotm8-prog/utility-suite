@@ -1,6 +1,8 @@
 // Mixer — line icons (the suite's set plus audio ones) (24×24, stroke = currentColor). icon('name', size) → SVG string.
 'use strict';
 const ICONS = {
+  gamepad: '<path d="M6 8h12a4 4 0 0 1 4 4v2.5a3.5 3.5 0 0 1-6.3 2.1L14.5 15h-5l-1.2 1.6A3.5 3.5 0 0 1 2 14.5V12a4 4 0 0 1 4-4Z"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="11.5" r=".6" fill="currentColor"/><circle cx="18" cy="13.5" r=".6" fill="currentColor"/>',
+  chip: '<rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5"/>',
   arrange: '<rect x="3" y="4" width="8" height="4" rx="1.5"/><rect x="9" y="10" width="12" height="4" rx="1.5"/><rect x="5" y="16" width="10" height="4" rx="1.5"/>',
   mixer: '<path d="M6 3v18M12 3v18M18 3v18"/><rect x="4" y="13" width="4" height="3" rx="1" fill="currentColor"/><rect x="10" y="7" width="4" height="3" rx="1" fill="currentColor"/><rect x="16" y="11" width="4" height="3" rx="1" fill="currentColor"/>',
   wave: '<path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h0"/>',

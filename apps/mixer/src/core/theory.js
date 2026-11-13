@@ -133,6 +133,10 @@
     'bass-octaves': { bass: true, desc: 'Root and the octave above, alternating 8ths (disco)', make: (L) => steps(L, 0.5, 0.45, 'bass').map((x, i) => [x[0], x[1], i % 2 ? 'oct' : 'bass']) },
     'bass-sync': { bass: true, desc: 'Syncopated: 1, the “and” of 2, 4', make: (L) => tile(L, 4, [[0, 1.2], [1.5, 1.2], [3, 0.8]], 'bass') },
     'bass-walk': { bass: true, desc: 'Walking: root, 3rd, 5th, then a step toward the next chord', make: (L) => tile(L, 4, [[0, 0.95], [1, 0.95], [2, 0.95], [3, 0.95]], 'walk') },
+    'chip-arp': { desc: '8-bit arpeggio: chord tones cycled every 1/32 note, up an octave and back (use a Chip instrument)', make: (L, n) => { const seq = [...Array(n).keys(), ...[...Array(n).keys()].map((i) => i + 100)]; const o = []; let k = 0; for (let b = 0; b < L - 1e-6; b += 0.125) o.push([b, 0.12, seq[k++ % seq.length]]); return o; } },
+    'chip-arp16': { desc: '8-bit arpeggio in 1/16 triplets, up and down', make: (L, n) => arp(L, n, 1 / 6, 'updown') },
+    'bass-chip': { bass: true, desc: '8-bit bass: root and octave bouncing in 8ths (triangle-channel style)', make: (L) => steps(L, 0.5, 0.4, 'bass').map((x, i) => [x[0], x[1], i % 2 ? 'oct' : 'bass']) },
+    'bass-gallop': { bass: true, desc: 'Galloping bass: an 8th then two 16ths, over and over (action / boss themes)', make: (L) => tile(L, 1, [[0, 0.45], [0.5, 0.22], [0.75, 0.22]], 'bass') },
     'bass-808': { bass: true, desc: 'Long 808 notes with a pickup before the next chord', make: (L) => (L >= 2 ? [[0, L - 0.75, 'bass'], [L - 0.5, 0.45, 'bass']] : [[0, L, 'bass']]) },
   };
   function steps(L, every, len, which, off = 0) { const o = []; for (let b = off; b < L - 1e-6; b += every) o.push([b, Math.min(len, L - b), which]); return o; }
@@ -153,6 +157,7 @@
           let ps;
           if (which === 'all') ps = v; else if (which === 'bass') ps = [b]; else if (which === 'oct') ps = [b + 12];
           else if (which === 'walk') { const beat = Math.round(st % 4); const third = b + (c.intervals.includes(3) ? 3 : 4); ps = [beat === 0 ? b : beat === 1 ? third : beat === 2 ? b + 7 : (next > b ? next - 1 : next + (K && inKey(next + 2, K) ? 2 : 1))]; }
+          else if (which >= 100) ps = [v[Math.min(which - 100, v.length - 1)] + 12];
           else ps = [v[Math.min(which, v.length - 1)]];
           for (const p of ps) { const j = humanize ? (Math.random() - 0.5) * humanize : 0; notes.push({ p, t: +(t + st + j * 0.02).toFixed(4), d: +d.toFixed(4), v: Math.max(0.05, Math.min(1, velocity + j * 0.08)) }); }
         }
@@ -186,6 +191,9 @@
     reggaeton: { desc: 'Dembow: kick on every beat, snare on 4-and/2-and', p: { kick: 'x...x...x...x...', snare: '...x..x....x..x.', hat: 'x.x.x.x.x.x.x.x.' } },
     afrobeats: { desc: 'Afrobeats: syncopated kick, rim pattern and shaker', p: { kick: 'x..x..x...x..x..', rim: '..x..x....x..x..', shaker: 'xoxoxoxoxoxoxoxo', clap: '....x.......x...' } },
     funk: { desc: 'Funk: syncopated kick, ghost snares, 16th hats', p: { kick: 'x.x....x..x.....', snare: '..g.X.g..g..X..g', hat: 'xoxoxoxoxoxoxoxo' } },
+    chiptune: { desc: '8-bit beat: kick on 1 and 3, noise snare on 2 and 4, steady noise hats (use the NES or Game Boy kit)', p: { kick: 'x.......x.......', snare: '....x.......x...', hat: 'x.o.x.o.x.o.x.o.' } },
+    'chip-drive': { desc: '8-bit driving beat for action levels: busy kick, 16th hats', p: { kick: 'x..x..x.x.x..x..', snare: '....X.......X..o', hat: 'xoxoxoxoxoxoxoxo' } },
+    'chip-march': { desc: '8-bit march / boss intro: snare rolls on a steady kick', p: { kick: 'x...x...x...x...', snare: '..o.X.o...o.X.oo', openhat: '............x...' } },
     breakbeat: { desc: 'Breakbeat (amen-flavoured)', p: { kick: 'x.x.......xx....', snare: '....x..x.x..x..x', hat: 'x.x.x.x.x.x.x.x.' } },
   };
   // swing: 0.5 = straight, 0.66 = triplet feel. Delays every off 16th (or 8th if grid=8).

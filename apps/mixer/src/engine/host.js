@@ -39,6 +39,7 @@ const jobs = {
     if (a.kind === 'waveform') return jobs.analyze({ ...a, picture: true });
     throw new Error('Pictures: arrangement, notes or waveform.');
   },
+  async sfx(a) { const items = a.items.map((it) => ({ name: it.name, lines: it.lines, y: MXSfx.render(it.sound) })); return { picture: PIC.sfxSheet(items) }; },
   async peaks(a) { const buf = await assets.get(a.file); const d = []; for (let c = 0; c < buf.numberOfChannels; c++) d.push(AN.peaks(buf.getChannelData(c), a.cols || 2000)); return { peaks: d, seconds: buf.duration }; },
   async export(a) {
     let song = SG.hydrate(JSON.parse(JSON.stringify(a.song))); const B = SG.bpb(song);
