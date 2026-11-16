@@ -87,7 +87,7 @@
 
   A.newSheetMenu = (anchor) => D.menu(anchor, [
     { header: 'New sheet' },
-    ...['data', 'slide', 'docu', 'report', 'dash'].map((t) => ({ label: `${D.TYPE_META[t].label}`, icon: D.TYPE_META[t].icon, kbd: '.' + (t === 'docu' ? 'docx' : D.TYPE_META[t].ext), onClick: () => A.addSheet(t) })),
+    ...['data', 'slide', 'docu', 'dash'].map((t) => ({ label: `${D.TYPE_META[t].label}`, icon: D.TYPE_META[t].icon, kbd: '.' + (t === 'docu' ? 'docx' : D.TYPE_META[t].ext), onClick: () => A.addSheet(t) })),
     { sep: true },
     { label: 'Data set (combine files)…', icon: 'layers', onClick: () => D.dataset.start() },
     { label: 'Open file as sheet…', icon: 'fileUp', kbd: 'Ctrl+Shift+O', onClick: () => D.io.openFiles() }
@@ -112,7 +112,7 @@
       const host = $('sheet-host');
       if (view) { view.destroy(); view = null; } mountedId = null;
       host.innerHTML = '';
-      host.append(h('div', { class: 'empty-project' }, h('div', { class: 'ep-title' }, 'Add your first sheet'), h('div', { class: 'type-cards' }, ['data', 'slide', 'docu', 'report', 'dash'].map((t) => typeCard(t, () => A.addSheet(t))))));
+      host.append(h('div', { class: 'empty-project' }, h('div', { class: 'ep-title' }, 'Add your first sheet'), h('div', { class: 'type-cards' }, ['data', 'slide', 'docu', 'dash'].map((t) => typeCard(t, () => A.addSheet(t))))));
       return;
     }
     A.activate(p.activeId, true);
@@ -140,7 +140,7 @@
     const palBtn = h('button', { class: 'palette-btn', onclick: () => A.palette() }, h('span', { html: D.icon('search', 14) }), h('span', null, p ? 'Search sheets, slides & commands' : 'Search commands'), h('kbd', null, 'Ctrl K'));
     top.append(palBtn);
     top.append(h('div', { class: 'top-spacer' }));
-    top.append(D.btn('sparkles', 'Ask Datum: build reports, dashboards, charts and insights by asking (Ctrl+J)', () => D.ai.toggle(), { label: 'Ask Datum', cls: 'top ai-top' }));
+    top.append(D.btn('sparkles', 'Ask Datum: build dashboards, charts and insights by asking (Ctrl+J)', () => D.ai.toggle(), { label: 'Ask Datum', cls: 'top ai-top' }));
     const openBtn = D.btn('folderOpen', 'Open', () => openMenu(openBtn), { label: 'Open', caret: true, cls: 'top' });
     top.append(openBtn);
     if (p) {
@@ -209,7 +209,7 @@
         s.dataset ? { label: 'Refresh data set', icon: 'refresh', onClick: () => D.dataset.refresh(s) } : null,
         s.type === 'data' ? { label: 'Build dashboard', icon: 'grid', onClick: () => D.sheetTypes.dash.createFor([s.id]) } : null,
         s.type === 'data' && D.board.siblings(s).length > 1 ? { label: `Build dashboard from all ${D.board.siblings(s).length} tabs like this`, icon: 'grid', onClick: () => { const sib = D.board.siblings(s); D.sheetTypes.dash.createFor(sib.map((x) => x.id), `${String(s.name).split(' · ')[0]} Dashboard`); } } : null,
-        s.type === 'data' ? { label: 'Build report', icon: 'sparkles', onClick: () => D.sheetTypes.report.quickDashboard(s, D.links.autoRange(s)) } : null,
+        s.type === 'data' ? { label: 'Build dashboard - choose what it shows…', icon: 'sparkles', onClick: () => D.dash.open(s, D.links.autoRange(s)) } : null,
         { sep: true },
         { label: 'Move left', icon: 'arrowUp', disabled: i === 0, onClick: () => moveTab(i, i - 1) },
         { label: 'Move right', icon: 'arrowDown', disabled: i === p.sheets.length - 1, onClick: () => moveTab(i, i + 1) },
@@ -268,7 +268,7 @@
       h('div', { class: 'hero' },
         h('div', { class: 'hero-mark', html: '<svg viewBox="0 0 32 32" width="56" height="56"><defs><linearGradient id="dmT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1C2A4A"/><stop offset="1" stop-color="#060A14"/></linearGradient><linearGradient id="dmD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7AA6FF"/><stop offset="1" stop-color="#2F6BFF"/></linearGradient></defs><rect x="1.5" y="1.5" width="29" height="29" rx="8" fill="url(#dmT)" stroke="#2F4A80" stroke-width="1"/><path fill="url(#dmD)" fill-rule="evenodd" d="M8.75 8.54H15.8C20.3 8.54 23 11.92 23 16C23 20.08 20.3 23.47 15.8 23.47H8.75ZM12.34 12.06V19.95H15.58C17.7 19.95 19.25 18.25 19.25 16C19.25 13.75 17.7 12.06 15.58 12.06Z"/><circle cx="23.25" cy="9.17" r="1.76" fill="#00C2FF"/></svg>' }),
         h('h1', null, 'datum'),
-        h('p', null, 'Spreadsheets, slides, documents, reports and dashboards in one project, all linked, so a number changed once updates everywhere.'),
+        h('p', null, 'Spreadsheets, slides, documents and dashboards in one project, all linked, so a number changed once updates everywhere.'),
         h('div', { class: 'hero-actions' },
           h('button', { class: 'btn primary lg', onclick: async () => { await D.io.newProject('blank'); } , html: D.icon('plus', 16) + '<span>New project</span>' }),
           h('button', { class: 'btn lg', onclick: () => D.io.openFolder(), html: D.icon('folderOpen', 16) + '<span>Open project folder</span>' }),
@@ -294,7 +294,7 @@
               h('span', { class: 'rr-time' }, D.fmtTime(r.openedAt)), more);
           }), rec.some((r) => r.missing) ? h('button', { class: 'link-btn rr-clear', onclick: async () => { await D.native.recentClearMissing(); A.renderHome(); } }, 'Remove folders that no longer exist') : null) : h('div', { class: 'recent-empty' }, 'Projects you save or open show up here. Drop any folder or files onto this window to open them.'))),
       h('div', { class: 'home-h' }, 'Four sheets, one project'),
-      h('div', { class: 'type-cards' }, ['data', 'slide', 'docu', 'report', 'dash'].map((t) => typeCard(t, async () => { await D.io.newProject('blank'); if (D.project()) { D.project().sheets = []; A.addSheet(t); } })))
+      h('div', { class: 'type-cards' }, ['data', 'slide', 'docu', 'dash'].map((t) => typeCard(t, async () => { await D.io.newProject('blank'); if (D.project()) { D.project().sheets = []; A.addSheet(t); } })))
     ));
   };
 
@@ -361,17 +361,18 @@
         const T = D.sheetTypes[s.type];
         if (T.outline) T.outline(s).forEach((o) => add(o.label, s.type === 'slide' ? 'slide' : 'heading', o.go, s.name, 'Inside sheets'));
       });
-      ['data', 'slide', 'docu', 'report', 'dash'].forEach((t) => add(`New ${D.TYPE_META[t].label}`, D.TYPE_META[t].icon, () => A.addSheet(t), D.TYPE_META[t].ext));
+      ['data', 'slide', 'docu', 'dash'].forEach((t) => add(`New ${D.TYPE_META[t].label}`, D.TYPE_META[t].icon, () => A.addSheet(t), D.TYPE_META[t].ext));
       add('Save project', 'save', () => D.io.save(), 'Ctrl+S');
       add('Save as new folder…', 'save', () => D.io.save(true), 'Ctrl+Shift+S');
       add('Export whole project as one PDF', 'pdf', () => D.io.exportAllPdf());
       const a = D.active();
       if (a) add(`Export ${a.name}`, 'download', () => D.io.exportSheet(a));
       add('Brand kit', 'palette', () => A.brandKit());
+      add('AI settings · connect Datum to Claude or ChatGPT', 'sparkles', () => D.ai.connect());
       add('Insert live value (copy to clipboard)', 'zap', () => D.links.pickToken((tok) => { navigator.clipboard.writeText(tok); D.toast(`Copied ${tok} - paste it into any text`, 'ok'); }));
       D.dataSheets().filter((s) => !s.calcOf).forEach((s) => add(`Build dashboard from ${s.name}`, 'grid', () => D.sheetTypes.dash.createFor([s.id])));
       D.dataSheets().filter((s) => !s.calcOf).forEach((s) => add(`Find duplicates in ${s.name}`, 'copy', () => { D.app.activate(s.id, true); D.dupes.open(s); }));
-      D.dataSheets().forEach((s) => add(`Build report from ${s.name}`, 'sparkles', () => D.sheetTypes.report.quickDashboard(s, D.links.autoRange(s))));
+      D.dataSheets().filter((s) => !s.calcOf).forEach((s) => add(`Build dashboard from ${s.name} - choose what it shows`, 'sparkles', () => D.dash.open(s, D.links.autoRange(s))));
       p.sheets.filter((s) => s.type === 'docu').forEach((s) => add(`Turn ${s.name} into a deck`, 'wand', () => D.sheetTypes.docu.toDeck(s)));
       p.sheets.filter((s) => s.type === 'slide').forEach((s) => add(`Present ${s.name}`, 'play', () => D.sheetTypes.slide.present(s, 0), 'F5'));
       if (p.dir) add('Show project folder', 'folder', () => D.native.reveal(p.dir));

@@ -17,7 +17,7 @@
     const st = {
       tab: preset.tab || 'suggested',
       layout: preset.layout || 'landscape',
-      title: preset.title || `${sheet.name} Report`,
+      title: preset.title || `${sheet.name} Dashboard`,
       roles: { ...(preset.roles || {}) },
       grain: preset.grain || 'auto',
       insights: preset.insights !== false,
@@ -163,8 +163,8 @@
       const art = (w, hh, blocks) => `<svg viewBox="0 0 ${w} ${hh}" width="${w}" height="${hh}"><rect width="${w}" height="${hh}" rx="3" fill="#fff"/>${blocks}</svg>`;
       const layoutCard = (id, label, sub, svg) => h('button', { class: `dash-layout ${st.layout === id ? 'on' : ''}`, onclick: () => { st.layout = id; draw(); } }, h('span', { class: 'dl-art', html: svg }), h('b', null, label), h('span', null, sub));
       const cards = h('div', { class: 'dash-layouts' },
-        layoutCard('landscape', 'Landscape', 'Report pages', art(76, 58, '<rect width="76" height="9" fill="#0B1530"/><rect x="5" y="13" width="14" height="8" rx="1.5" fill="#DCE8FF"/><rect x="22" y="13" width="14" height="8" rx="1.5" fill="#DCE8FF"/><rect x="39" y="13" width="14" height="8" rx="1.5" fill="#DCE8FF"/><rect x="56" y="13" width="15" height="8" rx="1.5" fill="#DCE8FF"/><rect x="5" y="25" width="40" height="15" rx="1.5" fill="#2F6BFF" opacity=".75"/><rect x="48" y="25" width="23" height="15" rx="1.5" fill="#00C2FF" opacity=".6"/><rect x="5" y="44" width="66" height="10" rx="1.5" fill="#E5EAF3"/>')),
-        layoutCard('portrait', 'Portrait', 'Vertical, scrolls down', art(46, 58, '<rect width="46" height="7" fill="#0B1530"/><rect x="3" y="10" width="9" height="6" rx="1" fill="#DCE8FF"/><rect x="13.5" y="10" width="9" height="6" rx="1" fill="#DCE8FF"/><rect x="24" y="10" width="9" height="6" rx="1" fill="#DCE8FF"/><rect x="34.5" y="10" width="8.5" height="6" rx="1" fill="#DCE8FF"/><rect x="3" y="19" width="40" height="13" rx="1.5" fill="#2F6BFF" opacity=".75"/><rect x="3" y="35" width="19" height="10" rx="1.5" fill="#00C2FF" opacity=".6"/><rect x="24" y="35" width="19" height="10" rx="1.5" fill="#7C5CFF" opacity=".5"/><rect x="3" y="48" width="40" height="7" rx="1.5" fill="#E5EAF3"/>')),
+        layoutCard('landscape', 'Dashboard', 'PDF on landscape pages', art(76, 58, '<rect width="76" height="9" fill="#0B1530"/><rect x="5" y="13" width="14" height="8" rx="1.5" fill="#DCE8FF"/><rect x="22" y="13" width="14" height="8" rx="1.5" fill="#DCE8FF"/><rect x="39" y="13" width="14" height="8" rx="1.5" fill="#DCE8FF"/><rect x="56" y="13" width="15" height="8" rx="1.5" fill="#DCE8FF"/><rect x="5" y="25" width="40" height="15" rx="1.5" fill="#2F6BFF" opacity=".75"/><rect x="48" y="25" width="23" height="15" rx="1.5" fill="#00C2FF" opacity=".6"/><rect x="5" y="44" width="66" height="10" rx="1.5" fill="#E5EAF3"/>')),
+        layoutCard('portrait', 'Dashboard', 'PDF on portrait pages', art(46, 58, '<rect width="46" height="7" fill="#0B1530"/><rect x="3" y="10" width="9" height="6" rx="1" fill="#DCE8FF"/><rect x="13.5" y="10" width="9" height="6" rx="1" fill="#DCE8FF"/><rect x="24" y="10" width="9" height="6" rx="1" fill="#DCE8FF"/><rect x="34.5" y="10" width="8.5" height="6" rx="1" fill="#DCE8FF"/><rect x="3" y="19" width="40" height="13" rx="1.5" fill="#2F6BFF" opacity=".75"/><rect x="3" y="35" width="19" height="10" rx="1.5" fill="#00C2FF" opacity=".6"/><rect x="24" y="35" width="19" height="10" rx="1.5" fill="#7C5CFF" opacity=".5"/><rect x="3" y="48" width="40" height="7" rx="1.5" fill="#E5EAF3"/>')),
         layoutCard('slides', 'Slides', 'A deck, one idea per slide', art(76, 58, '<rect x="2" y="4" width="34" height="21" rx="2" fill="#EEF3FF" stroke="#C9D6F2"/><rect x="40" y="4" width="34" height="21" rx="2" fill="#EEF3FF" stroke="#C9D6F2"/><rect x="2" y="31" width="34" height="21" rx="2" fill="#EEF3FF" stroke="#C9D6F2"/><rect x="40" y="31" width="34" height="21" rx="2" fill="#EEF3FF" stroke="#C9D6F2"/><rect x="6" y="11" width="20" height="3" fill="#0B1530"/><rect x="44" y="9" width="26" height="12" rx="1" fill="#2F6BFF" opacity=".7"/><rect x="6" y="37" width="12" height="9" rx="1" fill="#DCE8FF"/><rect x="20" y="37" width="12" height="9" rx="1" fill="#DCE8FF"/><rect x="44" y="36" width="26" height="2.5" fill="#94A3B8"/><rect x="44" y="41" width="22" height="2.5" fill="#94A3B8"/><rect x="44" y="46" width="24" height="2.5" fill="#94A3B8"/>')));
       const titleIn = h('input', { class: 'input', value: st.title }); titleIn.addEventListener('input', () => { st.title = titleIn.value; });
       const chk = (key, label) => { const c = h('input', { type: 'checkbox' }); c.checked = st[key]; c.addEventListener('change', () => { st[key] = c.checked; }); return h('label', { class: 'chk' }, c, h('span', null, label)); };
@@ -174,20 +174,31 @@
         h('div', { class: 'row2' }, field('Title', titleIn),
           isDate ? field('Group dates by', sel([['auto', `Automatic (${p.grain === 'row' ? 'each row' : p.grain})`], ['row', 'Each row'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year']], st.grain, (v) => { st.grain = v; })) : h('div')),
         h('div', { class: 'dash-checks' }, chk('showKpis', 'Headline number cards'), chk('insights', 'Written insights')),
-        h('p', { class: 'muted small' }, 'Groupings, rankings and calculated metrics live as formulas on a “Calc” sheet, so the report updates when your data does.'));
+        h('p', { class: 'muted small' }, st.layout === 'slides' ? 'Slides are built from live formulas on a “Calc” sheet, so the deck updates when your data does.' : 'You get a live dashboard: every chart, number and sentence follows its filters and your data, and it exports to PDF at the page size you pick.'));
     }
 
     const build = () => {
       const views = st.tab === 'custom' ? st.charts.filter((v) => v.kind) : sugg.filter((s) => st.picks.has(s.id)).map((s) => s.view);
       if (!views.length && !st.showKpis) { D.toast('Pick at least one question or chart', 'warn'); return false; }
       const o = { layout: st.layout, title: st.title, roles: st.roles, grain: st.grain, insights: st.insights, showKpis: st.showKpis, calcMetrics: st.calcMetrics, views, kpiKeys: st.tab === 'custom' ? st.kpiKeys : null };
-      setTimeout(() => (target ? DS.rebuild(target, o) : DS.build(sheet, range, o)), 0);
+      setTimeout(() => {
+        if (o.layout === 'slides') return target && target.type === 'slide' ? DS.rebuild(target, o) : DS.build(sheet, range, o);
+        // dashboards: built live, or rebuilt in place when editing one
+        const into = target && target.type === 'dash' ? target : null;
+        if (into && o.title && o.title !== into.name && !D.project().sheets.some((x) => x !== into && x.name === o.title)) into.name = o.title;
+        D.board.fromQuick(sheet, range, o, { into });
+      }, 0);
       return true;
     };
     draw();
-    D.modal({ title: target ? `Edit “${target.name}”` : 'Quick report', width: 760, body, className: 'dash-modal', actions: [{ label: 'Cancel' }, { label: target ? 'Update report' : 'Build report', primary: true, onClick: build }] });
+    D.modal({ title: target ? `Edit “${target.name}”` : 'Quick dashboard', width: 760, body, className: 'dash-modal', actions: [{ label: 'Cancel' }, { label: target ? 'Update' : st.layout === 'slides' ? 'Build deck' : 'Build dashboard', primary: true, onClick: build }] });
   };
   DS.edit = (dash) => {
+    if (dash && dash.type === 'dash') {
+      const q = dash.quick, src = q && D.sheet(q.sheetId);
+      if (!src) return D.toast('The data this dashboard was set up from is no longer in the project', 'warn');
+      return DS.open(src, q.range || D.links.autoRange(src), { ...q.opts, title: (dash.header && dash.header.title) || dash.name, tab: q.opts && q.opts.views ? 'custom' : 'suggested' }, dash);
+    }
     const ds = dash && dash.dashSource;
     const src = ds && D.sheet(ds.sheetId);
     if (!src) return D.toast('The data this report was built from is no longer in the project', 'warn');

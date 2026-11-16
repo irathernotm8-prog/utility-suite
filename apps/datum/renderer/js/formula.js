@@ -949,7 +949,7 @@
     });
     for (const s of p.sheets) {
       if (s.type === 'slide') s.slides.forEach((sl, i) => walkEls(sl.elements, `${s.name} · slide ${i + 1}`));
-      if (s.type === 'report') walkEls(s.elements, s.name);
+      if (s.type === 'report' || s.type === 'dash') walkEls(D.elementsOf(s), s.name);
       if (s.type === 'docu' && s.html) {
         const re = new RegExp(`data-sheet="${sheetId}"`, 'g');
         const n = (s.html.match(re) || []).length;
@@ -967,7 +967,7 @@
     const fix = (s) => (typeof s === 'string' ? s.replace(re, (_, pre) => pre + F.quoteSheet(newName) + '!') : s);
     for (const s of p.sheets) {
       if (s.type === 'data') s.cells.forEach((row) => row.forEach((v, i) => { if (typeof v === 'string' && v.startsWith('=')) row[i] = fix(v); }));
-      const els = s.type === 'slide' ? s.slides.flatMap((x) => x.elements) : s.type === 'report' ? s.elements : [];
+      const els = D.elementsOf(s);
       els.forEach((e) => { e.text = fix(e.text); e.expr = fix(e.expr); e.compareExpr = fix(e.compareExpr); });
       if (s.type === 'docu' && s.html) s.html = s.html.replace(/data-expr="([^"]*)"/g, (m, ex) => `data-expr="${fix(ex.replace(/&#39;/g, "'")).replace(/'/g, '&#39;')}"`).replace(/\{\{([^}]*)\}\}/g, (m, ex) => `{{${fix(ex)}}}`);
     }

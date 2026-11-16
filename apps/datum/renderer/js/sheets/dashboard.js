@@ -13,14 +13,14 @@
   const tableCache = new Map();
   E.table = (sheet) => {
     const ids = (sheet.sources || []).filter((id) => D.sheet(id));
-    const key = ids.join('|') + ':' + D.dataVersion + ':' + (sheet.dedupe || '');
+    const key = ids.join('|') + ':' + JSON.stringify([sheet.ranges || null, sheet.roles || null]) + ':' + D.dataVersion + ':' + (sheet.dedupe || '') + ':' + JSON.stringify(sheet.calcMetrics || []);
     if (tableCache.has(key)) return tableCache.get(key);
     const cols = new Map(); const rows = [];
     const multi = ids.length > 1;
     for (const id of ids) {
       const s = D.sheet(id);
       let p;
-      try { p = DS().profile(s, D.links.autoRange(s)); } catch { continue; }
+      try { p = DS().profile(s, (sheet.ranges && sheet.ranges[id]) || D.links.autoRange(s), (sheet.roles && sheet.roles[id]) || {}); } catch { continue; }
       for (const c of p.cols) {
         if (!cols.has(c.name)) cols.set(c.name, { name: c.name, type: c.type === 'date' ? 'date' : c.type === 'number' ? 'number' : 'text', role: c.role, fmt: c.fmt, money: c.money, lowerBetter: c.lowerBetter, derived: c.derived ? { a: c.derived.a.name, b: c.derived.b.name, k: c.derived.k, kind: c.derived.kind } : null, distinct: c.distinct });
       }
@@ -36,6 +36,14 @@
       }
     }
     if (multi) cols.set('__sheet', { name: '__sheet', label: 'Sheet', type: 'text', role: 'dimension', distinct: ids.length });
+    // calculated metrics (CTR = Clicks / Impressions…): rates are worked out from totals, so they stay right at any filter
+    for (const d of sheet.calcMetrics || []) {
+      if (!d || !d.name || cols.has(d.name) || !cols.has(d.a) || !cols.has(d.b)) continue;
+      const k = d.k || 1;
+      const f = d.op === '-' ? (a, b) => a - b : d.op === '+' ? (a, b) => a + b : d.op === '*' ? (a, b) => a * b : (a, b) => (b ? (a / b) * k : null);
+      for (const r of rows) { const a = r[d.a], b = r[d.b]; r[d.name] = typeof a === 'number' && typeof b === 'number' ? f(a, b) : null; }
+      cols.set(d.name, { name: d.name, type: 'number', role: !d.op || d.op === '/' ? 'ratio' : 'measure', fmt: d.fmt || null, money: !!d.money, lowerBetter: !!d.lowerBetter, derived: !d.op || d.op === '/' ? { a: d.a, b: d.b, k, kind: 'div' } : null, calc: true });
+    }
     // the column that names each record (Object Number, Order ID, Email…) and how many rows repeat it
     const idc = idColumn([...cols.values()], rows);
     let allRows = rows, dupExtra = 0;
@@ -45,6 +53,7 @@
       if (sheet.dedupe === idc.name) allRows = keep;
     }
     const t = { cols: [...cols.values()], rows: allRows, byName: Object.fromEntries([...cols.entries()]), idCol: idc ? idc.name : null, dupExtra, totalRows: rows.length };
+    try { t.recordsName = ids.length && DS() && DS().recordsName ? DS().recordsName({ sheet: D.sheet(ids[0]) }) : 'Records'; } catch { t.recordsName = 'Records'; }
     t.dateCols = t.cols.filter((c) => c.type === 'date' && (c.role === 'time' || (c.distinct || 0) >= 3));
     t.metrics = t.cols.filter((c) => c.type === 'number' && ['measure', 'ratio'].includes(c.role));
     t.groupCols = t.cols.filter((c) => c.type === 'text' && ['dimension', 'entity', 'label'].includes(c.role));
@@ -59,6 +68,7 @@
     return t;
   };
   const label = (c) => (c ? c.label || c.name : '');
+  E.label = label;
   const ID_RE = /(\bid\b|_id$|^id$|number|\bno\.?$|#|code$|email|account|order|invoice|ticket|sku|serial|reference|object|customer)/i;
   function idColumn(cols, rows) {
     let best = null, bestScore = 0;
@@ -188,6 +198,7 @@
     return new Date(d.getFullYear(), 0, 1).getTime();
   };
   const bucketLabel = (ms, b) => { const d = new Date(ms); return b === 'day' ? fmtDate(ms, { month: 'short', day: 'numeric' }) : b === 'week' ? 'Wk ' + fmtDate(ms, { month: 'short', day: 'numeric' }) : b === 'month' ? fmtDate(ms, { month: 'short', year: '2-digit' }) : b === 'quarter' ? `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}` : String(d.getFullYear()); };
+  E.autoBucket = autoBucket; E.bucketKey = bucketKey; E.bucketLabel = bucketLabel; E.fmtDate = fmtDate; E.filtersOf = (s) => filtersOf(s); E.PRESETS = PRESETS; E.DAY = DAY;
   // returns [{ key, label, rows }]
   E.group = (rows, t, by, opt = {}) => {
     if (by === '@date') {
@@ -257,7 +268,7 @@
   // where a widget's numbers come from, in words
   const measureLabel = (w, t) => {
     const m = t.byName[w.metric];
-    if (!m) return 'Records';
+    if (!m) return t.recordsName || 'Records';
     if (w.how === 'distinct') return `Different ${plural(label(m).toLowerCase())}`;
     if (w.how === 'count') return `${label(m)} (count)`;
     return label(m);
@@ -293,8 +304,12 @@
     daterange: { label: 'Date range', icon: 'clock', w: 4, h: 4, minW: 3, minH: 3 },
     sheetfilter: { label: 'Sheet filter', icon: 'layers', w: 4, h: 4, minW: 2, minH: 2 },
     filter: { label: 'Filter', icon: 'filter', w: 4, h: 4, minW: 2, minH: 2 },
-    text: { label: 'Text', icon: 'text', w: 4, h: 2, minW: 2, minH: 1 }
+    insights: { label: 'Written insights', icon: 'sparkles', w: 6, h: 5, minW: 3, minH: 2 },
+    text: { label: 'Text or heading', icon: 'text', w: 4, h: 2, minW: 2, minH: 1 },
+    image: { label: 'Image or logo', icon: 'image', w: 3, h: 3, minW: 1, minH: 1 },
+    element: { label: 'Chart from a range…', icon: 'link', w: 6, h: 6, minW: 2, minH: 2, hidden: true }
   };
+  E.KINDS = KINDS;
   const uid = () => D.uid();
   const pickMain = (t) => {
     const m = t.metrics;
@@ -317,7 +332,8 @@
       case 'daterange': return { col: t.dateCols[0] && t.dateCols[0].name };
       case 'sheetfilter': return { col: (t.sheetCols[0] || {}).name };
       case 'filter': return { col: g && g.name };
-      case 'text': return { text: 'Notes' };
+      case 'text': return { text: 'Notes', size: 'body' };
+      case 'insights': return { metric: mm.metric, how: mm.how, max: 6 };
       default: return {};
     }
   };
@@ -326,7 +342,11 @@
     if (w.title) return w.title;
     const m = t.byName[w.metric];
     const only = w.where && w.where.col && w.where.vals && w.where.vals.length ? ` (${w.where.not ? 'not ' : ''}${w.where.vals.length > 2 ? w.where.vals.length + ' ' + plural(label(t.byName[w.where.col] || { name: w.where.col }).toLowerCase()) : w.where.vals.join(', ')})` : '';
-    if (w.kind === 'kpi') return (m ? (w.how === 'distinct' ? `Different ${plural(label(m).toLowerCase())}` : w.how === 'count' ? `${label(m)} (count)` : m.role === 'ratio' ? label(m) : `Total ${label(m)}`) : 'Records') + only;
+    if (w.kind === 'kpi') {
+      if (w.leader && t.byName[w.leader]) return `Top ${label(t.byName[w.leader]).toLowerCase()}${m ? ` by ${label(m).toLowerCase()}` : ''}` + only;
+      const base = m ? (w.how === 'distinct' ? `Different ${plural(label(m).toLowerCase())}` : w.how === 'count' ? `${label(m)} (count)` : m.role === 'ratio' || w.span === 'latest' ? label(m) : `Total ${label(m)}`) : t.recordsName || 'Records';
+      return (w.span === 'latest' ? `${base} · latest period` : base) + only;
+    }
     if (w.kind === 'chart') {
       const by = w.by === '@date' ? 'over time' : w.by ? 'by ' + label(t.byName[w.by]).toLowerCase() : '';
       const sp = w.split && t.byName[w.split] && !['doughnut', 'pie', 'scatter'].includes(w.chartType) ? `${w.by === '@date' ? ' by' : ' and'} ${label(t.byName[w.split]).toLowerCase()}` : '';
@@ -337,6 +357,8 @@
       if (w.mode === 'pivot' && t.byName[w.by] && t.byName[w.split]) return `${measureLabel(w, t)} by ${label(t.byName[w.by]).toLowerCase()} and ${label(t.byName[w.split]).toLowerCase()}${only}`;
       return (w.mode === 'summary' && t.byName[w.by] ? `By ${label(t.byName[w.by]).toLowerCase()}` : 'Records') + only;
     }
+    if (w.kind === 'insights') return m ? `What stands out · ${label(m)}` : 'What stands out';
+    if (w.kind === 'element') { const e = w.el || {}; return e.title || (e.type === 'kpi' ? D.f.resolveTokens(e.label || '') : e.type === 'table' ? 'Table' : ''); }
     if (w.kind === 'daterange') return 'Date range';
     if (w.kind === 'sheetfilter') return 'Sheets';
     if (w.kind === 'filter') return label(t.byName[w.col]) || 'Filter';
@@ -431,6 +453,11 @@
       for (const o of hits) { o.y = it.y + it.h; queue.push(o); }
     }
   }
+  E.settle = (list, moved) => settle(list, moved);
+  E.compact = (list) => compact(list);
+  E.titleFor = (w, t) => titleFor(w, t);
+  // first free row below everything
+  E.bottom = (list) => Math.max(0, ...list.map((w) => w.y + w.h));
   // close the gaps (used for the PDF, where filter controls are left out)
   function compact(list) {
     const sorted = [...list].sort((a, b) => a.y - b.y || a.x - b.x);
@@ -460,18 +487,43 @@
     commit(data = false) { this._self = true; D.commit({ data }); this._self = false; }
     buildToolbar() {
       const tb = this.toolbar; tb.innerHTML = '';
-      const addBtn = D.btn('plus', 'Add a widget', () => D.menu(addBtn, Object.entries(KINDS).map(([k, v]) => ({ label: v.label, icon: v.icon, onClick: () => this.addWidget(k) }))), { label: 'Widget', caret: true, cls: 'accent' });
+      const addBtn = D.btn('plus', 'Add a widget', () => D.menu(addBtn, this.addMenu()), { label: 'Widget', caret: true, cls: 'accent' });
       tb.append(
         D.btn('undo', 'Undo', () => D.undo()), D.btn('redo', 'Redo', () => D.redo()), D.sep(),
         addBtn,
         D.btn('data', 'Choose the Data Sheets or data set this dashboard reads', () => this.pickSources(), { label: this.sourceLabel() }),
-        D.btn('sparkles', 'Lay out a starter dashboard from the data', () => this.autoBuild(), { label: 'Build from data' }),
+        this.sheet.quick ? D.btn('edit', 'Change the questions, numbers and charts this dashboard was set up with', () => D.dash.edit(this.sheet), { label: 'Edit setup' }) : D.btn('sparkles', 'Lay out a starter dashboard from the data', () => this.autoBuild(), { label: 'Build from data' }),
         D.btn('rows', 'Close the empty gaps between widgets (they otherwise stay exactly where you put them)', () => { compact(this.sheet.widgets); this.commit(); this.render(); }, { label: 'Tidy' }),
         this.dupButton(),
         D.sep(),
+        D.btn('report', 'Title band: the dashboard name, the period and filters shown, on screen and in the PDF', () => { const hd = (this.sheet.header ||= { show: false }); hd.show = !hd.show; this.commit(); this.buildToolbar(); this.render(); }, { label: 'Title', active: !!(this.sheet.header && this.sheet.header.show) }),
         D.btn('x', 'Clear every filter', () => { this.sheet.filters = { date: this.sheet.filters.date ? { ...this.sheet.filters.date, preset: 'all' } : null, vals: {} }; this.commit(); this.render(); }, { label: 'Clear filters' }),
         h('div', { class: 'tb-spacer' }),
-        D.btn('pdf', 'Export this dashboard as it looks now, filters included, as a PDF', () => D.io.exportSheet(this.sheet, 'pdf'), { label: 'PDF', cls: 'primary' }));
+        D.btn('pdf', 'Export this dashboard as it looks now, filters included, as a PDF', () => this.exportPdf(), { label: 'PDF', cls: 'primary' }));
+    }
+    addMenu() {
+      const items = Object.entries(KINDS).filter(([, v]) => !v.hidden).map(([k, v]) => ({ label: v.label, icon: v.icon, onClick: () => this.addWidget(k) }));
+      items.push({ sep: true }, { label: 'Chart, table or KPI from a cell range…', icon: 'link', onClick: () => this.addFromRange() });
+      return items;
+    }
+    // a chart / table / KPI linked to an exact range (the way Report pages worked): not affected by the filters
+    async addFromRange() {
+      const r = await D.links.insertDialog({ title: 'Add from a cell range' });
+      if (!r) return;
+      E.addElement(this.sheet, E.elementFromSpec(r));
+      this.commit(); this.render();
+    }
+    // PDF: page size and layout, then export
+    exportPdf() {
+      const s = this.sheet;
+      const o = { size: 'letter', orient: 'landscape', ...(s.pdf || {}) };
+      const sel = (opts, cur, on) => { const x = h('select', { class: 'input' }, opts.map(([v, l]) => h('option', { value: v, selected: v === cur ? true : null }, l))); x.addEventListener('change', () => on(x.value)); return x; };
+      const body = h('div', { class: 'stack' },
+        h('p', { class: 'muted small' }, 'The PDF shows the dashboard as it looks now: the active filters are listed in the title band, filter controls are left out, and widgets never split across pages.'),
+        h('div', { class: 'row2' },
+          h('div', { class: 'field' }, h('label', null, 'Page'), sel([['letter', 'Letter'], ['a4', 'A4'], ['legal', 'Legal'], ['tabloid', 'Tabloid / Ledger'], ['a3', 'A3'], ['fit', 'One long page (fits everything)']], o.size, (v) => { o.size = v; })),
+          h('div', { class: 'field' }, h('label', null, 'Orientation'), sel([['landscape', 'Landscape'], ['portrait', 'Portrait']], o.orient, (v) => { o.orient = v; }))));
+      D.modal({ title: 'Export PDF', width: 460, body, actions: [{ label: 'Cancel' }, { label: 'Export PDF', primary: true, onClick: () => { s.pdf = { size: o.size, orient: o.orient }; this.commit(); D.io.exportSheet(s, 'pdf'); } }] });
     }
     // repeated records (same ID in two weeks' exports, say): count each once, or every row
     dupButton() {
@@ -516,8 +568,15 @@
       if (!this.sheet.widgets.length) return go();
       D.choose('Replace the current layout?', 'Building from data lays out a fresh set of widgets. You can undo this.', [{ label: 'Cancel', value: null }, { label: 'Replace', value: 'y', primary: true }]).then((v) => v && go());
     }
-    addWidget(kind) {
-      if (!this.sheet.sources.length && !['text'].includes(kind)) { D.toast('Choose the data for this dashboard first', 'warn'); return this.pickSources(); }
+    async addWidget(kind) {
+      if (!this.sheet.sources.length && !['text', 'image'].includes(kind)) { D.toast('Choose the data for this dashboard first', 'warn'); return this.pickSources(); }
+      if (kind === 'image') {
+        const src = await D.native.pickImage();
+        if (!src) return;
+        E.addElement(this.sheet, D.newElement('image', { src, w: 300, h: 160 }), { kind: 'image' });
+        this.commit(); this.render();
+        return;
+      }
       const t = E.table(this.sheet);
       const k = KINDS[kind];
       const y = Math.max(0, ...this.sheet.widgets.map((w) => w.y + w.h));
@@ -539,16 +598,29 @@
       this.charts().forEach((c) => c.destroy());
       this.gridEl.innerHTML = '';
       this.renderFilterBar();
-      if (!s.sources.length || !s.sources.some((id) => D.sheet(id))) return this.empty();
+      this.headEl && this.headEl.remove(); this.headEl = null;
+      const hasData = s.sources.some((id) => D.sheet(id));
+      const free = s.widgets.length && s.widgets.every((w) => ['text', 'image', 'element'].includes(w.kind));
+      if (!hasData && !free) return this.empty();
       if (!s.widgets.length) return this.empty(true);
       const t = E.table(s);
       const M = this.metrics();
       this.M = M;
+      if (s.header && s.header.show) { this.headEl = this.headerBand(t, M.W); this.scroll.insertBefore(this.headEl, this.gridEl); }
       const height = Math.max(...s.widgets.map((w) => M.px(w).top + M.px(w).height)) + 40;
       this.gridEl.style.width = M.W + 'px'; this.gridEl.style.height = height + 'px';
       for (const w of s.widgets) this.gridEl.append(this.card(w, t, M));
+      if (!hasData) { D.app.setStatus(`${s.widgets.length} widgets`); return; }
       const rows = E.rows(s, t);
       D.app.setStatus(`${rows.length.toLocaleString()} of ${t.rows.length.toLocaleString()} rows shown${s.dedupe === t.idCol && t.dupExtra ? ` (${t.dupExtra.toLocaleString()} repeats left out)` : ''}<span class="st-sep"></span>${s.widgets.length} widgets`);
+    }
+    // the title band: name, period and filters (also the top of the PDF)
+    headerBand(t, W) {
+      const s = this.sheet, b = D.brand();
+      const title = h('div', { class: 'db-hb-title', contenteditable: 'true', spellcheck: 'false' }, s.header.title || s.name);
+      title.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); title.blur(); } });
+      title.addEventListener('blur', () => { const v = title.innerText.trim(); if (v && v !== (s.header.title || s.name)) { s.header.title = v; this.commit(); } });
+      return h('div', { class: 'db-hb', style: { width: W + 'px', background: b.dark, borderBottomColor: b.primary } }, title, h('div', { class: 'db-hb-sub' }, E.subtitle(s, t)));
     }
     renderFilterBar() {
       const s = this.sheet, bar = this.fbar; bar.innerHTML = '';
@@ -574,10 +646,12 @@
     }
     card(w, t, M) {
       const p = M.px(w);
-      const el = h('div', { class: `db-card k-${w.kind}`, dataset: { id: w.id }, style: { left: p.left + 'px', top: p.top + 'px', width: p.width + 'px', height: p.height + 'px' } });
-      const head = h('div', { class: 'db-head', title: 'Drag to move' }, h('span', { class: 'db-title' }, titleFor(w, t)),
+      const bare = w.kind === 'image' || (w.kind === 'element' && w.el && (w.el.type === 'image' || w.el.type === 'text')) || (w.kind === 'text' && w.size === 'heading');
+      const el = h('div', { class: `db-card k-${w.kind}${bare ? ' bare' : ''}${w.kind === 'text' && w.size ? ' sz-' + w.size : ''}`, dataset: { id: w.id }, style: { left: p.left + 'px', top: p.top + 'px', width: p.width + 'px', height: p.height + 'px' } });
+      const head = h('div', { class: 'db-head', title: 'Drag to move' }, h('span', { class: 'db-title' }, bare ? '' : titleFor(w, t)),
         h('button', { class: 'db-more', title: 'Widget options', html: D.icon('more', 14), onclick: (e) => { e.stopPropagation(); D.menu(e.currentTarget, [
           { label: 'Edit…', icon: 'edit', onClick: () => this.edit(w) },
+          w.kind === 'element' && w.el && w.el.link ? { label: 'Change the range…', icon: 'link', onClick: async () => { const r = await D.links.insertDialog({ kind: w.el.type === 'table' ? 'table' : w.el.type === 'kpi' ? 'kpi' : 'chart', link: w.el.link, title: 'Change the range' }); if (!r) return; w.el = { ...E.elementFromSpec(r), id: w.el.id }; this.commit(); this.render(); } } : null,
           { label: 'Duplicate', icon: 'copy', onClick: () => { const c = { ...D.clone(w), id: uid(), y: w.y + w.h }; this.sheet.widgets.push(c); settle(this.sheet.widgets, c); this.commit(); this.render(); } },
           { sep: true },
           { label: 'Remove', icon: 'trash', danger: true, onClick: () => { this.sheet.widgets = this.sheet.widgets.filter((x) => x !== w); this.commit(); this.render(); } }
@@ -650,12 +724,37 @@
     setFilter(col, values) { const f = filtersOf(this.sheet); if (!values || !values.length) delete f.vals[col]; else f.vals[col] = values.map(String); this.commit(); this.render(); }
     fill(body, w, t, p) {
       const s = this.sheet;
-      const innerW = p.width - 24, innerH = p.height - 44;
+      const bare = w.kind === 'image' || (w.kind === 'element' && w.el && (w.el.type === 'image' || w.el.type === 'text')) || (w.kind === 'text' && w.size === 'heading');
+      const innerW = p.width - 24, innerH = p.height - (bare ? 20 : 44);
       if (w.kind === 'text') {
-        const tx = h('div', { class: 'db-text', contenteditable: 'true' }); tx.innerText = w.text || '';
-        tx.addEventListener('blur', () => { if (tx.innerText !== w.text) { w.text = tx.innerText; this.commit(); } });
-        tx.addEventListener('keydown', (e) => e.stopPropagation());
+        // live values ({{SUM(Sales!B2:B9)}}) show their result; click to edit the text itself
+        const live = D.f.hasTokens(w.text || '');
+        const tx = h('div', { class: `db-text${w.bullets ? ' bullets' : ''}`, contenteditable: this.static ? null : 'true' });
+        const show = () => { if (w.bullets) { tx.innerHTML = ''; tx.append(h('ul', null, ...D.f.resolveTokens(w.text || '').split('\n').filter((x) => x.trim()).map((x) => h('li', null, x)))); } else tx.innerText = live ? D.f.resolveTokens(w.text || '') : w.text || ''; };
+        show();
+        if (!this.static) {
+          tx.addEventListener('focus', () => { tx.innerText = w.text || ''; });
+          tx.addEventListener('blur', () => { const v = tx.innerText.replace(/\n$/, ''); if (v !== (w.text || '')) { w.text = v; this.commit(); } show(); });
+          tx.addEventListener('keydown', (e) => e.stopPropagation());
+        }
+        if (w.align) tx.style.textAlign = w.align;
+        if (w.color) tx.style.color = w.color;
         return body.append(tx);
+      }
+      if (w.kind === 'image' || w.kind === 'element') {
+        const e = w.el || {};
+        const node = D.renderElementContent(h('div'), { ...e, x: 0, y: 0, w: Math.max(40, innerW), h: Math.max(30, innerH), z: 1 }, { lazyCharts: !!this.static });
+        node.style.position = 'absolute';
+        node.style.left = '12px'; node.style.top = bare ? '0' : '0';
+        body.classList.add('db-elbody');
+        return body.append(node);
+      }
+      if (w.kind === 'insights') {
+        const rows0 = E.where(E.rows(s, t), w);
+        const lines = E.insightLines ? E.insightLines(s, t, rows0, w) : [];
+        if (!lines.length) return body.append(h('div', { class: 'db-msg' }, 'Nothing stands out yet for the current filters'));
+        const fs = Math.max(11, Math.min(13.5, innerW / 40));
+        return body.append(h('ul', { class: 'db-insights', style: { fontSize: fs + 'px' } }, lines.map((l) => h('li', { html: l }))));
       }
       if (w.kind === 'daterange') return this.dateWidget(body, w, t);
       if (w.kind === 'filter' || w.kind === 'sheetfilter') return this.filterWidget(body, w, t);
@@ -665,6 +764,33 @@
         return body.append(h('div', { class: 'db-msg' }, `“${gone[0]}” isn't in the data any more.`, h('br'), h('button', { class: 'btn sm', style: { marginTop: '8px' }, onclick: () => this.edit(w) }, 'Choose another column')));
       }
       const rows = E.where(E.rows(s, t), w);
+      if (w.kind === 'kpi' && w.leader && t.byName[w.leader]) {
+        // the group out in front: "Market: Atlanta · 31% of sign-ups"
+        const m = t.byName[w.metric], how = w.how || 'auto';
+        const gs = E.group(rows, t, w.leader).map((g) => ({ ...g, v: E.agg(g.rows, m, how) })).filter((g) => g.v != null).sort((a, b) => b.v - a.v);
+        body.classList.add('db-kpi');
+        if (!gs.length) return body.append(h('div', { class: 'db-sub' }, 'No data for the current filters'));
+        const tot = E.agg(rows, m, how);
+        const share = tot && (!m || m.role !== 'ratio') ? gs[0].v / tot : null;
+        body.append(h('div', { class: 'db-kv', style: { fontSize: Math.max(16, Math.min(34, innerH * 0.34, (innerW / Math.max(4, String(gs[0].label).length)) * 1.6)) + 'px' } }, gs[0].label));
+        body.append(h('div', { class: 'db-sub' }, `${how === 'count' || how === 'distinct' || !m ? (gs[0].v ?? 0).toLocaleString() : E.fmt(m, gs[0].v)}${share != null ? ` · ${F().format(share, 'pct')} of the total` : ''} · ${gs.length} ${gs.length === 1 ? label(t.byName[w.leader]).toLowerCase() : plural(label(t.byName[w.leader]).toLowerCase())}`));
+        return;
+      }
+      if (w.kind === 'kpi' && w.span === 'latest' && E.latest) {
+        const m = t.byName[w.metric], how = w.how || 'auto';
+        const L = E.latest(s, t, rows, w);
+        body.classList.add('db-kpi');
+        if (!L) return body.append(h('div', { class: 'db-sub' }, 'Needs a date column'));
+        const v = E.agg(L.cur, m, how), pv = L.prev ? E.agg(L.prev, m, how) : null;
+        const fmtv = (x) => (how === 'count' || how === 'distinct' || !m ? (x ?? 0).toLocaleString() : E.fmt(m, x));
+        body.append(h('div', { class: 'db-kv', style: { fontSize: Math.max(18, Math.min(44, innerH * 0.42, innerW / 6)) + 'px' } }, fmtv(v)));
+        if (pv != null && v != null && pv !== 0) {
+          const g = (v - pv) / Math.abs(pv);
+          const lower = w.lowerBetter != null ? w.lowerBetter : m && m.lowerBetter;
+          body.append(h('div', { class: `db-delta ${(lower ? g <= 0 : g >= 0) ? 'up' : 'down'}` }, `${g >= 0 ? '▲' : '▼'} ${Math.abs(g * 100).toFixed(1)}%`, h('span', null, ` ${L.label} vs ${L.prevLabel} (${fmtv(pv)})`)));
+        } else body.append(h('div', { class: 'db-sub' }, L.label));
+        return;
+      }
       if (w.kind === 'kpi') {
         const m = t.byName[w.metric];
         const how = w.how || 'auto';
@@ -690,6 +816,7 @@
         body.append(host);
         const e = E.chartSpec(w, t, data);
         e.showValues = w.showValues && data.labels.length <= 24;
+        if (this.static) { const png = D.charts.toPng(e, Math.round(innerW), Math.round(innerH), 0.85); if (png) host.append(h('img', { src: png, style: { width: innerW + 'px', height: innerH + 'px' } })); return; }
         const ch = D.charts.render(host, e, { w: innerW, h: innerH, scale: 0.85 });
         host._chart = ch;
         // click a bar or slice to filter the whole dashboard by it
@@ -815,7 +942,7 @@
 
     // ---- widget editor
     edit(w) {
-      const t = E.table(this.sheet);
+      const t = this.sheet.sources.some((id) => D.sheet(id)) ? E.table(this.sheet) : { cols: [], metrics: [], dateCols: [], periodCols: [], groupCols: [], sheetCols: [], byName: {}, rows: [] };
       const o = D.clone(w);
       const field = (lab, ctl) => h('div', { class: 'field' }, h('label', null, lab), ctl);
       const sel = (opts, cur, on) => { const s = h('select', { class: 'input' }, opts.map(([v, l]) => h('option', { value: v, selected: String(v) === String(cur ?? '') ? true : null }, l))); s.addEventListener('change', () => on(s.value)); return s; };
@@ -877,6 +1004,9 @@
         box.append(field('Title', title));
         if (o.kind === 'kpi') {
           const m = t.byName[o.metric];
+          box.append(field('Card', sel([['total', 'The total for the filters'], ...(t.dateCols.length ? [['latest', 'The latest week / month (vs the one before)']] : []), ['leader', 'Which group is out in front']], o.leader ? 'leader' : o.span === 'latest' ? 'latest' : 'total', (v) => { delete o.span; delete o.leader; if (v === 'latest') o.span = 'latest'; if (v === 'leader') o.leader = (tOpts.find(([n]) => n !== '__sheet') || [])[0]; draw(); })));
+          if (o.leader) box.append(field('Group', sel(tOpts.filter(([n]) => n !== '__sheet'), o.leader, (v) => { o.leader = v; refreshTitle(); })));
+          if (o.span === 'latest') box.append(field('Period', sel([['auto', 'Automatic'], ['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year']], o.bucket || 'auto', (v) => { o.bucket = v; })));
           box.append(h('div', { class: 'row2' }, field('Shows', sel(measures, mVal(o), (v) => { setM(o, v); draw(); })),
             m && m.type === 'number' ? field('Calculation', sel([['auto', 'Automatic'], ['sum', 'Sum'], ['avg', 'Average'], ['min', 'Minimum'], ['max', 'Maximum'], ['count', 'Count of filled rows']], o.how || 'auto', (v) => { o.how = v; refreshTitle(); })) : h('span')),
           whereField(),
@@ -923,43 +1053,121 @@
         }
         if (o.kind === 'daterange') box.append(field('Date column', sel(t.dateCols.map((c) => [c.name, label(c)]), o.col, (v) => { o.col = v; })));
         if (o.kind === 'filter' || o.kind === 'sheetfilter') box.append(field('Filter by', sel((o.kind === 'sheetfilter' ? [...t.sheetCols, ...textCols.filter((c) => !t.sheetCols.includes(c))] : textCols).map((c) => [c.name, label(c)]), o.col, (v) => { o.col = v; })), h('div', { class: 'dash-checks' }, chk('multi', 'Allow several values at once', true)));
-        if (o.kind === 'text') { const ta = h('textarea', { class: 'input', rows: 4 }); ta.value = o.text || ''; ta.addEventListener('input', () => { o.text = ta.value; }); box.append(field('Text', ta)); }
+        if (o.kind === 'text') {
+          const ta = h('textarea', { class: 'input', rows: 5 }); ta.value = o.text || ''; ta.addEventListener('input', () => { o.text = ta.value; });
+          const tok = h('button', { class: 'btn sm', html: D.icon('zap', 13) + '<span>Insert live value…</span>', onclick: () => D.links.pickToken((tk) => { const at = ta.selectionStart ?? ta.value.length; ta.value = ta.value.slice(0, at) + tk + ta.value.slice(at); o.text = ta.value; }) });
+          box.append(field('Text', ta), h('div', { class: 'row2' }, field('Style', sel([['heading', 'Heading'], ['subheading', 'Subheading'], ['body', 'Body text'], ['small', 'Small print']], o.size || 'body', (v) => { o.size = v; })), field('Align', sel([['left', 'Left'], ['center', 'Center'], ['right', 'Right']], o.align || 'left', (v) => { o.align = v; }))),
+            h('div', { class: 'dash-checks' }, chk('bullets', 'Bullet list (one line per point)', false)), tok,
+            h('p', { class: 'muted small' }, 'Live values like {{SUM(Sales!B2:B9)}} recalculate when the data changes.'));
+        }
+        if (o.kind === 'insights') {
+          box.append(h('div', { class: 'row2' }, field('About', sel(measures, mVal(o), (v) => { setM(o, v); refreshTitle(); })), field('Compare across', sel([['', 'Automatic'], ...tOpts.filter(([n]) => n !== '__sheet')], o.by || '', (v) => { o.by = v || undefined; }))),
+            field('How many points', sel([[3, '3'], [4, '4'], [6, '6'], [8, '8']], o.max || 6, (v) => { o.max = +v; })), whereField(),
+            h('p', { class: 'muted small' }, 'Written by Datum from the numbers (no AI needed) and rewritten whenever the filters or the data change.'));
+        }
+        if (o.kind === 'image' || (o.kind === 'element' && o.el && o.el.type === 'image')) {
+          box.append(field('Picture', h('button', { class: 'btn', onclick: async () => { const src = await D.native.pickImage(); if (src) { o.el = { ...(o.el || D.newElement('image')), src }; D.toast('Picture chosen - Apply to use it', 'ok'); } } }, 'Choose another picture…')),
+            field('Fit', sel([['contain', 'Fit inside'], ['cover', 'Fill (crop)']], (o.el && o.el.fit) || 'contain', (v) => { o.el.fit = v; })));
+        }
+        if (o.kind === 'element' && o.el && o.el.type !== 'image') {
+          if (o.el.type === 'chart') box.append(field('Chart title', (() => { const x = h('input', { class: 'input', value: o.el.title || '' }); x.addEventListener('input', () => { o.el.title = x.value; }); return x; })()),
+            field('Chart type', sel(D.charts.TYPES.map((c) => [c.id, c.label]), o.el.chartType || 'bar', (v) => { o.el.chartType = v; })));
+          if (o.el.type === 'kpi') box.append(field('Label', (() => { const x = h('input', { class: 'input', value: o.el.label || '' }); x.addEventListener('input', () => { o.el.label = x.value; }); return x; })()));
+          box.append(h('p', { class: 'muted small' }, `Linked to ${o.el.link ? `${(D.sheet(o.el.link.sheetId) || {}).name || 'a missing sheet'} ${o.el.link.range}` : o.el.expr || 'fixed values'}. Dashboard filters don't apply to it.`));
+        }
       };
       draw();
-      D.modal({ title: `${KINDS[w.kind].label} widget`, width: 600, body: box, actions: [{ label: 'Cancel' }, { label: 'Apply', primary: true, onClick: () => { Object.keys(w).forEach((k) => { if (!(k in o)) delete w[k]; }); Object.assign(w, o); this.commit(); this.render(); } }] });
+      D.modal({ title: `${(KINDS[w.kind] || { label: 'Widget' }).label.replace(/…$/, '')} widget`, width: 600, body: box, actions: [{ label: 'Cancel' }, { label: 'Apply', primary: true, onClick: () => { Object.keys(w).forEach((k) => { if (!(k in o)) delete w[k]; }); Object.assign(w, o); this.commit(); this.render(); } }] });
     }
   }
 
   // =================================================================== PDF
+  // Pages at a real paper size (or one long page). Widgets are drawn exactly as on screen (same code), filter
+  // controls are left out (the filters are listed in the title band), and no widget is ever split across pages.
+  const PAPER = { letter: [8.5, 11], legal: [8.5, 14], tabloid: [11, 17], a4: [8.27, 11.69], a3: [11.69, 16.54] };
   function printPages(sheet) {
-    const t = E.table(sheet);
-    const W = 1280, colW = (W - 64 - GAP * (COLS - 1)) / COLS;
-    const px = (w) => ({ left: 32 + w.x * (colW + GAP), top: 120 + w.y * (ROW + GAP), width: w.w * colW + (w.w - 1) * GAP, height: w.h * ROW + (w.h - 1) * GAP });
+    const hasData = (sheet.sources || []).some((id) => D.sheet(id));
+    const t = hasData ? E.table(sheet) : { cols: [], metrics: [], dateCols: [], periodCols: [], groupCols: [], sheetCols: [], byName: {}, rows: [] };
+    const o = { size: 'letter', orient: 'landscape', ...(sheet.pdf || {}) };
     const b = D.brand();
-    const rows = E.rows(sheet, t);
-    const r = E.activeRange(sheet, t);
-    const filt = [r ? `${label(t.byName[r.col])}: ${isFinite(r.from) ? fmtDate(r.from) : 'start'} - ${isFinite(r.to) ? fmtDate(r.to) : 'end'}` : null, ...Object.entries(filtersOf(sheet).vals || {}).filter(([c, l]) => l && l.length && t.byName[c]).map(([c, l]) => `${label(t.byName[c])}: ${l.join(', ')}`)].filter(Boolean);
-    let html = `<div style="position:absolute;left:0;top:0;width:${W}px;height:96px;background:${b.dark}"></div><div style="position:absolute;left:0;top:96px;width:${W}px;height:4px;background:${b.primary}"></div>
-      <div style="position:absolute;left:32px;top:20px;font:700 26px 'Inter Variable',sans-serif;color:#fff">${D.esc(sheet.name)}</div>
-      <div style="position:absolute;left:32px;top:60px;font:400 12px 'Inter Variable',sans-serif;color:#AFC3E8">${D.esc([filt.length ? filt.join(' · ') : 'All data', `${rows.length.toLocaleString()} rows`, new Date().toLocaleDateString()].join(' · '))}</div>`;
-    let maxY = 0;
-    // filter controls don't print (the active filters are in the subtitle), so close the gaps they leave
     const printed = (sheet.widgets || []).filter((w) => !['daterange', 'filter', 'sheetfilter'].includes(w.kind)).map((w) => ({ ...w }));
     compact(printed);
-    for (const w of printed) {
-      const p = px(w); maxY = Math.max(maxY, p.top + p.height);
-      let inner = '';
-      const iw = p.width - 24, ih = p.height - 44;
-      const wr = E.where(rows, w);
-      if (w.kind === 'kpi') { const m = t.byName[w.metric]; const v = E.agg(wr, m, w.how || 'auto'); inner = `<div style="font:700 ${Math.max(18, Math.min(40, ih * 0.42))}px 'Inter Variable',sans-serif;color:#0B1530;margin-top:4px">${D.esc(w.how === 'count' || w.how === 'distinct' ? String(v ?? 0) : E.fmt(m, v))}</div>`; }
-      else if (w.kind === 'chart') { const data = E.chartData(w, t, wr, (filtersOf(sheet).date || {}).col); const png = data.labels.length ? D.charts.toPng(E.chartSpec(w, t, data), Math.round(iw), Math.round(ih), 0.85) : null; inner = png ? `<img src="${png}" style="width:${iw}px;height:${ih}px">` : '<div style="color:#94A3B8;font-size:12px">No data</div>'; }
-      else if (w.kind === 'table') { const holder = document.createElement('div'); DashView.prototype.tableWidget.call({ sheet }, holder, w, t, wr); inner = holder.innerHTML; }
-      else if (w.kind === 'text') inner = `<div style="font-size:13px;color:#1F2937;white-space:pre-wrap">${D.esc(w.text || '')}</div>`;
-      html += `<div class="db-pcard" style="position:absolute;left:${p.left}px;top:${p.top}px;width:${p.width}px;height:${p.height}px"><div class="db-ptitle">${D.esc(titleFor(w, t))}</div><div style="padding:0 12px;overflow:hidden;height:${ih}px">${inner}</div></div>`;
+    // page geometry (96 px per inch)
+    let PW, PH;
+    if (o.size === 'fit' || !PAPER[o.size]) { PW = o.orient === 'portrait' ? 900 : 1280; PH = null; }
+    else { const [a, c] = PAPER[o.size]; const [w, hh] = o.orient === 'portrait' ? [Math.min(a, c), Math.max(a, c)] : [Math.max(a, c), Math.min(a, c)]; PW = Math.round(w * 96); PH = Math.round(hh * 96); }
+    const MARGIN = 28, HEAD = 92, FOOT = 26;
+    const colW = (PW - 2 * MARGIN - GAP * (COLS - 1)) / COLS;
+    // portrait pages are narrow: rows a little shorter keeps charts in proportion
+    const rowH = o.orient === 'portrait' ? 38 : ROW;
+    const px = (w) => ({ left: MARGIN + w.x * (colW + GAP), width: w.w * colW + (w.w - 1) * GAP, top: w.y * (rowH + GAP), height: w.h * rowH + (w.h - 1) * GAP });
+    // horizontal bands no widget crosses: the only places a page may break
+    const sorted = [...printed].sort((a, c) => a.y - c.y);
+    const bands = []; let cur = null;
+    for (const w of sorted) {
+      if (cur && w.y < cur.y2) { cur.items.push(w); cur.y2 = Math.max(cur.y2, w.y + w.h); }
+      else { cur = { y1: w.y, y2: w.y + w.h, items: [w] }; bands.push(cur); }
     }
-    const css = `<style>.db-pcard{background:#fff;border:1px solid #E2E8F0;border-radius:10px;box-sizing:border-box;overflow:hidden;font-family:'Inter Variable',sans-serif}.db-ptitle{font:600 12.5px 'Inter Variable',sans-serif;color:#334155;padding:10px 12px 6px}.db-table{width:100%;border-collapse:collapse;font-size:11px}.db-table th{text-align:left;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0;padding:4px 6px}.db-table td{padding:4px 6px;border-bottom:1px solid #F1F5F9;color:#1F2937}.db-table .num{text-align:right}.db-table tr.total td{font-weight:700;border-top:1px solid #CBD5E1}</style>`;
-    const H = Math.max(720, maxY + 32);
-    return [{ w: W, h: H, html: `<div style="position:relative;width:${W}px;height:${H}px;background:#F5F7FB">${css}${html}</div>` }];
+    const filt = hasData ? E.subtitle(sheet, t) : new Date().toLocaleDateString();
+    const title = (sheet.header && sheet.header.title) || sheet.name;
+    const css = `<style>*{box-sizing:border-box}.pg{position:relative;background:#F5F7FB;font-family:'Inter Variable',Inter,sans-serif;overflow:hidden}
+      .db-pcard{position:absolute;background:#fff;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;color:#1F2937}
+      .db-pcard.bare{background:transparent;border-color:transparent}
+      .db-ptitle{font:600 12.5px 'Inter Variable',sans-serif;color:#334155;padding:10px 12px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+      .db-body{flex:1;min-height:0;padding:0 12px 10px;position:relative;overflow:hidden}
+      .db-kpi{display:flex;flex-direction:column;justify-content:center;border-left:4px solid ${b.primary};margin-left:12px;padding-left:12px !important;margin-bottom:12px}
+      .db-kv{font-weight:700;color:#0B1530;letter-spacing:-.02em;line-height:1.1}.db-sub{font-size:11px;color:#64748B;margin-top:4px}
+      .db-delta{font-size:12px;font-weight:600;margin-top:6px}.db-delta span{font-weight:400;color:#64748B}.db-delta.up{color:#059669}.db-delta.down{color:#DC2626}
+      .db-table{width:100%;border-collapse:collapse;font-size:11px}.db-table th{text-align:left;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0;padding:4px 6px;white-space:nowrap}
+      .db-table td{padding:4px 6px;border-bottom:1px solid #F1F5F9;color:#1F2937;white-space:nowrap}.db-table .num{text-align:right}.db-table tr.total td{font-weight:700;border-top:1px solid #CBD5E1}
+      .db-table.pivot td.heat{background:rgba(31,107,255,calc(var(--heat,0)*.22))}
+      .db-text{font-size:13px;line-height:1.5;color:#334155;white-space:pre-wrap;height:100%;overflow:hidden}.db-text ul{margin:0;padding-left:18px}
+      .sz-heading .db-text{font-size:24px;font-weight:700;color:#0B1530;line-height:1.2}.sz-subheading .db-text{font-size:16px;font-weight:600;color:#1E293B}.sz-small .db-text{font-size:11px;color:#64748B}
+      .db-insights{margin:0;padding-left:18px;color:#1F2937;line-height:1.45}.db-insights li{margin:0 0 6px}.db-insights b{color:#0B1530}
+      .db-msg{color:#94A3B8;font-size:12px;padding:12px 0}.el{position:absolute}</style>`;
+    const V = Object.create(DashView.prototype); V.sheet = sheet; V.static = true;
+    const cardHtml = (w, top) => {
+      const p = px(w); p.top = top;
+      const bare = w.kind === 'image' || (w.kind === 'element' && w.el && (w.el.type === 'image' || w.el.type === 'text')) || (w.kind === 'text' && w.size === 'heading');
+      const body = h('div', { class: 'db-body' });
+      try { V.fill(body, w, t, p); } catch (err) { body.append(h('div', { class: 'db-msg' }, 'Could not draw: ' + err.message)); }
+      const tl = bare ? '' : `<div class="db-ptitle">${D.esc(titleFor(w, t))}</div>`;
+      return `<div class="db-pcard ${bare ? 'bare' : ''} ${w.kind === 'text' && w.size ? 'sz-' + w.size : ''}" style="left:${p.left}px;top:${top}px;width:${p.width}px;height:${p.height}px">${tl}${body.outerHTML}</div>`;
+    };
+    const head = `<div style="position:absolute;left:0;top:0;width:${PW}px;height:${HEAD - 18}px;background:${b.dark}"></div><div style="position:absolute;left:0;top:${HEAD - 18}px;width:${PW}px;height:4px;background:${b.primary}"></div>
+      ${b.logo ? `<img src="${b.logo}" style="position:absolute;right:${MARGIN}px;top:16px;height:40px;max-width:160px;object-fit:contain">` : ''}
+      <div style="position:absolute;left:${MARGIN}px;top:14px;right:${MARGIN + 170}px;font:700 24px 'Inter Variable',sans-serif;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${D.esc(title)}</div>
+      <div style="position:absolute;left:${MARGIN}px;top:50px;right:${MARGIN}px;font:400 11.5px 'Inter Variable',sans-serif;color:#AFC3E8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${D.esc(filt)}</div>`;
+    if (!PH) {
+      // one long page
+      let html = head, maxY = 0;
+      for (const w of printed) { const p = px(w); const top = HEAD + p.top; maxY = Math.max(maxY, top + p.height); html += cardHtml(w, top); }
+      const H = Math.max(600, maxY + MARGIN);
+      return [{ w: PW, h: H, html: `<div class="pg" style="width:${PW}px;height:${H}px">${css}${html}</div>` }];
+    }
+    // paginate by bands; a band taller than a page is drawn smaller to fit
+    const pages = [];
+    let page = null, y = 0;
+    const newPage = (first) => { page = { html: first ? head : '', top: first ? HEAD : MARGIN }; pages.push(page); y = page.top; };
+    newPage(true);
+    const avail = () => PH - FOOT - y;
+    for (const band of bands) {
+      const bandH = band.y2 * (rowH + GAP) - band.y1 * (rowH + GAP) - GAP;
+      if (bandH > avail() && y > page.top) newPage(false);
+      const full = PH - FOOT - page.top;
+      const scale = bandH > full ? full / bandH : 1;
+      if (scale < 1) {
+        // a very tall band: draw it at normal size inside a scaled wrapper
+        let inner = '';
+        for (const w of band.items) inner += cardHtml(w, (w.y - band.y1) * (rowH + GAP));
+        page.html += `<div style="position:absolute;left:0;top:${y}px;width:${PW}px;height:${bandH}px;transform:scale(${scale});transform-origin:${PW / 2}px 0">${inner}</div>`;
+        y += bandH * scale + GAP;
+      } else {
+        for (const w of band.items) page.html += cardHtml(w, y + (w.y - band.y1) * (rowH + GAP));
+        y += bandH + GAP;
+      }
+    }
+    return pages.map((pg, i) => ({ w: PW, h: PH, html: `<div class="pg" style="width:${PW}px;height:${PH}px">${css}${pg.html}<div style="position:absolute;left:${MARGIN}px;right:${MARGIN}px;bottom:8px;font:400 9.5px 'Inter Variable',sans-serif;color:#94A3B8;display:flex;justify-content:space-between"><span>${D.esc(title)}</span><span>${i + 1} / ${pages.length}</span></div></div>` }));
   }
 
   D.sheetTypes.dash = {
@@ -967,9 +1175,16 @@
     create(name) { return { id: D.uid(), type: 'dash', name, sources: [], widgets: [], filters: { date: null, vals: {} } }; },
     exportPayload() { return {}; },
     printPages,
+    View: DashView,
     mount(host, sheet) { return new DashView(host, sheet); },
     // a dashboard over these sheets with a starter layout
     createFor(sources, name) {
+      // one sheet: the full smart build (headline numbers, written insights, charts); several tabs: the starter grid
+      if (sources.length === 1 && D.sheet(sources[0])) {
+        const src = D.sheet(sources[0]);
+        const made = E.fromQuick(src, D.links.autoRange(src), { title: name || `${src.name} Dashboard` });
+        if (made) return made;
+      }
       const s = D.app.addSheet('dash', { activate: false, name: D.uniqueSheetName(name || `${D.sheet(sources[0]).name} Dashboard`) });
       s.sources = sources;
       s.widgets = E.autoBuild(s);

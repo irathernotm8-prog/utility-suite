@@ -1048,7 +1048,7 @@
       if (!used) for (const s of p.sheets) {
         if (s === c) continue;
         if (s.type === 'data' && s.cells.some((row) => row.some((v) => typeof v === 'string' && v[0] === '=' && re.test(v)))) { used = true; break; }
-        const els = s.type === 'slide' ? s.slides.flatMap((x) => x.elements) : s.type === 'report' ? s.elements : [];
+        const els = D.elementsOf(s);
         if (els.some((e) => ['compareExpr', 'label'].some((k) => typeof e[k] === 'string' && re.test(e[k])))) { used = true; break; }
       }
       if (!used) p.sheets.splice(p.sheets.indexOf(c), 1);

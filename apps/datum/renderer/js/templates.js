@@ -10,8 +10,8 @@
 
   TPL.list = [
     { id: 'blank', name: 'Blank project', desc: 'A Data Sheet and a Slide Sheet to start from', icons: ['data', 'slide'] },
-    { id: 'all', name: 'Full workspace', desc: 'One of every sheet type, ready to link together', icons: ['data', 'slide', 'docu', 'report', 'dash'] },
-    { id: 'weekly', name: 'Weekly performance pack', desc: 'Sample weekly numbers driving a deck, report, dashboard and summary memo', icons: ['data', 'slide', 'report', 'dash', 'docu'] },
+    { id: 'all', name: 'Full workspace', desc: 'One of every sheet type, ready to link together', icons: ['data', 'slide', 'docu', 'dash'] },
+    { id: 'weekly', name: 'Weekly performance pack', desc: 'Sample weekly numbers driving a deck, a dashboard and a summary memo', icons: ['data', 'slide', 'dash', 'docu'] },
     { id: 'pitch', name: 'Pitch deck', desc: 'Eight-slide story with a linked market chart and traction KPIs', icons: ['data', 'slide'] }
   ];
 
@@ -24,7 +24,7 @@
       if (id === 'blank') {
         p.sheets.push(S.data.create('Data'), S.slide.create('Slides'));
       } else if (id === 'all') {
-        p.sheets.push(S.data.create('Data'), S.slide.create('Slides'), S.docu.create('Document'), S.report.create('Report'), S.dash.create('Dashboard'));
+        p.sheets.push(S.data.create('Data'), S.slide.create('Slides'), S.docu.create('Document'), S.dash.create('Dashboard'));
       } else if (id === 'weekly') {
         const data = S.data.create('Weekly Data');
         const weeks = ['Aug 4', 'Aug 11', 'Aug 18', 'Aug 25', 'Sep 1', 'Sep 8', 'Sep 15', 'Sep 22'];
@@ -103,15 +103,10 @@
     if (p._after === 'weekly') {
       delete p._after;
       const data = p.sheets[0];
-      D.sheetTypes.report.quickDashboard(data, 'A1:F9', { auto: true, layout: 'landscape', title: 'Weekly Performance Report' });
-      // keep sheets in a sensible order: Data, Deck, Report, Dashboard, Summary
-      const rep = p.sheets.find((s) => s.type === 'report');
+      const board = D.board.fromQuick(data, 'A1:F9', { layout: 'landscape', title: 'Weekly Performance' }, { silent: true });
+      // keep sheets in a sensible order: Data, Deck, Dashboard, Summary
       const deck = p.sheets.find((s) => s.type === 'slide');
-      const board = D.sheetTypes.dash.create('Weekly Dashboard');
-      board.sources = [data.id];
-      p.sheets.push(board);
-      board.widgets = D.board.autoBuild(board);
-      const first = [data, deck, rep, board];
+      const first = [data, deck, board].filter(Boolean);
       p.sheets = [...first, ...p.sheets.filter((s) => !first.includes(s))];
       D.resetHistory();
       D.app.activate(deck.id, true);

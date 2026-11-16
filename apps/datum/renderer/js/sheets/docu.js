@@ -283,7 +283,7 @@
           const card = h('div', { class: 'pdf-page' }, cv, h('div', { class: 'pdf-page-tools' },
             h('span', null, `Page ${n}`),
             h('button', { class: 'btn xs', onclick: () => this.pageTo('slide', n) }, 'To slide'),
-            h('button', { class: 'btn xs', onclick: () => this.pageTo('report', n) }, 'To report')));
+            h('button', { class: 'btn xs', onclick: () => this.pageTo('dash', n) }, 'To dashboard')));
           wrap.append(card);
           await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
           if (!this.host.isConnected) return;
@@ -304,8 +304,8 @@
         D.commit({ data: false });
         D.toast(`Page ${n} added as slide ${deck.slides.length} in ${deck.name}`, 'ok');
       } else {
-        const rep = D.project().sheets.find((s) => s.type === 'report') || D.app.addSheet('report', { activate: false });
-        D.sheetTypes.report.addElement(rep, D.newElement('image', { src: img.url, w: 360, h: Math.round(360 * img.h / img.w) }));
+        const rep = D.project().sheets.find((s) => s.type === 'dash') || D.app.addSheet('dash', { activate: false });
+        D.sheetTypes.dash.addElement(rep, D.newElement('image', { src: img.url, w: 420, h: Math.round(420 * img.h / img.w) }));
         D.toast(`Page ${n} added to ${rep.name}`, 'ok');
       }
       D.app.renderTabs();

@@ -1,4 +1,4 @@
-// Datum - "Ask Datum": a side panel that turns plain requests into report, dashboard, chart and insight actions.
+// Datum - "Ask Datum": a side panel that turns plain requests into dashboard, chart and insight actions.
 // Numbers always come from Datum's own formulas. An optional offline language model (downloaded once, runs on
 // the graphics chip, nothing leaves the computer) understands looser requests and writes the replies; without it,
 // a built-in planner handles the common requests.
@@ -16,6 +16,12 @@
   const LS = { get: (k, d) => { try { const v = localStorage.getItem('datum.ai.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('datum.ai.' + k, JSON.stringify(v)); } catch {} } };
   const st = AI.state = { open: false, engine: null, loaded: null, loading: null, busy: false, msgs: [], history: [], cached: {}, model: LS.get('model', AI.MODELS[1].id), useModel: LS.get('useModel', true) };
   const hasGPU = () => !!(navigator.gpu);
+  // who answers: 'builtin' (Datum's planner + the optional offline model), 'claude-code' / 'codex' (on this computer,
+  // with Datum's tools), or a model API (anthropic, openai, gemini…) running the same tools. Kept in the main process.
+  const NA = () => window.native && window.native.agent;
+  st.brain = 'builtin'; st.cfg = null;
+  AI.loadBrain = async () => { if (!NA()) return; try { st.cfg = await NA().settings(); st.brain = st.cfg.provider || 'builtin'; } catch (e) { console.warn(e); } };
+  const brainName = (id = st.brain) => id === 'builtin' ? 'Built-in' : id === 'claude-code' ? 'Claude Code' : id === 'codex' ? 'Codex' : ((st.cfg && st.cfg.providers.find((p) => p.id === id)) || { name: id }).name.split(' · ').pop();
   let lib = null;
   const loadLib = async () => (lib ||= await import(new URL('vendor/web-llm/web-llm.js', location.href).href));
 
@@ -53,6 +59,7 @@
     if (!a) return null;
     if (a.type === 'data') return a;
     if (a.dashSource) return D.sheet(a.dashSource.sheetId);
+    if (a.type === 'dash') { const id = (a.quick && a.quick.sheetId) || (a.sources || [])[0]; if (D.sheet(id)) return D.sheet(id); }
     return D.dataSheets().find((s) => !s.calcOf && D.f.usedRows(s) > 1) || null;
   }
   const factCache = new Map();
@@ -87,7 +94,7 @@
     const d = p.dims.find((x) => n.includes(x.name.toLowerCase()) || n.includes(DS().noun(x.name).one));
     return d ? d.c : p.entity ? 'entity' : p.dims[0] ? p.dims[0].c : p.time ? 'time' : null;
   };
-  const LABEL = { report: 'Build a report', board: 'Build a dashboard', chart: 'Add a chart', kpi: 'Add a headline number', insights: 'Add written insights', summary: 'Write a summary', dataset: 'Combine files into a data set', customize: 'Open Quick dashboard' };
+  const LABEL = { report: 'Build a dashboard', board: 'Build a dashboard', chart: 'Add a chart', kpi: 'Add a headline number', insights: 'Add written insights', summary: 'Write a summary', dataset: 'Combine files into a data set', customize: 'Open Quick dashboard' };
 
   // turn a loose action into a concrete, checked one (or null if it can't be done)
   AI.resolve = (a, ctx) => {
@@ -104,8 +111,8 @@
       if (!picks.length && focus) picks = ctx.sugg.filter((s) => (s.view.metrics || []).includes(focus.key) || s.view.kind === 'table');
       if (!picks.length) picks = ctx.sugg.filter((s) => s.rec);
       out.views = picks.map((s) => s.view);
-      out.title = a.title || `${ctx.sheet.name} Report`;
-      out.desc = `${out.layout === 'slides' ? 'Slides' : out.layout[0].toUpperCase() + out.layout.slice(1)} · ${picks.map((s) => s.q.replace(/\?$/, '')).slice(0, 3).join(' · ')}${picks.length > 3 ? ' …' : ''}`;
+      out.title = a.title || `${ctx.sheet.name} ${out.layout === 'slides' ? 'Deck' : 'Dashboard'}`;
+      out.desc = `${out.layout === 'slides' ? 'Slides' : 'Dashboard'} · ${picks.map((s) => s.q.replace(/\?$/, '')).slice(0, 3).join(' · ')}${picks.length > 3 ? ' …' : ''}`;
       return out;
     }
     if (a.type === 'chart') {
@@ -136,13 +143,17 @@
     return null;
   };
 
-  // where new charts / numbers go: the open report or deck, or a report made for the purpose
+  // where new charts / numbers go: the open dashboard or deck, or a dashboard made for the purpose
   function targetFor(src) {
     const a = D.active();
-    if (a && (a.type === 'report' || a.type === 'slide')) return a;
+    if (a && a.type === 'slide') return a;
+    if (a && a.type === 'dash' && (!(a.sources || []).length || a.sources.includes(src.id))) return a;
     const p = D.project();
-    let rep = p.sheets.find((s) => s.type === 'report' && s.aiFor === src.id);
-    if (!rep) { rep = D.app.addSheet('report', { activate: false, name: D.uniqueSheetName(`${src.name} Charts`) }); rep.aiFor = src.id; rep.elements.push(...D.sheetTypes.report.header(`${src.name}`, `Charts and notes · ${new Date().toLocaleDateString()}`, D.sheetTypes.report.dims(rep).w)); }
+    // the dashboard made for this sheet most recently, else one made for the purpose
+    const mine = p.sheets.filter((s) => s.type === 'dash' && ((s.sources || []).length === 1 && s.sources[0] === src.id));
+    let rep = mine.find((s) => s.aiFor === src.id) || mine[mine.length - 1];
+    if (!rep) { rep = D.app.addSheet('dash', { activate: false, name: D.uniqueSheetName(`${src.name} Dashboard`) }); rep.aiFor = src.id; rep.header = { show: true, title: src.name }; }
+    rep.sources ||= [];
     return rep;
   }
   const tokenSpan = (expr) => `<span class="dtoken" contenteditable="false" data-expr="${D.esc(expr).replace(/"/g, '&quot;')}">${D.esc(D.f.displayExpr(expr))}</span>`;
@@ -152,10 +163,17 @@
     if (a.type === 'dataset') { D.dataset.start(); return 'Opened Combine files'; }
     const src = D.sheet(a.sheetId);
     if (!src) throw new Error('That sheet is no longer in the project');
-    if (a.type === 'customize') { DS().open(src, D.links.autoRange(src)); return 'Opened Quick report'; }
+    if (a.type === 'customize') { DS().open(src, D.links.autoRange(src)); return 'Opened Quick dashboard'; }
     if (a.type === 'board') { const made = D.sheetTypes.dash.createFor([src.id], a.title); return made ? `Built “${made.name}”` : 'Nothing built'; }
-    if (a.type === 'report') { const made = DS().build(src, D.links.autoRange(src), { layout: a.layout, views: a.views, title: a.title }); return made ? `Built “${made.name}”` : 'Nothing built'; }
+    if (a.type === 'report') { const o = { layout: a.layout, views: a.views, title: a.title }; const made = a.layout === 'slides' ? DS().build(src, D.links.autoRange(src), o) : D.board.fromQuick(src, D.links.autoRange(src), o); return made ? `Built “${made.name}”` : 'Nothing built'; }
     if (a.type === 'chart') {
+      const tg = targetFor(src);
+      if (tg.type === 'dash') {
+        const wd = D.board.addView(tg, src, a.view, { calcMetrics: a.view.calcMetrics });
+        if (!wd) throw new Error('Couldn’t make that chart from this data');
+        D.dataVersion++; D.commit(); D.app.activate(tg.id, true);
+        return `Added “${D.board.titleFor(wd, D.board.table(tg))}” to ${tg.name}`;
+      }
       const r = DS().chartFor(src, a.view);
       if (!r) throw new Error('Couldn’t make that chart from this data');
       const t = targetFor(src);
@@ -175,6 +193,14 @@
       const r = DS().kpiFor(src, a.metric);
       if (!r) throw new Error('Couldn\u2019t work out that number');
       const t = targetFor(src);
+      if (t.type === 'dash') {
+        const C = D.board.quickCtx(src, D.links.autoRange(src)); const mm = C.mOf(a.metric) || C.prim;
+        if (!t.sources.includes(src.id)) t.sources.push(src.id);
+        const wd = { id: D.uid(), kind: 'kpi', x: 0, y: D.board.bottom(t.widgets || []), w: 3, h: 3, ...mm, compare: C.dated };
+        (t.widgets ||= []).push(wd); D.board.settle(t.widgets, wd);
+        D.dataVersion++; D.commit(); D.app.activate(t.id, true);
+        return `Added “${D.board.titleFor(wd, D.board.table(t))}” to ${t.name}`;
+      }
       if (t.type === 'slide') { D.sheetTypes.slide.insertLinked(t, { kind: 'kpi', expr: r.expr, label: r.label }); const sl = t.slides[t.current || 0]; sl.elements[sl.elements.length - 1].format = r.format; D.commit(); }
       else D.sheetTypes.report.addElement(t, D.newElement('kpi', { ...r, w: 230, h: 118, style: { fontSize: 28, fill: '#F4F7FD' } }));
       D.app.activate(t.id, true);
@@ -186,6 +212,14 @@
       const t = D.active();
       if (t && t.type === 'docu') { t.html = (t.html || '') + `<h2>Key insights</h2><ul>${lines.map((l) => `<li>${liveHtml(l)}</li>`).join('')}</ul>`; D.commit(); D.app.activate(t.id, true); return `Added ${lines.length} live insights to ${t.name}`; }
       const tg = targetFor(src);
+      if (tg.type === 'dash') {
+        if (!tg.sources.includes(src.id)) tg.sources.push(src.id);
+        const C = D.board.quickCtx(src, D.links.autoRange(src));
+        const wd = { id: D.uid(), kind: 'insights', x: 0, y: D.board.bottom(tg.widgets || []), w: 12, h: 4, ...C.prim, max: 6 };
+        (tg.widgets ||= []).push(wd); D.board.settle(tg.widgets, wd);
+        D.dataVersion++; D.commit(); D.app.activate(tg.id, true);
+        return `Added written insights to ${tg.name}`;
+      }
       if (tg.type === 'slide') { const S = D.sheetTypes.slide; tg.slides.splice((tg.current || 0) + 1, 0, S.newSlide('content', { title: 'Key insights', body: lines.slice(0, 5).join('\n') })); tg.current = (tg.current || 0) + 1; D.commit(); D.app.activate(tg.id, true); return 'Added a Key insights slide'; }
       const W = D.sheetTypes.report.dims(tg).w - 80;
       D.sheetTypes.report.addElement(tg, D.newElement('text', { w: W, h: 26, text: 'Key insights', style: { fontSize: 13, bold: true, color: D.brand().dark } }));
@@ -254,13 +288,10 @@
     let reply = '';
     if (/combine|merge (my |the )?files|data ?set|stack .*files|folder of/.test(t)) { acts.push({ type: 'dataset' }); reply = 'I can stack files that share a layout into one Data Sheet.'; }
     else if (!ctx) reply = 'Open or select a Data Sheet with some numbers first, and I’ll take it from there.';
-    else if (/dashboard|interactive|filter by|date range|slice/.test(t) && !/chart|graph|report|deck|slides/.test(t)) {
-      acts.push({ type: 'board' });
-      reply = `Here\u2019s an interactive dashboard over ${ctx.sheet.name}. Use its date range and filter widgets to slice the data.`;
-    } else if (/report|overview|one.?pager|deck|slides|presentation|summary page/.test(t) && !/chart|graph/.test(t)) {
-      const layout = /slide|deck|presentation/.test(t) ? 'slides' : /portrait|vertical|scroll/.test(t) ? 'portrait' : 'landscape';
+    else if (/dashboard|interactive|filter by|date range|slice|report|overview|one.?pager|deck|slides|presentation|summary page/.test(t) && !/chart|graph/.test(t)) {
+      const layout = /slide|deck|presentation/.test(t) ? 'slides' : /portrait|vertical/.test(t) ? 'portrait' : 'landscape';
       acts.push({ type: 'report', layout, focus: ms[0] && ms[0].name });
-      reply = `Here’s a ${layout === 'slides' ? 'deck' : layout + ' report'} built around ${ms[0] ? ms[0].name : 'your main numbers'}.`;
+      reply = layout === 'slides' ? `Here’s a deck built around ${ms[0] ? ms[0].name : 'your main numbers'}.` : `Here’s a dashboard built around ${ms[0] ? ms[0].name : 'your main numbers'}: headline numbers, written insights and charts that all follow its filters. PDF exports it.`;
       if (/custom|choose|pick|myself/.test(t)) acts.push({ type: 'customize' });
     } else if (/chart|graph|plot|visual|compare|vs\.?|versus|against|over time|trend|share|breakdown|split/.test(t)) {
       const chart = /scatter|vs\.?|versus|against|relationship|correlat/.test(t) ? 'scatter' : /pie|donut|doughnut|share|split|portion/.test(t) ? 'doughnut' : /line|trend|over time/.test(t) ? 'line' : /bar/.test(t) ? 'hbar' : undefined;
@@ -299,16 +330,15 @@
   };
   function systemPrompt(ctx) {
     const lines = [];
-    lines.push('You are Datum’s report assistant. Datum is a desktop app with Data Sheets (spreadsheets), Report Sheets (printable report pages), Dashboard Sheets (interactive widget grids with date and sheet filters), Slide Sheets and Docu Sheets.');
-    lines.push('You help the person turn their data into clear reports. Reply with JSON only: {"reply": string, "actions": [...]}.');
+    lines.push('You are Datum’s reporting assistant. Datum is a desktop app with Data Sheets (spreadsheets), Dashboard Sheets (live headline numbers, charts, tables and written insights with date and category filters, exported to PDF as the report), Slide Sheets and Docu Sheets.');
+    lines.push('You help the person turn their data into clear dashboards and reports. Reply with JSON only: {"reply": string, "actions": [...]}.');
     lines.push('RULES: Only quote numbers that appear in FACTS or KPIS, copied exactly. Never calculate or invent numbers. Keep "reply" under 90 words, plain and friendly. Suggest at most 3 actions, only ones that fit the request. Use exact metric and column names from CONTEXT.');
     lines.push('ACTIONS:');
-    lines.push('- {"type":"report","layout":"landscape|portrait|slides","focus":metric,"questions":[ids from QUESTIONS],"title":string} builds a full report.');
-    lines.push('- {"type":"board","title":string} builds an interactive dashboard with date range and filter widgets.');
-    lines.push('- {"type":"chart","metric":metric,"metric2":optional second metric,"by":column name or "time","chart":"bar|hbar|line|area|doughnut|scatter|combo"} adds one linked chart.');
+    lines.push('- {"type":"report","layout":"landscape|portrait|slides","focus":metric,"questions":[ids from QUESTIONS],"title":string} builds a full dashboard (slides builds a deck instead). This is the usual answer to "make me a report".');
+    lines.push('- {"type":"chart","metric":metric,"metric2":optional second metric,"by":column name or "time","chart":"bar|hbar|line|area|doughnut|scatter|combo"} adds one chart to the open dashboard (or a new one).');
     lines.push('- {"type":"kpi","metric":metric} adds a headline number card.');
     lines.push('- {"type":"insights"} adds Datum’s live insight sentences. {"type":"summary","text":string} writes an executive summary (only numbers from FACTS).');
-    lines.push('- {"type":"customize"} opens the report builder. {"type":"dataset"} combines many files into one sheet.');
+    lines.push('- {"type":"customize"} opens the dashboard builder. {"type":"dataset"} combines many files into one sheet.');
     lines.push('For questions about the data, answer in "reply" from FACTS and use no actions.');
     if (ctx) {
       const p = ctx.p;
@@ -355,7 +385,7 @@
     }
     panel.innerHTML = '';
     const m = AI.MODELS.find((x) => x.id === st.model) || AI.MODELS[1];
-    const chip = !hasGPU() ? h('span', { class: 'ai-chip off', title: 'This computer can’t run the offline model, so Datum’s built-in planner is used.' }, 'Built-in') : modelReady() ? h('span', { class: 'ai-chip on', title: m.meta }, `${m.name} · offline`) : h('span', { class: 'ai-chip', title: 'Using Datum’s built-in planner' }, 'Built-in');
+    const chip = st.brain !== 'builtin' ? h('span', { class: 'ai-chip on', title: 'Answers come from this AI, using Datum’s tools. Change it in ⋯' }, brainName()) : !hasGPU() ? h('span', { class: 'ai-chip off', title: 'This computer can’t run the offline model, so Datum’s built-in planner is used.' }, 'Built-in') : modelReady() ? h('span', { class: 'ai-chip on', title: m.meta }, `${m.name} · offline`) : h('span', { class: 'ai-chip', title: 'Using Datum’s built-in planner' }, 'Built-in');
     panel.append(h('div', { class: 'ai-head' }, h('span', { class: 'ai-mark', html: D.icon('sparkles', 16) }), h('b', null, 'Ask Datum'), chip,
       h('button', { class: 'icon-btn ghost', title: 'Assistant settings', html: D.icon('more', 15), onclick: () => settings() }),
       h('button', { class: 'icon-btn ghost', title: 'Close (Ctrl+J)', html: D.icon('x', 15), onclick: () => AI.toggle(false) })));
@@ -367,7 +397,7 @@
     panel.append(list);
     input = h('textarea', { class: 'ai-input', rows: 2, placeholder: 'Ask about your data, or say what you want built…' });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input.value); } e.stopPropagation(); });
-    panel.append(h('div', { class: 'ai-foot' }, input, h('button', { class: 'btn primary sm', html: D.icon('send', 14), title: 'Send (Enter)', onclick: () => send(input.value) })));
+    panel.append(h('div', { class: 'ai-foot' }, input, st.busy && st.brain !== 'builtin' ? h('button', { class: 'btn sm', html: D.icon('x', 14), title: 'Stop', onclick: () => NA().chatStop() }) : h('button', { class: 'btn primary sm', html: D.icon('send', 14), title: 'Send (Enter)', onclick: () => send(input.value) })));
     list.scrollTop = list.scrollHeight;
   }
   function welcome() {
@@ -376,20 +406,21 @@
     const chips = [];
     if (ctx && ctx.metrics.length) {
       const k = DS().pickMain(ctx.p, ctx.metrics);
-      chips.push('Build me a report', 'Make an interactive dashboard', ctx.p.mode === 'trend' ? `How has ${k.primary.name} changed?` : `Which ${ctx.p.noun.many} perform best?`, 'What stands out in this data?');
+      chips.push('Build me a dashboard', 'Make a deck from this', ctx.p.mode === 'trend' ? `How has ${k.primary.name} changed?` : `Which ${ctx.p.noun.many} perform best?`, 'What stands out in this data?');
       if (k.spend && k.primary && k.spend !== k.primary) chips.push(`Chart ${k.spend.name} vs ${k.primary.name}`);
       chips.push('Make it a slide deck');
     } else chips.push('Combine a folder of files into a data set');
     return h('div', { class: 'ai-welcome' },
-      h('p', null, ctx ? `I’m looking at “${ctx.sheet.name}” - ${DS().describe(ctx.p)}.` : 'Open a Data Sheet and I’ll help turn it into a report.'),
+      h('p', null, ctx ? `I’m looking at “${ctx.sheet.name}” - ${DS().describe(ctx.p)}.` : 'Open a Data Sheet and I’ll help turn it into a dashboard.'),
       h('p', { class: 'muted small' }, 'Every number I place is a live formula from your data, so nothing is made up.' + (hasGPU() && !modelReady() ? ' Download an offline model in ⋯ for looser requests and written summaries.' : '')),
       h('div', { class: 'ai-chips' }, chips.map((c) => h('button', { class: 'chip-t', onclick: () => send(c) }, c))));
   }
   function bubble(x) {
     if (x.role === 'user') return h('div', { class: 'ai-msg me' }, x.text);
     const box = h('div', { class: 'ai-msg bot' });
-    const txt = h('div', { class: 'ai-text' }, x.text || (x.pending ? '…' : ''));
+    const txt = h('div', { class: 'ai-text' }, x.text || (x.pending ? (x.steps && x.steps.length ? '' : '…') : ''));
     box.append(txt);
+    if (x.steps && x.steps.length) box.append(h('div', { class: 'ai-steps' }, x.steps.slice(-8).map((t) => h('span', { class: t.err ? 'err' : '' }, t.name.replace(/_/g, ' '))), x.pending ? h('span', { class: 'ai-dots' }, '…') : null));
     if (x.bad && x.bad.length) box.append(h('div', { class: 'ai-warn', html: D.icon('zap', 12) + `<span>Couldn’t match ${x.bad.join(', ')} to your data - check before using.</span>` }));
     (x.actions || []).forEach((a) => {
       const btn = h('button', { class: `btn sm ${a.done ? 'ghost' : 'primary'}`, disabled: a.done || a.running ? true : null }, a.done ? 'Done' : a.running ? 'Working…' : (a.type === 'summary' ? 'Add to a document' : 'Do it'));
@@ -398,7 +429,7 @@
         try { a.result = await AI.run(a); a.done = true; } catch (e) { console.error(e); a.result = e.message || 'Something went wrong'; a.failed = true; }
         a.running = false; render();
       });
-      box.append(h('div', { class: `ai-act ${a.failed ? 'failed' : ''}` }, h('span', { class: 'aa-ic', html: D.icon(a.type === 'chart' ? 'chart' : a.type === 'kpi' ? 'kpi' : a.type === 'report' ? 'report' : a.type === 'board' ? 'grid' : a.type === 'dataset' ? 'layers' : a.type === 'summary' ? 'docu' : 'sparkles', 15) }),
+      box.append(h('div', { class: `ai-act ${a.failed ? 'failed' : ''}` }, h('span', { class: 'aa-ic', html: D.icon(a.type === 'chart' ? 'chart' : a.type === 'kpi' ? 'kpi' : a.type === 'report' ? (a.layout === 'slides' ? 'slide' : 'grid') : a.type === 'board' ? 'grid' : a.type === 'dataset' ? 'layers' : a.type === 'summary' ? 'docu' : 'sparkles', 15) }),
         h('span', { class: 'aa-t' }, h('b', null, a.label || LABEL[a.type]), h('span', null, a.result || a.desc || '')), btn));
     });
     return box;
@@ -406,6 +437,7 @@
   async function send(text) {
     text = String(text || '').trim();
     if (!text || st.busy) return;
+    if (st.brain !== 'builtin' && NA()) return agentSend(text);
     if (input) input.value = '';
     st.msgs.push({ role: 'user', text });
     const bot = { role: 'bot', text: '', pending: true, actions: [] };
@@ -429,7 +461,99 @@
   }
   AI.send = send;
 
-  function settings() {
+  // ---- an AI with Datum's tools (Claude Code, Codex, or an API key): it builds and checks in the open project
+  function contextLine() {
+    const p = D.project();
+    if (!p) return 'No project is open yet.';
+    const a = D.active(); const v = D.app.view && D.app.view();
+    const sel = a && a.type === 'data' && v && v.selRange ? ` (selected ${v.selRange(true)})` : '';
+    return `Open project: "${p.name}"${p.dir ? ' at ' + p.dir : ' (not saved yet)'}, ${p.sheets.length} sheets. The user is looking at ${a ? `the ${a.type === 'dash' ? 'dashboard' : a.type + ' sheet'} "${a.name}"${sel}` : 'no sheet'}.`;
+  }
+  let live = null;
+  if (NA()) NA().onChatEvent((e) => {
+    const bot = live; if (!bot) return;
+    if (e.kind === 'text') bot.text = String(e.text).trim();
+    else if (e.kind === 'tool') bot.steps.push({ name: String(e.name).replace(/^mcp__datum__/, '') });
+    else if (e.kind === 'tool-error') { const last = bot.steps[bot.steps.length - 1]; if (last) last.err = true; }
+    else if (e.kind === 'done') { if (e.text) bot.text = String(e.text).trim(); }
+    else if (e.kind === 'error') { if (!/Couldn’t finish|Stopped\./.test(bot.text)) bot.text = (bot.text ? bot.text + '\n\n' : '') + (e.text === 'Stopped' ? 'Stopped.' : 'Couldn’t finish: ' + e.text); }
+    if (st.open && list) { const last = list.lastChild; const nb = bubble(bot); if (last && last.classList.contains('bot')) last.replaceWith(nb); else list.append(nb); list.scrollTop = list.scrollHeight; }
+  });
+  async function agentSend(text) {
+    if (input) input.value = '';
+    st.msgs.push({ role: 'user', text });
+    const bot = live = { role: 'bot', text: '', pending: true, steps: [] };
+    st.msgs.push(bot);
+    st.busy = true; render();
+    // the reply can overtake the last streamed events, so the final text is taken from the reply; late events still land on this bubble
+    try { const r = await NA().chatSend({ prompt: text, key: (D.project() || {}).id || 'none', context: contextLine(), provider: st.brain }); if (r && r.text) bot.text = String(r.text).trim(); }
+    catch (e) { const m = String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); if (!/Couldn’t finish|Stopped/.test(bot.text)) bot.text = (bot.text ? bot.text + '\n\n' : '') + (m === 'Stopped' ? 'Stopped.' : 'Couldn’t finish: ' + m); }
+    bot.pending = false; st.busy = false; render();
+  }
+
+  // ---- Settings: which AI answers here, and adding Datum to Claude / ChatGPT (Codex)
+  async function settings() {
+    if (NA()) { await AI.loadBrain(); return agentSettings(); }
+    return offlineSettings();
+  }
+  async function agentSettings() {
+    const cfg = st.cfg;
+    const pick = h('select', { class: 'input' },
+      h('optgroup', { label: 'Private, on this computer' }, h('option', { value: 'builtin' }, 'Datum built-in (and the optional offline model)')),
+      h('optgroup', { label: 'Your AI app on this computer (uses its own sign-in)' }, h('option', { value: 'claude-code' }, 'Claude Code'), h('option', { value: 'codex' }, 'Codex (ChatGPT)')),
+      h('optgroup', { label: 'An API key' }, cfg.providers.map((p) => h('option', { value: p.id }, p.name))));
+    pick.value = st.brain;
+    const detail = h('div', { class: 'stack' });
+    const conn = h('div', { class: 'ai-conn' }, h('p', { class: 'muted small' }, 'Checking…'));
+    const drawDetail = async () => {
+      detail.innerHTML = '';
+      const id = pick.value;
+      if (id === 'builtin') { detail.append(h('p', { class: 'muted small' }, 'Answers questions and builds dashboards with Datum’s own planner. Nothing leaves this computer.'), h('button', { class: 'btn sm', onclick: () => { D.closeModals && D.closeModals(); offlineSettings(); } }, 'Offline model…')); return; }
+      if (id === 'claude-code' || id === 'codex') {
+        const stt = await NA().status().catch(() => ({}));
+        const c = id === 'claude-code' ? stt.claude : stt.codex;
+        detail.append(h('p', { class: 'muted small' }, c ? `Found ${id === 'codex' ? 'Codex' : 'Claude Code'}${c.version ? ' ' + c.version : ''}. It runs with your own sign-in and works in Datum through Datum’s tools.` : `${id === 'codex' ? 'Codex' : 'Claude Code'} isn’t installed on this computer. Install it and sign in, or pick an API key below.`));
+        return;
+      }
+      const p = cfg.providers.find((x) => x.id === id);
+      const key = h('input', { class: 'input', type: 'password', placeholder: cfg.hasKey[id] ? 'Saved - type to replace' : p.noKey ? 'Not needed' : 'Paste your API key' });
+      const model = h('input', { class: 'input', value: (cfg.models && cfg.models[id]) || '', placeholder: p.model || 'Model name' });
+      const base = h('input', { class: 'input', value: (cfg.bases && cfg.bases[id]) || '', placeholder: p.base || 'https://…/v1' });
+      const saveIt = async () => { const patch = { id, model: model.value.trim(), base: base.value.trim() }; if (key.value.trim()) patch.key = key.value.trim(); st.cfg = { ...st.cfg, ...(await NA().setSettings(patch)) }; key.value = ''; key.placeholder = 'Saved - type to replace'; D.toast('Saved', 'ok'); };
+      detail.append(
+        p.noKey ? null : h('div', { class: 'field' }, h('label', null, 'API key'), key, p.keyUrl ? h('a', { href: '#', class: 'small', onclick: (e) => { e.preventDefault(); NA().openUrl(p.keyUrl); } }, 'Get a key') : null),
+        h('div', { class: 'row2' }, h('div', { class: 'field' }, h('label', null, 'Model'), model), h('div', { class: 'field' }, h('label', null, 'Address (optional)'), base)),
+        h('div', { class: 'row-btns' }, h('button', { class: 'btn sm', onclick: saveIt }, 'Save'), h('button', { class: 'btn sm', onclick: async () => { await saveIt(); try { const ms = await NA().models(id); D.toast(`Connected - ${ms.length} models available`, 'ok', 4000); } catch (e) { D.toast('Couldn’t connect: ' + String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'err', 6000); } } }, 'Test')),
+        h('p', { class: 'muted small' }, 'The key is encrypted with your system keychain and only used to talk to that service. What you ask and the numbers the AI reads go to it.'));
+    };
+    pick.addEventListener('change', drawDetail);
+    const drawConn = async () => {
+      const stt = await NA().status().catch((e) => ({ error: e.message }));
+      conn.innerHTML = '';
+      if (stt.error) return conn.append(h('p', { class: 'ai-warn' }, stt.error));
+      const row = (name, sub, s, which) => h('div', { class: 'ai-conn-row' },
+        h('div', null, h('b', null, name), h('span', { class: 'muted small' }, sub)),
+        h('span', { class: `ai-chip ${s.added ? 'on' : ''}` }, s.added ? (s.current ? 'Added' : 'Needs update') : s.installed === false ? 'Not installed' : 'Not added'),
+        h('button', { class: `btn sm ${s.added && s.current ? '' : 'primary'}`, disabled: s.installed === false && which !== 'desktop' ? true : null, onclick: async () => {
+          try { await NA().connect(which); D.toast(`Datum added to ${name}. ${which === 'desktop' ? 'Quit and reopen Claude to see it.' : 'Start a new session to use it.'}`, 'ok', 6000); drawConn(); }
+          catch (e) { D.toast(String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'err', 7000); }
+        } }, s.added && s.current ? 'Re-add' : 'Add'));
+      conn.append(
+        row('Claude Desktop', 'Chat with Claude and let it build reports in Datum', stt.desktop, 'desktop'),
+        row('Claude Code', stt.code.version || 'The claude command line', stt.code, 'code'),
+        row('Codex (ChatGPT)', stt.codex.version || 'Codex app, CLI or IDE extension, signed in with ChatGPT', stt.codex, 'codex'),
+        h('p', { class: 'muted small' }, stt.bridge && stt.bridge.connected ? `Connected now: ${stt.bridge.client || 'an AI app'}.` : 'Once added, ask there: “Use Datum to build a dashboard from my sign-ups sheet”. Datum opens in the background if it isn’t running.'));
+    };
+    const body = h('div', { class: 'ai-settings' },
+      h('h4', null, 'Who answers in Ask Datum'), h('div', { class: 'field' }, pick), detail,
+      h('h4', null, 'Use Datum from Claude or ChatGPT'),
+      h('p', { class: 'muted small' }, 'Adds Datum as a plugin (MCP server) so those apps can read your sheets and build, check and export dashboards for you.'),
+      conn);
+    drawDetail(); drawConn();
+    D.modal({ title: 'AI settings', width: 600, body, actions: [{ label: 'Close' }, { label: 'Use this AI', primary: true, onClick: async () => { st.cfg = { ...st.cfg, ...(await NA().setSettings({ provider: pick.value })) }; st.brain = pick.value; render(); D.toast(`Ask Datum now uses ${brainName()}`, 'ok'); } }] });
+  }
+  AI.connect = () => settings();
+  function offlineSettings() {
     const gpu = hasGPU();
     const use = h('input', { type: 'checkbox' }); use.checked = st.useModel;
     use.addEventListener('change', () => { st.useModel = use.checked; LS.set('useModel', st.useModel); });
@@ -445,7 +569,7 @@
       h('label', { class: 'chk' }, use, h('span', null, 'Use the offline model when it’s downloaded')),
       h('p', { class: 'muted small' }, 'Either way, numbers come from Datum’s formulas, and the assistant flags any figure it can’t match to your data.'));
     let closeFn;
-    closeFn = D.modal({ title: 'Ask Datum settings', width: 560, body, actions: [
+    closeFn = D.modal({ title: 'Offline model', width: 560, body, actions: [
       { label: 'Remove downloaded models', danger: true, onClick: () => { AI.removeModels().then(() => D.toast('Downloaded models removed', 'ok')); } },
       { label: 'Close' },
       gpu ? { label: st.cached[st.model] ? 'Load model now' : 'Download model', primary: true, onClick: () => { AI.toggle(true); st.useModel = true; LS.set('useModel', true); AI.ensureEngine(progress).then(() => { if (statusEl) statusEl.innerHTML = ''; D.toast('Offline model ready', 'ok'); render(); }).catch((e) => { console.error(e); if (statusEl) statusEl.innerHTML = ''; D.toast(/memory|allocate/i.test(String(e)) ? 'Not enough memory - try the Swift model' : navigator.onLine ? 'Couldn’t load the model' : 'You’re offline and this model isn’t downloaded yet', 'warn', 6000); }); } } : null
@@ -456,4 +580,5 @@
   // ------------------------------------------------------------------ wiring
   document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); AI.toggle(); } });
   setTimeout(() => AI.refreshCache(), 2500);
+  setTimeout(() => AI.loadBrain().then(() => { if (st.open) render(); }), 600);
 })();

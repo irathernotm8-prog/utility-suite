@@ -122,8 +122,8 @@
     data: { label: 'Data Sheet', short: 'Data', icon: 'data', color: '#00C2FF', ext: 'xlsx', hint: 'Spreadsheet with formulas - saves as Excel' },
     slide: { label: 'Slide Sheet', short: 'Slides', icon: 'slide', color: '#3D7BFF', ext: 'pptx', hint: 'Presentation deck - saves as PowerPoint' },
     docu: { label: 'Docu Sheet', short: 'Docu', icon: 'docu', color: '#8B9BFF', ext: 'docx', hint: 'Document - saves as Word or PDF' },
-    report: { label: 'Report Sheet', short: 'Report', icon: 'report', color: '#2EE6C9', ext: 'pdf', hint: 'Report pages of charts, KPIs and insights (saves as PDF)' },
-    dash: { label: 'Dashboard Sheet', short: 'Dashboard', icon: 'grid', color: '#F5B544', ext: 'pdf', hint: 'Live grid of widgets with date range and sheet filters (saves as PDF)' }
+    report: { label: 'Report Sheet', short: 'Report', icon: 'report', color: '#2EE6C9', ext: 'pdf', hint: 'Older report pages (still open; convert to a dashboard)', retired: true },
+    dash: { label: 'Dashboard Sheet', short: 'Dashboard', icon: 'grid', color: '#F5B544', ext: 'pdf', hint: 'Live charts, numbers and written insights with filters - exports to PDF' }
   };
 
   // ---------- state

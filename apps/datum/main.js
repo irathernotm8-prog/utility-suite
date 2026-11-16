@@ -7,6 +7,11 @@ const os = require('os');
 const { pathToFileURL } = require('url');
 const formats = require('./lib/formats');
 
+// one Datum at a time: opening it again (or Claude starting it) brings the running one forward
+if (process.env.DATUM_USER_DATA) app.setPath('userData', process.env.DATUM_USER_DATA);
+let startHidden = process.argv.includes('--hidden');
+if (!process.env.DATUM_E2E && !app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
+
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } }
 ]);
@@ -24,8 +29,17 @@ const recoveryFile = () => path.join(userData(), 'recovery.datum');
 process.on('uncaughtException', (err) => { console.error('Uncaught:', err); });
 process.on('unhandledRejection', (err) => { console.error('Unhandled rejection:', err); });
 
+function showWindow() {
+  if (!win || win.isDestroyed()) return createWindow();
+  if (process.platform === 'darwin' && app.dock) app.dock.show();
+  if (win.isMinimized()) win.restore();
+  win.show(); win.focus();
+}
+app.on('second-instance', (_e, argv) => { if (!argv.includes('--hidden')) showWindow(); });
+
 function createWindow() {
   win = new BrowserWindow({
+    show: !startHidden,
     width: 1480,
     height: 920,
     minWidth: 1024,
@@ -70,8 +84,12 @@ app.whenReady().then(() => {
     if (!abs.startsWith(ROOT)) return new Response('forbidden', { status: 403 });
     return net.fetch(pathToFileURL(abs).toString());
   });
+  // Claude / Codex plugin bridge and the in-app assistant (lib/agent.js)
+  try { require('./lib/agent').setup({ getWin: () => win, showWindow, htmlToPng }); } catch (e) { console.error('AI bridge failed to start', e); }
   createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  if (startHidden && process.platform === 'darwin' && app.dock) app.dock.hide();
+  startHidden = false;
+  app.on('activate', () => { if (!win || win.isDestroyed()) createWindow(); else showWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 

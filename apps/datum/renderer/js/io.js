@@ -148,16 +148,14 @@
       out.push(s);
     }
     if (images.length) {
-      const rep = D.sheetTypes.report.create(IO.uniqueAmong('Images', [...(D.project()?.sheets || []), ...out]));
+      // loose pictures land on a dashboard, three to a row
+      const rep = D.sheetTypes.dash.create(IO.uniqueAmong('Images', [...(D.project()?.sheets || []), ...out]));
       for (const im of images) {
         const img = await D.loadImage(im.src).catch(() => null);
-        const w = 300, hh = img ? Math.round(300 * img.naturalHeight / img.naturalWidth) : 200;
-        const e = D.newElement('image', { src: im.src, w, h: hh });
-        const n = rep.elements.length;
-        e.x = 40 + (n % 3) * 330; e.y = 40 + Math.floor(n / 3) * (hh + 20);
-        rep.elements.push(e);
+        const hh = img ? Math.round(420 * img.naturalHeight / img.naturalWidth) : 280;
+        const n = rep.widgets.length;
+        D.board.addElement(rep, D.newElement('image', { src: im.src, w: 420, h: hh }), { kind: 'image', x: (n % 3) * 4, y: Math.max(0, ...rep.widgets.filter((w) => w.x === (n % 3) * 4).map((w) => w.y + w.h)) });
       }
-      rep.pages = Math.max(1, Math.ceil((Math.max(...rep.elements.map((e) => e.y + e.h)) + 40) / 816));
       out.push(rep);
     }
     Object.defineProperty(out, 'names', { value: names, enumerable: false });
@@ -187,13 +185,13 @@
     if (!sheets.length) return;
     // image-only drop onto an open canvas sheet goes straight in
     const a = D.active();
-    if (sheets.every((s) => s.type === 'image') && a && (a.type === 'slide' || a.type === 'report')) {
+    if (sheets.every((s) => s.type === 'image') && a && (a.type === 'slide' || a.type === 'report' || a.type === 'dash')) {
       for (const im of sheets) {
         const img = await D.loadImage(im.src);
         const w = Math.min(img.naturalWidth, 480), hh = Math.round(w * img.naturalHeight / img.naturalWidth);
         const e = D.newElement('image', { src: im.src, w, h: hh });
         if (a.type === 'slide') { e.x = Math.round((960 - w) / 2); e.y = Math.round((540 - hh) / 2); a.slides[a.current || 0].elements.push(e); }
-        else D.sheetTypes.report.addElement(a, e);
+        else D.sheetTypes[a.type].addElement(a, e);
       }
       D.commit({ data: false });
       D.app.activate(a.id, true);
@@ -274,7 +272,8 @@
     return exports;
   };
 
-  IO.save = async (saveAs = false) => {
+  // opt (from the AI tools): { parentDir, name } saves a new project there without asking
+  IO.save = async (saveAs = false, opt = {}) => {
     const p = D.project();
     if (!p) return false;
     IO.flush();
@@ -289,7 +288,8 @@
       if (!c) return false;
       if (c === 'new') folder = null; else p.confirmedFolderSave = true;
     }
-    if (!folder) {
+    if (!folder && opt.parentDir) { if (opt.name) { p.name = opt.name; D.app.renderTop(); } parentDir = opt.parentDir; }
+    else if (!folder) {
       if (saveAs || !p.dir) {
         const nm = await D.prompt('Project name', p.name === 'Untitled project' ? '' : p.name, 'e.g. Q3 Marketing Review');
         if (!nm) return false;
@@ -332,20 +332,21 @@
   };
 
   // ---------- export single sheet / everything
-  IO.exportSheet = async (sheet, fmt) => {
+  IO.exportSheet = async (sheet, fmt, opt = {}) => {
     IO.flush();
     const T = D.sheetTypes[sheet.type];
     fmt = fmt || D.TYPE_META[sheet.type].ext;
     if (sheet.type === 'docu' && !fmt) fmt = sheet.format === 'pdf' ? 'pdf' : 'docx';
-    const fp = await N().saveFileDialog(`${sheet.name}.${fmt}`, fmt);
+    const fp = opt.filePath || (await N().saveFileDialog(`${sheet.name}.${fmt}`, fmt));
     if (!fp) return;
     D.app.busy('Exporting…');
     try {
       if (fmt === 'pdf') await N().exportPdf(await IO.buildPrint(await IO.printPartsFor(sheet), sheet.name), fp);
       else { if (sheet.type === 'docu') await T.ensureHtml(sheet); await N().exportSheet({ sheet: D.clone(sheet), ex: T.exportPayload(sheet), brand: D.brand(), filePath: fp }); }
       D.toast(`Exported ${fp.split(/[\\/]/).pop()}`, 'ok');
-      N().reveal(fp);
-    } catch (err) { console.error(err); D.toast(`Export failed: ${err.message}`, 'err', 6000); }
+      if (!opt.filePath) N().reveal(fp);
+      return fp;
+    } catch (err) { console.error(err); D.toast(`Export failed: ${err.message}`, 'err', 6000); if (opt.filePath) throw err; }
     finally { D.app.busy(false); }
   };
 

@@ -45,7 +45,7 @@
     });
     for (const s of p.sheets) {
       if (s.type === 'data') s.cells.forEach((row) => row.forEach((v, i) => { if (typeof v === 'string' && v.startsWith('=')) row[i] = fix(v, s === target); }));
-      const els = s.type === 'slide' ? s.slides.flatMap((x) => x.elements) : s.type === 'report' ? s.elements : [];
+      const els = D.elementsOf(s);
       els.forEach((e) => {
         if (e.link && e.link.sheetId === target.id) e.link.range = fix(e.link.range, true);
         ['text', 'label'].forEach((k) => { if (typeof e[k] === 'string') e[k] = e[k].replace(/\{\{([^}]*)\}\}/g, (_, x) => `{{${fix(x, false)}}}`); });
@@ -338,10 +338,13 @@
         h('div', { class: 'tb-spacer' }),
         this.sheet.dataset ? D.btn('layers', 'This sheet combines several files - see the files or refresh', () => D.dataset.info(this.sheet), { label: `${new Set((this.sheet.dataset.files || []).map((f) => f.path)).size} files` }) : null,
         this.sheet.dataset ? D.btn('refresh', 'Re-read the files now. Datum also picks up new and changed files on its own', () => D.dataset.refresh(this.sheet), { label: 'Refresh' }) : null,
-        (() => { const b = D.btn('send', 'Send the selected range to a slide, report or document - it stays linked', () => D.links.sendTo(b, this.sheet.id, this.selRange(true)), { label: 'Send to', caret: true, cls: 'accent' }); return b; })(),
-        D.btn('chart', 'Chart the selection on a Report Sheet', () => this.quickChart(), { label: 'Chart' }),
-        D.btn('sparkles', 'Build a report from this table', () => D.sheetTypes.report.quickDashboard(this.sheet, this.selRange(true)), { label: 'Report' }),
-        D.btn('grid', 'Build an interactive dashboard (filters, date range) from this sheet', () => D.sheetTypes.dash.createFor([this.sheet.id]), { label: 'Dashboard' })
+        (() => { const b = D.btn('send', 'Send the selected range to a slide, dashboard or document - it stays linked', () => D.links.sendTo(b, this.sheet.id, this.selRange(true)), { label: 'Send to', caret: true, cls: 'accent' }); return b; })(),
+        D.btn('chart', 'Chart the selection on a dashboard', () => this.quickChart(), { label: 'Chart' }),
+        (() => { const b = D.btn('sparkles', 'Build a dashboard from this table: headline numbers, written insights and charts, all filterable, exported to PDF', () => D.menu(b, [
+          { label: 'Build it for me', icon: 'zap', onClick: () => D.sheetTypes.dash.createFor([this.sheet.id]) },
+          { label: 'Choose what it shows…', icon: 'sparkles', onClick: () => D.dash.open(this.sheet, this.selRange(true)) },
+          ...(D.board.siblings(this.sheet).length > 1 ? [{ label: `From all ${D.board.siblings(this.sheet).length} tabs like this`, icon: 'grid', onClick: () => { const sib = D.board.siblings(this.sheet); D.sheetTypes.dash.createFor(sib.map((x) => x.id), `${String(this.sheet.name).split(' · ')[0]} Dashboard`); } }] : [])
+        ]), { label: 'Dashboard', caret: true }); return b; })()
       );
     }
     setFrozen(n) { this.sheet.frozen = n; D.commit({ data: false }); this.renderGrid(); this.buildToolbar(); }
@@ -388,7 +391,7 @@
       const p = D.project();
       const add = (rg) => { const g = F().parseRange(rg); if (!g) return; for (let r = g.r1; r <= Math.min(g.r2, g.r1 + 2000); r++) for (let c = g.c1; c <= g.c2; c++) set.add(r + ',' + c); };
       for (const s of p.sheets) {
-        const els = s.type === 'slide' ? s.slides.flatMap((x) => x.elements) : s.type === 'report' ? s.elements : [];
+        const els = D.elementsOf(s);
         els.forEach((e) => { if (e.link && e.link.sheetId === this.sheet.id) add(e.link.range); });
         if (s.type === 'docu' && s.html) s.html.replace(new RegExp(`data-sheet="${this.sheet.id}" data-range="([^"]+)"`, 'g'), (_, rg) => add(rg));
       }
@@ -1560,10 +1563,9 @@
 
     quickChart() {
       const range = this.selRange(true);
-      const reps = D.project().sheets.filter((s) => s.type === 'report');
-      const target = reps[0] || D.app.addSheet('report', { activate: false });
+      const target = D.project().sheets.find((s) => s.type === 'dash') || D.app.addSheet('dash', { activate: false });
       const link = { sheetId: this.sheet.id, range };
-      D.sheetTypes.report.insertLinked(target, { kind: 'chart', chartType: 'bar', link, title: D.links.defaultTitle(link) });
+      D.sheetTypes.dash.insertLinked(target, { kind: 'chart', chartType: 'bar', link, title: D.links.defaultTitle(link) });
       D.app.activate(target.id);
       D.toast(`Charted ${range} on ${target.name}`, 'ok');
     }

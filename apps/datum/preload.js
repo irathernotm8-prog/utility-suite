@@ -27,5 +27,22 @@ contextBridge.exposeInMainWorld('native', {
   exportPdf: (html, filePath) => invoke('export:pdf', { html, filePath }),
   exportSheet: (payload) => invoke('export:sheet', payload),
   renderPng: (html, w, h) => invoke('render:png', { html, w, h }),
-  pathForFile: (file) => webUtils.getPathForFile(file)
+  pathForFile: (file) => webUtils.getPathForFile(file),
+  // AI: tool calls from Claude / Codex / the in-app assistant, and their settings
+  agent: {
+    ready: () => ipcRenderer.send('agent:ready'),
+    onCall: (fn) => ipcRenderer.on('agent:call', (_e, msg) => fn(msg)),
+    result: (id, result) => ipcRenderer.send('agent:result', { id, result }),
+    onBridge: (fn) => ipcRenderer.on('agent:bridge', (_e, st) => fn(st)),
+    settings: () => invoke('agent:settings'),
+    setSettings: (patch) => invoke('agent:settings-set', patch),
+    models: (id) => invoke('agent:models', id),
+    status: () => invoke('agent:status'),
+    connect: (which) => invoke('agent:connect', which),
+    openUrl: (u) => invoke('agent:open-url', u),
+    chatSend: (o) => invoke('agent:chat-send', o),
+    chatStop: () => invoke('agent:chat-stop'),
+    chatClear: (key) => invoke('agent:chat-clear', key),
+    onChatEvent: (fn) => ipcRenderer.on('agent:chat-event', (_e, ev) => fn(ev))
+  }
 });

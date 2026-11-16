@@ -280,7 +280,7 @@
           { label: 'Duplicate', icon: 'copy', onClick: () => { const c = D.clone(s); c.id = D.uid(); c.elements.forEach((x) => { x.id = D.uid(); }); this.sheet.slides.splice(i + 1, 0, c); this.sheet.current = i + 1; D.commit({ data: false }); this.renderRail(); this.show(); } },
           { label: 'Move up', icon: 'arrowUp', disabled: i === 0, onClick: () => this.moveSlide(i, i - 1) },
           { label: 'Move down', icon: 'arrowDown', disabled: i === this.sheet.slides.length - 1, onClick: () => this.moveSlide(i, i + 1) },
-          { label: 'Send slide to report (as image)', icon: 'report', onClick: () => this.slideToReport(s) },
+          { label: 'Send slide to a dashboard (as image)', icon: 'dash', onClick: () => this.slideToReport(s) },
           { sep: true },
           { label: 'Delete slide', icon: 'trash', danger: true, disabled: this.sheet.slides.length === 1, onClick: () => this.deleteSlide(i) }
         ]); });
@@ -325,8 +325,8 @@
     async slideToReport(s) {
       const sz = this.sheet.size || { w: W, h: H };
       const png = await D.io.pageToPng({ ...sz, bg: s.bg, elements: s.elements });
-      const rep = D.project().sheets.find((x) => x.type === 'report') || D.app.addSheet('report', { activate: false });
-      D.sheetTypes.report.addElement(rep, D.newElement('image', { src: png, w: 480, h: 270 }));
+      const rep = D.project().sheets.find((x) => x.type === 'dash') || D.app.addSheet('dash', { activate: false });
+      D.sheetTypes.dash.addElement(rep, D.newElement('image', { src: png, w: 630, h: 354 }));
       D.toast(`Slide added to ${rep.name}`, 'ok');
     }
 

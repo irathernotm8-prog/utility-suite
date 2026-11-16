@@ -1,6 +1,6 @@
 # Datum
 
-A desktop workstation where spreadsheets, slides, documents, reports and dashboards live in one **project**, all linked. Change a number once on a Data Sheet and every chart, table, KPI and sentence that uses it updates.
+A desktop workstation where spreadsheets, slides, documents and dashboards live in one **project**, all linked. Change a number once on a Data Sheet and every chart, table, KPI and sentence that uses it updates.
 
 ## Run it
 
@@ -23,24 +23,25 @@ Everything lands in `dist/`:
 
 | File | What it is |
 |---|---|
-| `Datum-1.6.0-mac-universal.dmg` | Mac installer (drag to Applications). Works on Apple Silicon and Intel Macs |
-| `Datum-1.6.0-mac-universal.zip` | Mac app, zipped. Unzip and double-click Datum |
-| `Datum-1.6.0-win-x64.exe` | Windows installer |
-| `Datum-1.6.0-win-x64.zip` | Windows app, zipped. Unzip and run `Datum.exe`, no install needed |
+| `Datum-2.0.0-mac-universal.dmg` | Mac installer (drag to Applications). Works on Apple Silicon and Intel Macs |
+| `Datum-2.0.0-mac-universal.zip` | Mac app, zipped. Unzip and double-click Datum |
+| `Datum-2.0.0-win-x64.exe` | Windows installer |
+| `Datum-2.0.0-win-x64.zip` | Windows app, zipped. Unzip and run `Datum.exe`, no install needed |
 
 The people you send these to don't need Node.js or anything else installed.
 
 The app isn't code-signed, so the first launch shows a warning. On a Mac, right-click Datum, choose **Open**, then **Open** again. On Windows, click **More info**, then **Run anyway**.
 
-## The four sheets
+## The sheets
 
 | Sheet | Works like | Saves as |
 |---|---|---|
 | **Data Sheet** | Excel - formulas, formats, sort, freeze header | `.xlsx` |
 | **Slide Sheet** | PowerPoint - layouts, shapes, images, speaker notes, presenter mode | `.pptx` (native, editable charts and tables) |
 | **Docu Sheet** | Word - headings, lists, tables, images, page breaks. Opens PDFs too | `.docx` or `.pdf` |
-| **Report Sheet** | Report pages of charts, KPI cards, tables, images and insights | `.pdf` |
-| **Dashboard Sheet** | A live grid of widgets (KPIs, charts, tables) with date range, sheet and value filters | `.pdf` (a snapshot with the current filters) |
+| **Dashboard Sheet** | Your reports: headline numbers, charts, tables, written insights, text and images on a live grid with date and value filters | `.pdf` at Letter, A4, Legal, Tabloid, A3 or one long page |
+
+Reports and dashboards are one thing since 2.0: a dashboard *is* the report, and its PDF is what you send. Older Report Sheets in existing projects still open and work; a banner on them offers **Convert to dashboard** (Ctrl+Z undoes it).
 
 ## Projects are folders
 
@@ -53,7 +54,7 @@ The app isn't code-signed, so the first launch shows a warning. On a Mac, right-
 
 ## Linking - the core idea
 
-- **Send to** (Data Sheet toolbar): select a range → send it to any slide, report or doc as a chart, table, KPI card or live value.
+- **Send to** (Data Sheet toolbar): select a range → send it to any slide, dashboard or doc as a chart, table, KPI card or live value.
 - **Insert from data** (Chart / Table / KPI buttons on other sheets): pick a range on a mini-grid with a live preview.
 - **Live values in text**: type `{{'Weekly Data'!B9}}` or `{{SUM(Sales!B2:B13)}}` inside any text box. The ⚡ button builds these for you.
 - **Paste cells into a Docu Sheet**: copy a range in a Data Sheet, paste into a document, and choose linked table, linked chart or live total.
@@ -61,20 +62,20 @@ The app isn't code-signed, so the first launch shows a warning. On a Mac, right-
 
 ## Shortcuts that save time
 
-- **Quick report** turns a table into a finished report, whether the table has amounts to add up (spend, revenue) or is a list of records to count (sign-ups, leads, tickets).
+- **Quick dashboard** (the *Dashboard* button on a Data Sheet → *Choose what it shows…*) turns a table into a finished report, whether the table has amounts to add up (spend, revenue) or is a list of records to count (sign-ups, leads, tickets).
   - **It reads the table first.** Datum works out which column names each row (campaign, product, store), which is a timeline, and which are amounts, rates or categories. Rates such as cost per result or CPC are recognised as one column divided by another and totalled properly (total spend ÷ total results), not averaged. Columns that never change, such as a status of "active" on every row, are set aside, and fixed reporting dates go into the subtitle. Click any column chip to correct a guess.
   - **Suggested for you** lists plain-language questions to tick, such as "Where is the spend going?", "Which campaigns are most efficient?" and "Does more spend bring more results?". The recommended ones are pre-ticked.
   - **Build your own** is for experienced users: pick up to 8 headline numbers in your order; add charts (over time, ranking, share, bar + line, stacked breakdown of one category by another, scatter, table); "Number of records" is always one of the metrics and choose the metric, grouping, sort and chart type for each; and create calculated metrics (CTR, CPM, cost per click, ROAS and conversion rate are suggested when the columns exist).
-  - **Layouts:** Landscape, Portrait (vertical, scrolls down) or a Slides deck. Insights flow onto the next page instead of leaving gaps.
+  - **Layouts:** Dashboard (landscape or portrait PDF pages) or a Slides deck.
   - **Lists of records** are counted: how many per week or month, which source or market brings the most, each group's share, a stacked breakdown of one category by another (market by source), and a ranked table with shares. A month still in progress is compared with the same days of the previous month, never called a drop, and best / weakest months only count complete ones.
-  - **What you get:** headline cards, live-sorted rankings, scatter plots with point labels, bar + line combos, and written insights (leaders, concentration, best and worst, how many beat the overall rate, correlations), all as live formulas on a "· Calc" sheet.
-  - **Edit report** on the report reopens the builder with your choices, and **Apply brand** restyles the header, cards, charts and tables with the project's brand kit.
-- **Data sets** - New sheet → *Data set (combine files)*, or *Combine files* on the start screen. Pick a set of spreadsheets or a whole folder (monthly exports, one file per region…) and Datum stacks them into one Data Sheet without opening each file. It finds the header row in each file, lines columns up by name (any order) or by position, skips total rows and repeated headers, and can add **Source** and **Period** columns (the period comes from dates in file names such as `Sales 2024-03.xlsx`, `Q1 2024` or `March 2024`). Formulas in the files are calculated, and the preview flags files with missing or extra columns. **It stays current on its own:** drop a new export into the folder (or save over one) and within about 20 seconds the data set re-reads itself. Dashboards update live, and reports built from it are rebuilt automatically (both can be switched off in the data set's *files* panel). **Refresh** does the same on demand. Formulas and charts that cover the whole data grow with it, and columns you added keep their formulas. **One workbook with a tab per week or month:** pick the workbook and Datum stacks every tab with a date in its name (`10-04-26`, `9-7-25`, `Mar 2024`…), leaving summary, blank and helper tabs out. It adds **Worksheet** and **Period** columns (the period comes from the tab name), and when you add a new week's tab and save the workbook, the data set picks it up within about 20 seconds. If the file can't be read for a moment (Excel or OneDrive still saving it), the data set keeps its last rows and tries again on the next save. **Duplicates:** when the files share an ID column (Order ID, Email, Object Number…), the preview says how many records repeat and can remove repeats, keeping the copy from the newest file or the first one found.
+  - **What you get:** a dashboard with a title band (period, filters, rows), date and category filters, headline cards (totals, the latest week or month against the one before, which group leads), a *What stands out* card of written insights, the charts you picked and a table. Everything follows the filters, including the sentences. *Build it for me* skips the questions and takes the recommendations. Slide decks are still built from live formulas on a "· Calc" sheet.
+  - **Edit setup** on the dashboard reopens the builder with your choices.
+- **Data sets** - New sheet → *Data set (combine files)*, or *Combine files* on the start screen. Pick a set of spreadsheets or a whole folder (monthly exports, one file per region…) and Datum stacks them into one Data Sheet without opening each file. It finds the header row in each file, lines columns up by name (any order) or by position, skips total rows and repeated headers, and can add **Source** and **Period** columns (the period comes from dates in file names such as `Sales 2024-03.xlsx`, `Q1 2024` or `March 2024`). Formulas in the files are calculated, and the preview flags files with missing or extra columns. **It stays current on its own:** drop a new export into the folder (or save over one) and within about 20 seconds the data set re-reads itself. Dashboards update live, and decks built from it are rebuilt automatically (both can be switched off in the data set's *files* panel). **Refresh** does the same on demand. Formulas and charts that cover the whole data grow with it, and columns you added keep their formulas. **One workbook with a tab per week or month:** pick the workbook and Datum stacks every tab with a date in its name (`10-04-26`, `9-7-25`, `Mar 2024`…), leaving summary, blank and helper tabs out. It adds **Worksheet** and **Period** columns (the period comes from the tab name), and when you add a new week's tab and save the workbook, the data set picks it up within about 20 seconds. If the file can't be read for a moment (Excel or OneDrive still saving it), the data set keeps its last rows and tries again on the next save. **Duplicates:** when the files share an ID column (Order ID, Email, Object Number…), the preview says how many records repeat and can remove repeats, keeping the copy from the newest file or the first one found.
 - **Doc → Deck** - headings become slides, bullets become bullet points, linked charts come along still linked.
-- **PDF pages → slides** - hover a PDF page and send it to a deck or report as an image.
+- **PDF pages → slides** - hover a PDF page and send it to a deck or dashboard as an image.
 - **Brand kit** - colors, chart palette, fonts and logo used across the project. *Apply brand* restyles a whole deck and stamps the logo.
 - **Command palette** (Ctrl+K) - jump to any sheet, slide or heading, or run any command.
-- **Export → Combine sheets into one PDF** - a single board-pack PDF with slides, reports and docs at their correct page sizes.
+- **Export → Combine sheets into one PDF** - a single board-pack PDF with slides, dashboards and docs at their correct page sizes.
 - Crash recovery autosaves unsaved work every 30 seconds.
 
 Full shortcut list: Ctrl+K → "Keyboard shortcuts".
@@ -99,9 +100,11 @@ Full shortcut list: Ctrl+K → "Keyboard shortcuts".
 
 ## Dashboard Sheets
 
-A Dashboard Sheet is a live grid of widgets over one or more Data Sheets or a data set, similar to a Salesforce dashboard.
+A Dashboard Sheet is a live grid of widgets over one or more Data Sheets or a data set, similar to a Salesforce dashboard, and it is also the report you export.
 
-- **Widgets:** KPI (with change vs the previous period), chart (columns, bars, line, area, stacked, bar + line, doughnut, pie, scatter), table (totals per group, a rows × columns grid, or individual rows), date range, sheet filter, value filter and text.
+- **Widgets:** KPI (total with change vs the previous period, the latest week or month vs the one before, or which group leads and its share), chart (columns, bars, line, area, stacked, bar + line, doughnut, pie, scatter), table (totals per group, a rows × columns grid, or individual rows), **written insights**, text or heading (with live values), image or logo, date range, sheet filter and value filter. *Widget → Chart, table or KPI from a cell range…* adds a range-linked element like the old reports had.
+- **Written insights** are sentences Datum writes from the numbers (no AI needed): the total and its change, the latest period, the best period and the trend, the leader and its share, how concentrated it is, the biggest rises and drops. They're rewritten whenever the filters or the data change.
+- **Title band** (*Title* in the toolbar): the report title, with the period, active filters, row count and date underneath, on screen and in the PDF.
 - **Counts as well as sums.** Every KPI, chart and table can show the *number of records*, the number of *different* values of a column (cities, customers…), or a number column. Lists with nothing to add up (sign-ups, tickets, leads) work as well as spend and revenue.
 - **Comparing:** *Split into series by* breaks a chart into one series per value of another column (sign-ups per market, split by source), side by side or stacked. *Values as share* turns it into percentages (100% stacked when split). The grid table shows counts or totals for every pair, for example source × status, shaded by size. *Only count rows where* limits one widget to some rows (only Active, only D2D) while the rest of the dashboard stays as it is.
 - **Colours per chart:** pick a preset palette (Vivid, Ocean, Sunset, Forest, Grays, Pastel), set each series or slice yourself, or give every bar its own colour. *Brand* goes back to the project palette.
@@ -109,18 +112,28 @@ A Dashboard Sheet is a live grid of widgets over one or more Data Sheets or a da
 - **Filters apply to every widget.** The date range widget offers presets (last 30/90 days, this or last month and quarter, year to date, last 12 months, custom). For historical data, ranges count back from the latest date in the data. The sheet filter switches between the files in a data set (its Source column), the tabs of a dated-tab data set (its Worksheet column, newest first) or between several Data Sheets used together. Clicking a bar, slice or table row filters the whole dashboard by it.
 - **Build from data** lays out a starter dashboard: filter controls, headline numbers, trend and breakdown charts, and a summary table. Lists with nothing to add up (sign-ups, tickets, orders) get counts instead: records over time and records by each field. New dashboards are offered when you create a data set, and from the *Dashboard* button on any Data Sheet.
 - **Workbooks with one tab per week or month:** right-click any of those tabs and choose *Build dashboard from all N tabs like this*. The Sheet filter then picks weeks. In *Choose data*, tabs from one workbook are grouped with an *All / none* switch. Hidden Excel tabs (lookup lists) are left out.
-- When a sheet has summary blocks or helper formulas beside its records, the dashboard and Quick report read only the records table (labelled columns, down to the last row with typed data).
+- When a sheet has summary blocks or helper formulas beside its records, dashboards and Quick dashboard read only the records table (labelled columns, down to the last row with typed data).
 - **Repeated records:** when the data has an ID column that repeats (the same customer in two weeks' exports, say), the toolbar shows how many, and *Count each … once* leaves the repeats out of every widget.
 - Rates such as cost per result are worked out from the filtered totals, so they stay correct at any date range.
-- **PDF** exports the dashboard as it looks with the current filters, which are listed in the header.
+- **PDF** asks for the page size (Letter, A4, Legal, Tabloid, A3, or one long page) and orientation, then lays the dashboard out on real pages: filter controls are left out (the filters are listed in the title band), widgets are never split across pages, and every page has a footer with the title and page number.
 
 ## Ask Datum
 
-Click **Ask Datum** in the top bar (Ctrl+J) and ask in plain words: "build me a portrait report", "make an interactive dashboard", "chart cost per result by campaign", "spend vs results scatter", "which campaigns are most efficient?", "what stands out?". It answers from Datum's own calculations and offers actions (build a report or a dashboard, add a chart, a headline number or live insights to the open report or deck) that you confirm with **Do it**. Everything can be undone.
+Click **Ask Datum** in the top bar (Ctrl+J) and ask in plain words: "build me a dashboard", "make it a slide deck", "chart cost per result by campaign", "spend vs results scatter", "which campaigns are most efficient?", "what stands out?". It answers from Datum's own calculations and offers actions (build a dashboard or a deck, add a chart, a headline number or written insights to the open dashboard or deck) that you confirm with **Do it**. Everything can be undone.
 
 - Works straight away with Datum's built-in planner.
 - Optionally download an offline language model in Ask Datum's settings (⋯): Swift (about 0.9 GB), Balanced (about 1.6 GB, recommended) or Sharp (about 2.3 GB). It downloads once, then runs on your Mac's graphics chip with nothing leaving the computer. It handles looser requests and can write executive summaries.
 - Every number placed is a live formula. Any figure in a written reply that can't be matched to your data is flagged.
+- **Or let a full AI do the work** (⋯ → *Who answers*): **Claude Code** or **Codex** on this computer (they use your own sign-in), or an API key for Anthropic (Claude), OpenAI (GPT), Google Gemini, OpenRouter, xAI, Mistral, DeepSeek, Groq, or a local Ollama / LM Studio model. That AI gets the same tools as the plugins below and builds, checks (screenshots) and refines dashboards itself. API keys are encrypted with the system keychain.
+
+## Claude and ChatGPT plugins
+
+Datum can be added to **Claude Desktop**, **Claude Code** and **Codex** (OpenAI's coding agent, signed in with ChatGPT) as a plugin, so you can ask there: "use Datum to build a dashboard from my sign-ups sheet and export it as a PDF". Open Ask Datum → ⋯ (or search *AI settings* with Ctrl+K) and click **Add** next to each app; Datum writes the entry into that app's settings (backing up the old file first). Restart Claude Desktop afterwards.
+
+- The plugin is a small MCP server (`mcp/datum-mcp.js`, copied to Datum's app-data folder so it survives updates). It talks to the running Datum over a private local connection (127.0.0.1, a random port and a token only Datum and the plugin can read). If Datum isn't running, it starts it in the background.
+- Tools: project_context, open_project, new_project, save_project, import_files, read_sheet, profile_sheet, write_cells, create_sheet, quick_dashboard, get_dashboard, add_widget, update_widget, remove_widget, update_dashboard, set_filters, dashboard_data, write_document, show_sheet, screenshot, export_pdf, and datum_guide (how Datum works and what makes a good report).
+- A small "Claude · quick dashboard" note appears at the bottom of Datum while an outside AI works, and everything it does can be undone.
+- The ChatGPT desktop app itself only takes remote (internet) connectors, so for GPT use Codex, or an OpenAI API key in Ask Datum.
 
 ## Formulas
 
@@ -148,10 +161,9 @@ Other things that work:
 
 **Opening other people's files.** Datum calculates Excel formulas itself. If a file uses something Datum can't compute, such as a link to another workbook, the value Excel last saved is shown instead, so a cell never comes up broken. Hover the small mark in the corner of such a cell to see the reason. Sheet names (including `INDIRECT` text that names a tab), named ranges, hidden tabs and spilled array results are carried over. When you save, any formula Excel can't read the same way is written as its value, so the .xlsx always opens cleanly.
 
-## Reports and images
+## Images
 
-- Report Sheets can be Letter, Legal, Tabloid, A3, A4, A5, 16:9, 4:3, Square or a custom size, in portrait or landscape. Content can scale automatically when you change size, and the PDF exports at that page size.
-- Images on slides and reports can have a border (any color and thickness), rounded corners, a circle crop and a drop shadow - with one-click presets. Borders and shadows carry into PowerPoint.
+- Images on slides (and on older report pages) can have a border (any color and thickness), rounded corners, a circle crop and a drop shadow - with one-click presets. Borders and shadows carry into PowerPoint.
 
 ## Known limits
 

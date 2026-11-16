@@ -449,7 +449,7 @@
         chk('period', res.allDated ? `Add a “Period” column from ${o.sheetMode === 'dated' ? 'tab' : 'file'} names` : 'Add a “Period” column (no dates found in file names)', !res.allDated && 'File names need a date, month, quarter or year in them, e.g. Sales 2024-03.xlsx'),
         chk('skipTotals', 'Skip total rows'),
         chk('board', 'Build a dashboard next'),
-        chk('dashboard', 'Build a quick report next')),
+        chk('dashboard', 'Choose what a dashboard shows next')),
       dupBox,
       h('div', { class: 'field' }, h('label', null, 'Columns'), colsBox),
       h('div', { class: 'field' }, h('label', null, 'Files'), fileList));
@@ -524,9 +524,9 @@
     const rebuilt = how.quiet && dashes.length && ds.autoRebuild !== false;
     if (rebuilt) { dashes.forEach((d) => D.dash.rebuild(d)); D.dataVersion++; D.commit(); D.app.renderAll(); }
     else if (dashes.length && !how.quiet) {
-      D.modal({ title: 'Update reports?', width: 460,
-        body: h('p', { class: 'muted' }, `${dashes.map((d) => `“${d.name}”`).join(', ')} ${dashes.length > 1 ? 'were' : 'was'} built from this data set. Rebuild ${dashes.length > 1 ? 'them' : 'it'} so new periods and categories show up? Manual changes on ${dashes.length > 1 ? 'those dashboards' : 'that dashboard'} will be replaced.`),
-        actions: [{ label: 'Keep as is' }, { label: `Rebuild ${dashes.length > 1 ? dashes.length + ' reports' : 'report'}`, primary: true, onClick: () => { dashes.forEach((d) => D.dash.rebuild(d)); D.dataVersion++; D.commit(); D.app.renderAll(); D.toast('Reports rebuilt with the latest data', 'ok'); } }] });
+      D.modal({ title: 'Update reports and decks?', width: 460,
+        body: h('p', { class: 'muted' }, `${dashes.map((d) => `“${d.name}”`).join(', ')} ${dashes.length > 1 ? 'were' : 'was'} built from this data set. Rebuild ${dashes.length > 1 ? 'them' : 'it'} so new periods and categories show up? Manual changes on ${dashes.length > 1 ? 'those' : 'it'} will be replaced.`),
+        actions: [{ label: 'Keep as is' }, { label: `Rebuild ${dashes.length > 1 ? dashes.length + ' reports' : 'report'}`, primary: true, onClick: () => { dashes.forEach((d) => D.dash.rebuild(d)); D.dataVersion++; D.commit(); D.app.renderAll(); D.toast('Rebuilt with the latest data', 'ok'); } }] });
     }
     const bits = [`${n.toLocaleString()} rows`];
     if (added) bits.push(`${added} new file${added > 1 ? 's' : ''}`);
@@ -578,7 +578,7 @@
     });
     for (const s of p.sheets) {
       if (s.type === 'data') s.cells.forEach((row) => row.forEach((v, i) => { if (typeof v === 'string' && v[0] === '=') row[i] = fix(v, s === target); }));
-      const els = s.type === 'slide' ? s.slides.flatMap((x) => x.elements) : s.type === 'report' ? s.elements : [];
+      const els = D.elementsOf(s);
       els.forEach((e) => {
         if (e.link && e.link.sheetId === target.id) e.link.range = e.link.range.split(',').map((rg) => fix(rg, true)).join(',');
         ['text', 'label'].forEach((k) => { if (typeof e[k] === 'string') e[k] = e[k].replace(/\{\{([^}]*)\}\}/g, (_, x) => `{{${fix(x, false)}}}`); });

@@ -311,7 +311,7 @@
   // ------------------------------------------------ send a selected range somewhere
   L.sendTo = (anchor, sheetId, range) => {
     const p = D.project();
-    const targets = p.sheets.filter((s) => s.type !== 'data');
+    const targets = p.sheets.filter((s) => s.type !== 'data' && D.sheetTypes[s.type] && D.sheetTypes[s.type].insertLinked);
     const reps = (spec) => [
       { header: 'Show as' },
       { label: 'Chart', icon: 'chart', sub: D.charts.TYPES.map((t) => ({ label: t.label, icon: t.icon, onClick: () => spec({ kind: 'chart', chartType: t.id }) })) },
@@ -340,7 +340,7 @@
       })),
       targets.length ? { sep: true } : null,
       { label: 'New Slide Sheet', icon: 'slide', sub: reps(go('slide', { where: 'new' })) },
-      { label: 'New Report Sheet', icon: 'report', sub: reps(go('report')) },
+      { label: 'New Dashboard Sheet', icon: 'dash', sub: reps(go('dash')) },
       { label: 'New Docu Sheet', icon: 'docu', sub: reps(go('docu')) }
     ];
     D.menu(anchor, items);

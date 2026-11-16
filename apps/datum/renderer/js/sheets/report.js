@@ -77,7 +77,8 @@
     mount(host, sheet) { return new ReportView(host, sheet); },
     header: (...a) => header(...a),
     classicDashboard: (...a) => quickDashboard(...a),
-    quickDashboard: (s, range, opts) => (D.dash ? (opts && opts.auto ? D.dash.build(s, range, opts) : D.dash.open(s, range)) : quickDashboard(s, range))
+    // Quick report now makes a dashboard (a deck when the layout is slides)
+    quickDashboard: (s, range, opts) => (opts && opts.auto ? (opts.layout === 'slides' ? D.dash.build(s, range, opts) : D.board.fromQuick(s, range, opts)) : D.dash.open(s, range))
   };
   D.sheetTypes.report = T;
 
@@ -162,7 +163,11 @@
       this.toolbar = h('div', { class: 'sheet-toolbar' });
       this.canvasHost = h('div', { class: 'canvas-host report' });
       this.insp = h('div', { class: 'inspector' });
-      host.append(this.toolbar, h('div', { class: 'sheet-body two' }, this.canvasHost, this.insp));
+      // Reports and dashboards are one thing now: older report pages still open, with a one-click way across
+      const banner = h('div', { class: 'report-retired' }, h('span', { html: D.icon('dash', 16) }),
+        h('span', null, 'Reports are dashboards now: live filters, written insights and the same PDF export. This older report still works as it is.'),
+        h('button', { class: 'btn sm primary', onclick: () => D.board.convertReport(sheet) }, 'Convert to dashboard'));
+      host.append(banner, this.toolbar, h('div', { class: 'sheet-body two' }, this.canvasHost, this.insp));
       this.fc = new D.FreeCanvas(this.canvasHost, {
         model: () => { const d = dims(sheet); return { w: d.w, h: d.h * (sheet.pages || 1), bg: sheet.bg || '#FFFFFF', elements: sheet.elements }; },
         get pageHeight() { return dims(sheet).h; },
