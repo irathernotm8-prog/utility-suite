@@ -130,6 +130,30 @@ test('shaders: every built-in has mainImage and only uses uniforms Mural provide
   }
 });
 
+test('widgets: built-ins are valid, placing finds free spots, clamp, storage, import/export, permissions', () => {
+  const { Widgets, normalizeWidget, permissionText } = require('../src/core/widgets');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mural-w-'));
+  const W = new Widgets({ builtinDir: path.join(__dirname, '..', 'src', 'widgets'), userDir: path.join(tmp, 'Widgets'), dataDir: tmp });
+  const types = W.types(); assert(types.length >= 10, 'built-in widgets: ' + types.length);
+  for (const t of types) { const r = W.read(t.type); assert(fs.existsSync(W.fileOf(t.type, r.manifest.page)), t.type); const html = fs.readFileSync(W.fileOf(t.type, r.manifest.page), 'utf8'); assert(/widget-sdk\.js/.test(html), t.type + ' uses the SDK'); if (/setInterval|setTimeout\((tick|load|loop)/.test(html)) assert(/on\('pause'|mural\.paused/.test(html), t.type + ' stops its timers on pause'); }
+  assert.strictEqual(W.fileOf('builtin/clock', '../../main.js'), null);
+  const b = { width: 1440, height: 900 };
+  const a1 = W.add('builtin/clock', '1', b), a2 = W.add('builtin/notes', '1', b), a3 = W.add('builtin/todo', '1', b);
+  const overlap = (p, q) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
+  assert(!overlap(a1, a2) && !overlap(a2, a3) && !overlap(a1, a3), 'free spots don’t overlap');
+  assert.strictEqual(a1.settings.style, 'digital'); assert.deepStrictEqual(W.instances('1').length, 3);
+  W.update(a1.id, { x: 5000, y: -40, settings: { h24: true } }); const c = W.clamp(W.instance(a1.id), b);
+  assert(c.x + c.w <= 1440 && c.y >= 0); assert.strictEqual(W.instance(a1.id).settings.h24, true); assert.strictEqual(W.instance(a1.id).settings.style, 'digital');
+  W.setData(a2.id, 'text', 'hello'); assert.strictEqual(new Widgets({ builtinDir: W.builtinDir, userDir: W.userDir, dataDir: tmp }).getData(a2.id).text, 'hello', 'data survives a restart');
+  const t = W.temp('builtin/notes'); W.setData(t.id, 'text', 'x'); assert.strictEqual(W.getData(t.id).text, 'x'); assert(!fs.existsSync(W.dataFile(t.id)), 'previews never write to disk');
+  const mine = W.saveType(null, { name: 'Stock ticker', permissions: ['network', 'evil', 'suite:scene'], settings: [{ key: 'sym', type: 'text' }, { key: 'bad', type: 'nope' }] }, { 'index.html': '<p>hi</p>' });
+  assert.strictEqual(mine, 'user/stock-ticker'); const mm = W.read(mine).manifest; assert.deepStrictEqual(mm.permissions, ['network', 'suite:scene']); assert.strictEqual(mm.settings.length, 1);
+  const copy = W.saveType('builtin/clock', W.read('builtin/clock').manifest, {}); assert(copy.startsWith('user/') && fs.existsSync(W.fileOf(copy, 'index.html')), 'editing a built-in copies it');
+  const pkg = path.join(tmp, 'x.muralwidget'); W.exportType(mine, pkg); const back = W.importPath(pkg); assert.notStrictEqual(back, mine); assert.strictEqual(W.read(back).manifest.name, 'Stock ticker');
+  W.remove(a2.id); assert(!fs.existsSync(W.dataFile(a2.id))); assert.throws(() => W.removeType('builtin/clock'));
+  assert.strictEqual(normalizeWidget({ size: { w: 99999 } }).size.w, 3000); assert(/Scene/.test(permissionText('suite:scene')));
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) { try { await t.fn(); console.log('ok   ' + t.name); } catch (e) { failed++; console.log('FAIL ' + t.name + '\n     ' + (e.stack || e).toString().split('\n').slice(0, 3).join('\n     ')); } }

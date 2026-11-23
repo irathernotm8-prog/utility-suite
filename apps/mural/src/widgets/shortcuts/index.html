@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ body { padding: 12px; } .g { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; height: 100%; align-content: center; }
+ button { border: 0; border-radius: 12px; background: var(--fill); padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; transition: background .15s, transform .1s; }
+ button:hover { background: var(--fill2); } button:active { transform: scale(.96); }
+ .b { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font: 650 15px var(--display); color: #fff; }
+ span { font-size: 11.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .err { position: fixed; left: 8px; right: 8px; bottom: 6px; color: var(--bad); font-size: 11px; text-align: center; }
+</style></head><body><div class="g" id="g"></div><div class="err" id="err"></div>
+<script>
+const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+function draw() { const items = (mural.settings.items || []).map((l) => String(l).split('|').map((x) => x.trim())).filter((x) => x[0]);
+  g.innerHTML = ''; for (const [name, target] of items) { const b = document.createElement('button'); const k = /^https?:/.test(target || '') ? '↗' : /^[~\/]|^[a-z]:\\/i.test(target || '') ? '▤' : name[0].toUpperCase();
+    b.innerHTML = '<div class="b" style="background:hsl(' + hue(name) + ' 55% 48%)">' + k + '</div><span></span>'; b.querySelector('span').textContent = name;
+    b.onclick = () => mural.open(target || name).catch((e) => { err.textContent = e.message; setTimeout(() => (err.textContent = ''), 3000); }); g.appendChild(b); } }
+mural.ready().then(draw); mural.on('settings', draw);
+</script></body></html>

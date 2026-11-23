@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ body { display: flex; align-items: center; justify-content: space-around; padding: 0 10px; }
+ .r { text-align: center; } svg { width: 72px; height: 72px; transform: rotate(-90deg); } .r b { display: block; font: 600 15px var(--display); margin-top: -50px; height: 34px; font-variant-numeric: tabular-nums; }
+ .r span { display: block; margin-top: 10px; font-size: 11px; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+ circle { fill: none; stroke-width: 7; } .bg { stroke: var(--fill2); } .fg { stroke-linecap: round; transition: stroke-dashoffset .6s; }
+</style></head><body><div id="v"></div>
+<script>
+let t = 0; const C = 2 * Math.PI * 30;
+const ring = (pct, label, sub, col) => '<div class="r"><svg viewBox="0 0 72 72"><circle class="bg" cx="36" cy="36" r="30"/><circle class="fg" cx="36" cy="36" r="30" stroke="' + col + '" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - Math.max(0, Math.min(1, pct / 100)))) + '"/></svg><b>' + label + '</b><span>' + sub + '</span></div>';
+const col = (p) => (p > 85 ? 'var(--bad)' : p > 60 ? 'var(--warn)' : 'var(--accent2)');
+async function tick() { clearTimeout(t); if (mural.paused) return;
+  try { const s = await mural.system(); const mem = (1 - s.memFree / s.memTotal) * 100; let h = ring(s.cpu ?? 0, s.cpu == null ? '…' : Math.round(s.cpu) + '%', 'CPU', col(s.cpu || 0));
+    h += ring(mem, Math.round(mem) + '%', (s.memTotal / 1073741824).toFixed(0) + ' GB RAM', col(mem));
+    if (s.battery) h += ring(s.battery.level * 100, Math.round(s.battery.level * 100) + '%', s.battery.charging ? 'Charging' : 'Battery', s.battery.level < 0.2 ? 'var(--bad)' : 'var(--ok)');
+    document.body.innerHTML = h; } catch (e) { document.body.innerHTML = '<div style="color:var(--dim)">' + e.message + '</div>'; }
+  t = setTimeout(tick, (mural.settings.every || 2) * 1000); }
+mural.ready().then(tick); mural.on('resume', tick); mural.on('settings', tick); mural.on('pause', () => clearTimeout(t));
+</script></body></html>

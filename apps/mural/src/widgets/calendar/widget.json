@@ -1,0 +1,2 @@
+{ "format": 1, "name": "Calendar", "description": "This month at a glance. Click the arrows to look ahead or back.", "size": { "w": 270, "h": 250, "minW": 210, "minH": 200 },
+  "settings": [ { "key": "monday", "label": "Weeks start on Monday", "type": "toggle", "default": false }, { "key": "accent", "label": "Accent", "type": "color", "default": "#8f80ff" } ], "tags": ["time"] }

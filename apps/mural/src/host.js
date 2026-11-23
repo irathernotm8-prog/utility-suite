@@ -41,11 +41,13 @@ class Host extends EventEmitter {
     this.desktop.on('behind', () => { for (const r of this.recs.values()) if (r.win && !r.win.isDestroyed()) try { r.win.moveTop(); } catch (_) {} });
     this.desktop.on('restarted', () => { for (const r of this.recs.values()) if (r.win && !r.win.isDestroyed()) this.desktop.attach(r.win, r.display).catch(() => {}); });
     this.desktop.start({ clicks: false, cover: s.pauseCovered !== false });
-    let deb = 0; const later = () => { clearTimeout(deb); deb = setTimeout(() => this.sync(), 600); };
+    // displays settle in steps when the resolution changes: sync soon, then again once it's quiet
+    let deb = 0, deb2 = 0; const later = () => { this.emit('displays'); clearTimeout(deb); clearTimeout(deb2); deb = setTimeout(() => this.sync(), 250); deb2 = setTimeout(() => this.sync(), 1800); };
     screen.on('display-added', later); screen.on('display-removed', later); screen.on('display-metrics-changed', later);
     this.metricsTimer = setInterval(() => this.sampleMetrics(), 4000);
     this.idleTimer = setInterval(() => this.checkIdle(), 30000);
     this.rotateTimer = setInterval(() => this.checkRotate(), 30000); this.rotatedAt = Date.now();
+    this.fitTimer = setInterval(() => { for (const r of this.recs.values()) this.fit(r); }, 5000);
     this.sync();
   }
 
@@ -66,13 +68,12 @@ class Host extends EventEmitter {
     ds.forEach((d, i) => {
       const k = this.key(d); let r = this.recs.get(k);
       if (!r) { r = { key: k, display: d, win: null, wallpaperId: null, covered: false, reason: null, frozen: false, freed: false, pausedAt: 0, traits: {}, stats: { fps: 0, ms: 0 }, cpu: 0, mem: 0, error: null }; this.recs.set(k, r); }
-      const moved = JSON.stringify(r.display.bounds) !== JSON.stringify(d.bounds) || r.display.scaleFactor !== d.scaleFactor;
       r.display = d; r.label = this.label(d, i);
       const want = this.store.wallpaperFor(k);
       if (r.freed) return; // paused long enough to give the memory back; comes back when it can run
       if (!r.win || r.win.isDestroyed()) this.open(r, want);
       else if (r.wallpaperId !== want) this.load(r, want);
-      else if (moved) this.desktop.place(r.win, d).catch(() => {});
+      else this.fit(r);
     });
     this.updateWatchers(); this.emit('state');
   }
@@ -97,6 +98,8 @@ class Host extends EventEmitter {
     win.webContents.on('render-process-gone', (_e, d) => { this.log('wallpaper renderer gone', d && d.reason); if (!this.quitting) { this.close(r, true); setTimeout(() => this.sync(), 1500); } });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (e) => e.preventDefault());
+    let fitT = 0; const refit = () => { clearTimeout(fitT); fitT = setTimeout(() => this.fit(r), 300); };
+    win.on('resize', refit); win.on('move', refit);
     win.once('ready-to-show', async () => {
       if (win.isDestroyed()) return;
       const res = await this.desktop.attach(win, r.display).catch((e) => ({ ok: false, error: e.message }));
@@ -109,6 +112,23 @@ class Host extends EventEmitter {
     win.loadURL(`mural://app/wallpaper.html?d=${encodeURIComponent(r.key)}`);
     r.pendingId = id;
     win.webContents.once('did-finish-load', () => { if (!win.isDestroyed()) this.load(r, r.pendingId); });
+  }
+
+  /**
+   * Make sure the wallpaper covers its whole display. macOS can shrink a window while the resolution changes (and
+   * Windows can rescale one on a DPI change); if the window doesn't match, place it again, and if that keeps failing,
+   * start a fresh window at the right size.
+   */
+  fit(r) {
+    const w = r.win; if (!w || w.isDestroyed() || !r.attached || this.quitting) return;
+    const want = r.display.bounds; let have; try { have = w.getBounds(); } catch (_) { return; }
+    const off = Math.max(Math.abs(have.x - want.x), Math.abs(have.y - want.y), Math.abs(have.width - want.width), Math.abs(have.height - want.height));
+    r.fitOff = off;
+    if (off <= 1) { r.fitFails = 0; r.fitHave = null; return; }
+    r.fitHave = have; r.fitFails = (r.fitFails || 0) + 1;
+    this.log('wallpaper not covering its display', r.key, JSON.stringify({ want, have, scale: r.display.scaleFactor, tries: r.fitFails }));
+    if (r.fitFails > 3 && this.desktop.name === 'mac') { r.fitFails = 0; const id = r.wallpaperId; this.close(r); this.open(r, id || this.store.wallpaperFor(r.key)); return; }
+    this.desktop.place(w, r.display).catch(() => {});
   }
 
   close(r, forget = false) {
@@ -262,7 +282,7 @@ class Host extends EventEmitter {
     const gpu = metrics.find((m) => m.type === 'GPU');
     this.gpuCpu = gpu ? gpu.cpu.percentCPUUsage : 0; this.gpuMem = gpu ? (gpu.memory.workingSetSize || 0) : 0; // KB
     // the GPU process does the drawing; count it when nothing else (the app window) is using it
-    const appOpen = this.e.BrowserWindow.getAllWindows().some((w) => w.isVisible() && !w.isDestroyed() && w.getTitle() !== 'Mural wallpaper');
+    const appOpen = this.e.BrowserWindow.getAllWindows().some((w) => w.isVisible() && !w.isDestroyed() && !/^Mural (wallpaper|widgets)$/.test(w.getTitle()));
     if (!appOpen) total += this.gpuCpu;
     this.totalCpu = total;
     if (running) { this.governor.setBudget(this.store.get().budget); if (this.governor.sample(total)) { this.log('governor level', this.governor.level, 'cpu', total.toFixed(1)); this.pushQuality(); } }
@@ -276,7 +296,7 @@ class Host extends EventEmitter {
       key: r.key, label: r.label, bounds: r.display.bounds, scale: r.display.scaleFactor, wallpaperId: r.wallpaperId, name: r.name || '',
       state: r.freed ? 'freed' : !r.win ? 'off' : r.frozen ? 'paused' : 'running', reason: r.reason, covered: r.covered,
       fps: r.frozen ? 0 : r.stats.fps || 0, frameMs: r.stats.ms || 0, cpu: Math.round((r.cpu || 0) * 10) / 10, memMB: Math.round((r.mem || 0) / 1024),
-      quality: this.qualityFor(r), traits: r.traits, error: r.error
+      quality: this.qualityFor(r), traits: r.traits, error: r.error, fit: r.fitOff > 1 ? { off: r.fitOff, window: r.fitHave } : 'ok'
     }));
     return {
       enabled: s.enabled, userPaused: this.userPaused, power: this.power, platform: this.desktop.name, mode: this.desktop.mode || null,
@@ -287,7 +307,7 @@ class Host extends EventEmitter {
 
   async stop() {
     this.quitting = true;
-    clearInterval(this.pointerTimer); clearInterval(this.metricsTimer); clearInterval(this.idleTimer); clearInterval(this.rotateTimer);
+    clearInterval(this.pointerTimer); clearInterval(this.metricsTimer); clearInterval(this.idleTimer); clearInterval(this.rotateTimer); clearInterval(this.fitTimer);
     for (const r of this.recs.values()) this.close(r);
     this.recs.clear();
     await this.desktop.restoreDesktop().catch(() => {});

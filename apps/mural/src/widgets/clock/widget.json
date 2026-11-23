@@ -1,0 +1,7 @@
+{ "format": 1, "name": "Clock", "description": "The time and date — digital, analog or in words.", "size": { "w": 300, "h": 150, "minW": 140, "minH": 100 },
+  "settings": [
+    { "key": "style", "label": "Style", "type": "select", "options": ["digital", "analog", "words"], "default": "digital" },
+    { "key": "h24", "label": "24-hour", "type": "toggle", "default": false },
+    { "key": "seconds", "label": "Seconds", "type": "toggle", "default": false },
+    { "key": "date", "label": "Show the date", "type": "toggle", "default": true },
+    { "key": "accent", "label": "Accent", "type": "color", "default": "#8f80ff" } ], "tags": ["time"] }

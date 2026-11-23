@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ .w-pad { gap: 8px; } #title { border: 0; background: transparent; padding: 0; font-size: 11px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); width: 100%; }
+ textarea { flex: 1; resize: none; border: 0; background: transparent; padding: 0; line-height: 1.5; } textarea:focus { border: 0; }
+ #s { font-size: 10.5px; color: var(--faint); text-align: right; height: 12px; }
+ body.t-yellow { background: rgba(255, 214, 102, .22); } body.t-mint { background: rgba(102, 230, 180, .18); } body.t-rose { background: rgba(255, 140, 170, .2); } body.t-sky { background: rgba(110, 180, 255, .2); }
+</style></head><body><div class="w-pad"><input id="title" spellcheck="false"><textarea id="ta" placeholder="Write something…"></textarea><div id="s"></div></div>
+<script>
+let t = 0;
+function apply() { const st = mural.settings; title.value = st.title || 'Notes'; ta.style.fontSize = (st.size || 14) + 'px'; document.body.className = 't-' + (st.tint || 'none'); }
+mural.ready().then(async () => { apply(); ta.value = (await mural.storage.get('text')) || ''; });
+ta.addEventListener('input', () => { clearTimeout(t); s.textContent = ''; t = setTimeout(async () => { await mural.storage.set('text', ta.value); s.textContent = 'Saved'; setTimeout(() => (s.textContent = ''), 1200); }, 400); });
+title.addEventListener('change', () => mural.saveSettings({ title: title.value }));
+mural.on('settings', apply);
+</script></body></html>

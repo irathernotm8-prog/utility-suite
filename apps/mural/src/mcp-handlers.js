@@ -6,7 +6,45 @@ const path = require('path');
 const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t, null, 1) }] });
 const err = (t) => ({ content: [{ type: 'text', text: t }], isError: true });
 
-function makeHandlers({ library, schema, apply, host, store, setSettings, preview, notify }) {
+function makeHandlers({ library, schema, apply, host, store, setSettings, preview, notify, widgets, layer, renderWidget, sendWidgets, screen }) {
+  const resolveType = (t) => {
+    if (widgets.read(t)) return t;
+    const w = widgets.types().find((x) => x.name.toLowerCase() === String(t || '').toLowerCase()); if (w) return w.type;
+    throw new Error(`No widget "${t}". Call list_widgets for types.`);
+  };
+  const widgetGuide = () => `# Mural widgets
+
+A widget is a small web page that lives on the desktop: above the wallpaper and the icons, below the user's apps, fully
+clickable and typeable. A widget TYPE is a folder (widget.json + index.html + any css/js); a PLACED widget is one copy on
+a display with its own position, size, settings and saved data. Mural draws the card behind it (dark glass by default),
+so keep the page background transparent.
+
+## widget.json
+{ "name", "description", "page": "index.html", "size": { "w", "h", "minW", "minH", "resizable" },
+  "permissions": [ "network" (fetch from https — without it the page can't load anything from the web), "system" (CPU/memory/battery),
+                   "open" (open links, folders, apps), "location" (the place set in Mural), "suite:<app>" (Utility Suite app, e.g. suite:scene) ],
+  "settings": [ { "key", "label", "type": "text|textarea|toggle|select|color|range|list", "default", "options", "min", "max", "step" } ] }
+
+## The page
+<link rel="stylesheet" href="mural://app/widget-base.css">   (transparent page, system font, variables --fg --dim --faint --line --fill --fill2 --accent --accent2 --ok --warn --bad, --font --display --mono; .w-pad, .w-title; follows light/dark cards via <html data-tone>)
+<script src="mural://app/widget-sdk.js"></script>
+mural.ready().then(() => …)           settings arrive with init: mural.settings, mural.size {w,h}, mural.style {glass, opacity}, mural.sky
+mural.on('settings'|'style'|'resize'|'sky'|'pause'|'resume', fn)   — on 'pause' stop every timer; on 'resume' refresh
+await mural.storage.get(key) / mural.storage.set(key, value)        — saved per placed widget (2 MB)
+await mural.saveSettings({ key: value })                              — e.g. after the user renames something in place
+await mural.system()   → { cpu %, cores, memTotal, memFree, uptime, battery { level 0..1, charging } }   (system)
+await mural.open('https://…' | '~/Downloads' | 'App Name')                                            (open)
+await mural.suite('scene', 'list') / ('scene', 'activate', id)  — Scene: list, activate(id), previous; Vitals: stats; Docket: status, start, stop; Beam: peers  (suite:<app>)
+await mural.location() → { name, lat, lon } or null                                                      (location)
+await mural.resize(w, h)
+No alert/confirm/popups; links go through mural.open. Inline <script> and <style> are fine.
+
+## Keep it light (it runs all day)
+Update on a timer no faster than needed (clock: at the next minute or second; stats: 2 s; web data: 15–30 min), and
+stop on 'pause'. No heavy animation loops; CSS transitions are fine. Size it for its content (typical 220–340 × 120–300).
+
+## Workflow
+create_widget → preview_widget (try a couple of sizes, glass "light" too, and any settings) → fix → place_widget only when the user wants it.`;
   const resolveId = (id) => {
     if (library.read(id)) return id;
     const w = library.list().find((x) => x.name.toLowerCase() === String(id || '').toLowerCase()); if (w) return w.id;
@@ -118,6 +156,45 @@ create_wallpaper or update_wallpaper → preview (try hour 6, 12, 19, 23 for tim
     },
     apply: async ({ id, display }) => text(apply(resolveId(id), display || null)),
     status: async () => { const s = store.get(); return text({ ...host.status(), settings: { fps: s.fps, scale: s.scale, budget: s.budget, battery: s.battery, pauseCovered: s.pauseCovered, pauseIdle: s.pauseIdle, freeAfter: s.freeAfter, cursor: s.cursor, clicks: s.clicks } }); },
+    widget_guide: async () => text(widgetGuide()),
+    list_widgets: async () => text({ types: widgets.types().map((t) => ({ type: t.type, name: t.name, description: t.description, builtin: t.builtin, size: t.size, permissions: t.permissions.map((p) => p.id), settings: t.settings.map((f) => f.key) })), placed: widgets.instances().map((i) => ({ id: i.id, type: i.type, display: i.display, x: i.x, y: i.y, w: i.w, h: i.h, settings: i.settings, style: i.style })), displays: screen.getAllDisplays().map((d) => ({ key: String(d.id), bounds: d.bounds })) }),
+    get_widget: async ({ type }) => {
+      type = resolveType(type); const w = widgets.read(type); const files = {};
+      for (const f of fs.readdirSync(w.dir)) { const p = path.join(w.dir, f); if (fs.statSync(p).isFile() && /\.(html?|css|js|json|svg|txt|md)$/i.test(f)) files[f] = fs.readFileSync(p, 'utf8'); }
+      return text({ type, builtin: w.builtin, files });
+    },
+    create_widget: async (a) => {
+      const m = { name: a.name || 'Widget', description: a.description || '', author: 'Claude', size: a.size || {}, permissions: a.permissions || [], settings: a.settings || [] };
+      const t = widgets.saveType(null, m, { ...(a.files || {}), 'index.html': a.html || '<!doctype html><body></body>' }); sendWidgets();
+      return text({ type: t, next: 'Call preview_widget to look at it.' });
+    },
+    update_widget: async (a) => {
+      let type = resolveType(a.type); const w = widgets.read(type); const m = { ...w.manifest };
+      for (const k of ['name', 'description', 'permissions', 'settings']) if (a[k] !== undefined) m[k] = a[k];
+      if (a.size) m.size = { ...m.size, ...a.size };
+      const files = { ...(a.files || {}) }; if (a.html != null) files[m.page || 'index.html'] = a.html;
+      const nt = widgets.saveType(type, m, files);
+      for (const i of widgets.instances()) if (i.type === type && nt !== type) { /* placed built-ins keep using the built-in */ }
+      layer.pushAll(); for (const L of layer.layers.values()) if (L.win && !L.win.isDestroyed()) L.win.webContents.reload();
+      sendWidgets();
+      return text({ type: nt, copied: nt !== type ? `“${w.manifest.name}” is built in, so this was saved as the user’s own widget.` : undefined, next: 'Call preview_widget to check it.' });
+    },
+    preview_widget: async (a) => {
+      const type = resolveType(a.type);
+      const r = await renderWidget({ type, settings: a.settings || null, w: a.w, h: a.h, wait: a.wait, style: a.glass ? { glass: a.glass } : null });
+      return { content: [{ type: 'image', data: r.png.toString('base64'), mimeType: 'image/png' }, { type: 'text', text: JSON.stringify({ type, size: r.size, errors: r.errors.length ? r.errors : null }) }], isError: r.errors.length > 0 };
+    },
+    place_widget: async (a) => {
+      const style = {}; if (a.glass) style.glass = a.glass; if (a.opacity != null) style.opacity = Math.max(0.3, Math.min(1, Number(a.opacity)));
+      if (a.id) {
+        const patch = {}; for (const k of ['x', 'y', 'w', 'h', 'display']) if (a[k] != null) patch[k] = a[k]; if (a.settings) patch.settings = a.settings; if (Object.keys(style).length) patch.style = style;
+        const i = widgets.update(a.id, patch); layer.sync(); layer.pushAll(); sendWidgets(); return text(i);
+      }
+      const type = resolveType(a.type); const ds = screen.getAllDisplays(); const d = ds.find((x) => String(x.id) === String(a.display)) || screen.getPrimaryDisplay();
+      const i = widgets.add(type, String(d.id), d.bounds, { x: a.x, y: a.y, w: a.w, h: a.h, settings: a.settings, style }); layer.sync(); sendWidgets();
+      return text({ placed: i, display: String(d.id) });
+    },
+    remove_widget: async ({ id }) => { widgets.remove(id); layer.sync(); sendWidgets(); return text({ removed: id }); },
     set_performance: async (a) => {
       const patch = {}; for (const k of ['fps', 'scale', 'budget', 'battery', 'pauseCovered', 'pauseIdle', 'freeAfter']) if (a[k] !== undefined) patch[k] = a[k];
       if (patch.fps) patch.fps = [15, 24, 30, 60].reduce((b, f) => (Math.abs(f - patch.fps) < Math.abs(b - patch.fps) ? f : b), 30);

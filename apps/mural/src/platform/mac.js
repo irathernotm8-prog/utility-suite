@@ -79,8 +79,8 @@ class MacDesktop extends EventEmitter {
     if (JSON.stringify(this.opts) === before || !this.child) return;
     this.restarting = true; const c = this.child; this.child = null; try { c.kill(); } catch (_) {} this.restarting = false; this.start();
   }
-  async attach(win) { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false }); win.setIgnoreMouseEvents(true); return { ok: true, mode: 'desktop' }; }
-  async place(win, display) { win.setBounds(display.bounds); return { ok: true }; }
+  async attach(win, display) { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false }); win.setIgnoreMouseEvents(true); if (display) win.setBounds(display.bounds, false); return { ok: true, mode: 'desktop' }; }
+  async place(win, display) { win.setBounds(display.bounds, false); win.setSize(display.bounds.width, display.bounds.height); win.setPosition(display.bounds.x, display.bounds.y); return { ok: true }; }
   forget() { return Promise.resolve(); }
   restoreDesktop() { return Promise.resolve({ ok: true }); }
   getWallpaper() {

@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ .w-pad { gap: 10px; } .top { display: flex; align-items: center; justify-content: space-between; } #count { color: var(--faint); font-size: 11px; }
+ form { display: flex; gap: 6px; } form input { flex: 1; min-width: 0; } form button { border: 0; border-radius: 9px; background: var(--accent); color: #fff; width: 32px; font-size: 17px; }
+ ul { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
+ li { display: flex; align-items: center; gap: 9px; padding: 6px 2px; border-bottom: 1px solid var(--line); } li:last-child { border: 0; }
+ li .c { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--faint); flex: none; display: grid; place-items: center; background: transparent; padding: 0; }
+ li.done .c { background: var(--accent); border-color: var(--accent); } li.done .c::after { content: '✓'; color: #fff; font-size: 11px; font-weight: 700; }
+ li span { flex: 1; overflow-wrap: anywhere; } li.done span { color: var(--faint); text-decoration: line-through; }
+ li .x { border: 0; background: transparent; color: var(--faint); opacity: 0; padding: 0 4px; } li:hover .x { opacity: 1; }
+ #clear { border: 0; background: transparent; color: var(--dim); font-size: 11px; padding: 0; }
+</style></head><body><div class="w-pad"><div class="top"><div class="w-title" id="title"></div><span id="count"></span></div>
+<form id="f"><input id="i" placeholder="Add a task" autocomplete="off"><button>+</button></form><ul id="l"></ul><button id="clear">Clear finished</button></div>
+<script>
+let items = [];
+const save = () => mural.storage.set('items', items);
+function draw() { const st = mural.settings; document.documentElement.style.setProperty('--accent', st.accent || '#4fd69c'); title.textContent = st.title || 'To-do';
+  const left = items.filter((x) => !x.done).length; count.textContent = left ? left + ' left' : items.length ? 'All done' : '';
+  l.innerHTML = ''; items.forEach((it, k) => { if (st.hideDone && it.done) return; const li = document.createElement('li'); li.className = it.done ? 'done' : '';
+    li.innerHTML = '<button class="c"></button><span></span><button class="x">✕</button>'; li.querySelector('span').textContent = it.text;
+    li.querySelector('.c').onclick = () => { it.done = !it.done; save(); draw(); }; li.querySelector('.x').onclick = () => { items.splice(k, 1); save(); draw(); }; l.appendChild(li); });
+  clear.style.display = items.some((x) => x.done) ? '' : 'none'; }
+f.onsubmit = (e) => { e.preventDefault(); const v = i.value.trim(); if (!v) return; items.push({ text: v, done: false }); i.value = ''; save(); draw(); };
+clear.onclick = () => { items = items.filter((x) => !x.done); save(); draw(); };
+mural.ready().then(async () => { items = (await mural.storage.get('items')) || []; draw(); }); mural.on('settings', draw);
+</script></body></html>

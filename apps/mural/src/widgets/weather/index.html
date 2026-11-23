@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ .w-pad { gap: 6px; } .now { display: flex; align-items: center; gap: 12px; } .ic { font-size: 40px; line-height: 1; }
+ .tmp { font: 200 42px/1 var(--display); } .cond { color: var(--dim); } .pl { font-weight: 600; }
+ .days { display: flex; justify-content: space-between; margin-top: auto; } .day { text-align: center; font-size: 11.5px; color: var(--dim); } .day b { display: block; color: var(--fg); font-weight: 500; } .day i { display: block; font-style: normal; font-size: 18px; margin: 2px 0; }
+ .err { color: var(--dim); margin: auto; text-align: center; }
+</style></head><body><div class="w-pad" id="v"><div class="err">Loading…</div></div>
+<script>
+const CODES = { 0: ['☀️', 'Clear'], 1: ['🌤️', 'Mostly clear'], 2: ['⛅', 'Partly cloudy'], 3: ['☁️', 'Cloudy'], 45: ['🌫️', 'Fog'], 48: ['🌫️', 'Fog'], 51: ['🌦️', 'Drizzle'], 53: ['🌦️', 'Drizzle'], 55: ['🌧️', 'Drizzle'], 61: ['🌧️', 'Rain'], 63: ['🌧️', 'Rain'], 65: ['🌧️', 'Heavy rain'], 71: ['🌨️', 'Snow'], 73: ['🌨️', 'Snow'], 75: ['❄️', 'Heavy snow'], 80: ['🌦️', 'Showers'], 81: ['🌧️', 'Showers'], 82: ['⛈️', 'Heavy showers'], 95: ['⛈️', 'Thunderstorms'], 96: ['⛈️', 'Storms, hail'], 99: ['⛈️', 'Storms, hail'] };
+const code = (c, night) => { const x = CODES[c] || ['🌡️', '']; return [night && c <= 1 ? '🌙' : x[0], x[1]]; };
+let t = 0;
+async function place() { const st = mural.settings;
+  if (st.place) { const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name=' + encodeURIComponent(st.place)); const j = await r.json(); if (!j.results || !j.results[0]) throw new Error('Couldn’t find “' + st.place + '”'); return { name: j.results[0].name, lat: j.results[0].latitude, lon: j.results[0].longitude }; }
+  const l = await mural.location(); if (!l) throw new Error('Set your place in Mural › Settings › Time of day, or type a city in this widget’s settings'); return l; }
+async function load() { clearTimeout(t); if (mural.paused) return;
+  try { const st = mural.settings, p = await place(), f = st.units === '°C' ? 'celsius' : 'fahrenheit';
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + p.lat + '&longitude=' + p.lon + '&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7&temperature_unit=' + f);
+    const w = await r.json(); const [ic, cond] = code(w.current.weather_code, !w.current.is_day);
+    let h = '<div class="now"><div class="ic">' + ic + '</div><div><div class="tmp">' + Math.round(w.current.temperature_2m) + '°</div></div><div><div class="pl">' + (p.name || '') + '</div><div class="cond">' + cond + ' · H ' + Math.round(w.daily.temperature_2m_max[0]) + '° L ' + Math.round(w.daily.temperature_2m_min[0]) + '°</div></div></div>';
+    const n = Math.min(6, st.days ?? 4); if (n) { h += '<div class="days">'; for (let i = 1; i <= n; i++) { const d = new Date(w.daily.time[i] + 'T12:00'); h += '<div class="day"><b>' + d.toLocaleDateString([], { weekday: 'short' }) + '</b><i>' + code(w.daily.weather_code[i])[0] + '</i>' + Math.round(w.daily.temperature_2m_max[i]) + '° <span style="opacity:.6">' + Math.round(w.daily.temperature_2m_min[i]) + '°</span></div>'; } h += '</div>'; }
+    v.innerHTML = h; t = setTimeout(load, 20 * 60000);
+  } catch (e) { v.innerHTML = '<div class="err">' + e.message + '</div>'; t = setTimeout(load, 5 * 60000); } }
+mural.ready().then(load); mural.on('settings', load); mural.on('resume', load); mural.on('pause', () => clearTimeout(t));
+</script></body></html>

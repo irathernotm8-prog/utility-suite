@@ -1,0 +1,2 @@
+{ "format": 1, "name": "Focus timer", "description": "A focus/break timer with a soft chime.", "size": { "w": 220, "h": 220, "minW": 160, "minH": 160 },
+  "settings": [ { "key": "focus", "label": "Focus (minutes)", "type": "range", "min": 5, "max": 90, "step": 5, "default": 25 }, { "key": "rest", "label": "Break (minutes)", "type": "range", "min": 1, "max": 30, "step": 1, "default": 5 }, { "key": "chime", "label": "Chime", "type": "toggle", "default": true }, { "key": "accent", "label": "Accent", "type": "color", "default": "#ff8fb3" } ], "tags": ["productivity", "time"] }

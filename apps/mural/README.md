@@ -20,6 +20,30 @@ stops completely the moment its desktop can't be seen, and a CPU budget keeps th
 - **Settings** — displays, cursor/click reactions, location for the sun (city list or lat/lon; otherwise a guess from
   the time zone), rotation through favorites, open at login, Claude & Codex.
 
+## Widgets (0.2.0)
+
+Interactive widgets on the desktop: above the wallpaper and the icons, below your apps, fully clickable and typeable.
+Built in: **Clock** (digital, analog, in words), **Calendar**, **Notes**, **To-do**, **System** (CPU, memory, battery),
+**Weather** (Open-Meteo, no account), **Shortcuts** (apps, folders, sites), **Focus timer**, **Countdown** and **Scenes**
+(switches your Scene workspaces over the Utility Suite link).
+
+- **Widgets page** — gallery with live-rendered previews, what's on each display, per-widget settings (each widget's own
+  settings plus Dark/Light glass, Solid or No card, opacity, size, display), and an editor for your own (code, live
+  preview you can resize, size, permissions, settings) with Ask Claude. Import/export `.muralwidget` files — that's the
+  plugin format: a folder with `widget.json` + `index.html` (+ css/js).
+- **Arrange** (Widgets page, tray, or a widget's ⚙) lifts the layer over everything with a dim backdrop: drag to move,
+  corner to resize, ✕ to remove, Esc or Done when finished.
+- **Permissions** are declared in `widget.json` and shown before adding: `network`, `system`, `open`, `location`,
+  `suite:<app>`. They're enforced: the page is served with a Content-Security-Policy that blocks the internet unless the
+  widget asked for it, and every SDK call is checked in the main process against the frame it came from.
+- **SDK**: `mural://app/widget-sdk.js` (settings, per-widget storage, pause/resume, sky, system, open, suite, location,
+  resize) and `mural://app/widget-base.css` (Mural's look, follows light/dark cards).
+- **Cost**: no widgets = no window. One transparent window per display that has widgets; all widget frames share one
+  process. Clicks pass through except over a widget (main checks the pointer against widget rectangles at 30 Hz). Widgets
+  pause and the layer freezes when a full-screen window, the lock screen or sleep hides the desktop.
+- **Where the layer sits**: Mac — window level "normal − 1" (`setAlwaysOnTop(true, 'normal', -1)`): under every app
+  window, over the icons, still focusable. Windows — owned by Progman (stays on Win+D), pushed to the bottom after use.
+
 ## How it stays light
 
 1. Frames are capped (30 by default) and the renderer **sleeps** between them.
@@ -42,6 +66,10 @@ stops completely the moment its desktop can't be seen, and a CPU budget keeps th
   on Windows 11 24H2+ into Progman just below `SHELLDLL_DefView`. It also reports desktop clicks (only when the bare
   desktop is under the pointer) and covered monitors. Explorer repaints the normal wallpaper when Mural quits.
 - **Linux** is only for tests (plain windows).
+- **Keeping it covered** (0.2.0): every 5 s, and whenever a display changes or the window moves, Mural compares each
+  wallpaper window with its display and places it again if it's off by more than a pixel (after a resolution switch macOS
+  can leave it smaller); on a Mac, repeated misses start a fresh window. On Windows the helper snaps to the monitor's own
+  pixel rectangle and converts with `MapWindowPoints`, so scaled and mixed-DPI setups no longer leave a strip.
 
 ## The wallpaper format
 
@@ -55,7 +83,8 @@ overlay), `web` (any page; receives `{mural:'pointer'|'click'|'pause'|'resume'|'
 Settings › Claude & Codex adds Mural to Claude Desktop, Claude Code and Codex in one click (same approach as Mixer).
 Tools: `mural_guide`, `list_wallpapers`, `get_wallpaper`, `create_wallpaper`, `update_wallpaper` (with layer ops),
 `preview` (renders offscreen and returns a picture — any hour, cursor position or click), `add_asset`, `apply`, `status`,
-`set_performance`. The Studio's **Ask Claude** runs a headless Claude Code (or Codex) with only Mural's tools.
+`set_performance`; for widgets `widget_guide`, `list_widgets`, `get_widget`, `create_widget`, `update_widget`,
+`preview_widget` (offscreen picture plus the page's errors), `place_widget`, `remove_widget`. The Studio's **Ask Claude** runs a headless Claude Code (or Codex) with only Mural's tools.
 
 ## Code map
 
@@ -68,6 +97,10 @@ src/renderer/runtime/    the player shared by desktop, Studio and cards: player,
 src/renderer/            app.html/css/js (Library, Performance, Settings), studio.js, wallpaper.html/js
 src/builtin/<slug>/      the built-in wallpapers
 src/connectors.js ai.js mcp-handlers.js, mcp/   the Claude/Codex plugin
+src/core/widgets.js      widget types, placed widgets, per-widget data, import/export
+src/widget-host.js       the widgets layer: windows per display, click-through, arrange mode, pausing, permissions
+src/renderer/widgets.{html,js}, widget-sdk.js, widget-base.css, widgets-page.js   layer page, SDK, styles, Widgets page
+src/widgets/<slug>/      the built-in widgets
 test/run.js              unit checks;  test/e2e/{render,ui,bridge}.js  real windows under Xvfb
 ```
 

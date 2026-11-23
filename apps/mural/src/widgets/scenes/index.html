@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ .w-pad { gap: 10px; } .g { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; overflow: auto; }
+ button { border: 0; border-radius: 12px; background: var(--fill); padding: 10px; text-align: left; display: flex; align-items: center; gap: 8px; } button:hover { background: var(--fill2); }
+ button.on { background: var(--accent); color: #fff; } .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; } button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .msg { color: var(--dim); font-size: 12px; }
+</style></head><body><div class="w-pad"><div class="w-title">Scenes</div><div class="g" id="g"></div><div class="msg" id="msg"></div></div>
+<script>
+let t = 0;
+async function load() { clearTimeout(t); if (mural.paused) return; document.documentElement.style.setProperty('--accent', mural.settings.accent || '#8f80ff');
+  try { const r = await mural.suite('scene', 'list'); msg.textContent = r.scenes.length ? '' : 'No scenes yet — make one in Scene.';
+    g.innerHTML = ''; for (const sc of r.scenes) { const b = document.createElement('button'); b.className = sc.id === r.activeId ? 'on' : ''; b.innerHTML = '<span class="dot" style="background:' + (sc.color || '#9aa3b5') + '"></span><span></span>'; b.lastChild.textContent = sc.name;
+      b.onclick = async () => { b.style.opacity = .6; try { await mural.suite('scene', 'activate', sc.id); } catch (e) { msg.textContent = e.message; } load(); }; g.appendChild(b); }
+  } catch (e) { g.innerHTML = ''; msg.textContent = 'Open the Scene app to switch scenes from here.'; }
+  t = setTimeout(load, 15000); }
+mural.ready().then(load); mural.on('resume', load); mural.on('pause', () => clearTimeout(t)); mural.on('settings', load);
+</script></body></html>

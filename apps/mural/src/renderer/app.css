@@ -67,8 +67,9 @@ body.win .head { padding-right: 150px; }
 .switch.on { background: linear-gradient(135deg, #7d6bff, #4fa3ff); } .switch.on::after { transform: translateX(15px); }
 input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); outline: 0; flex: 1; min-width: 60px; }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer; }
+textarea.txt { border-radius: 8px; border: 1px solid var(--line2); background: var(--bg); outline: 0; color: var(--text); }
 input.txt, select.txt { height: 30px; border-radius: 8px; border: 1px solid var(--line2); background: var(--bg); padding: 0 9px; outline: 0; min-width: 0; }
-input.txt:focus, select.txt:focus, textarea:focus { border-color: rgba(139,123,255,.6); }
+input.txt:focus, select.txt:focus, textarea.txt:focus, textarea:focus { border-color: rgba(139,123,255,.6); }
 input[type=color] { -webkit-appearance: none; width: 30px; height: 30px; border: 1px solid var(--line2); border-radius: 8px; padding: 2px; background: var(--bg); cursor: pointer; flex: none; }
 input[type=color]::-webkit-color-swatch-wrapper { padding: 0; } input[type=color]::-webkit-color-swatch { border: 0; border-radius: 5px; }
 .empty-color { width: 30px; height: 30px; border-radius: 8px; border: 1px dashed var(--line2); background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,.06) 4px 8px); flex: none; cursor: pointer; }

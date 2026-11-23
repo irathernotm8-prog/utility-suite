@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ body { display: grid; place-items: center; } .wrap { position: relative; width: 82vmin; height: 82vmin; }
+ svg { width: 100%; height: 100%; transform: rotate(-90deg); } circle { fill: none; stroke-width: 5; } .bg { stroke: var(--fill2); } .fg { stroke: var(--accent); stroke-linecap: round; }
+ .mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+ #t { font: 200 clamp(22px, 17vmin, 54px)/1 var(--display); font-variant-numeric: tabular-nums; } #m { font-size: 11px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+ .btns { display: flex; gap: 6px; margin-top: 6px; } .btns button { border: 0; border-radius: 99px; background: var(--fill2); padding: 4px 12px; font-size: 12px; } .btns button.p { background: var(--accent); color: #fff; }
+</style></head><body><div class="wrap"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="45"/><circle class="fg" id="ring" cx="50" cy="50" r="45"/></svg>
+<div class="mid"><div id="m">Focus</div><div id="t">25:00</div><div class="btns"><button class="p" id="go">Start</button><button id="rs">Reset</button></div></div></div>
+<script>
+const C = 2 * Math.PI * 45; ring.style.strokeDasharray = C;
+let s = { mode: 'focus', left: null, endsAt: null }, t = 0;
+const total = () => (s.mode === 'focus' ? mural.settings.focus || 25 : mural.settings.rest || 5) * 60000;
+const left = () => (s.endsAt ? Math.max(0, s.endsAt - Date.now()) : s.left ?? total());
+function draw() { document.documentElement.style.setProperty('--accent', mural.settings.accent || '#ff8fb3'); const l = left();
+  t_.textContent = String(Math.floor(l / 60000)).padStart(2, '0') + ':' + String(Math.floor(l / 1000) % 60).padStart(2, '0');
+  m.textContent = s.mode === 'focus' ? 'Focus' : 'Break'; ring.style.strokeDashoffset = C * (1 - l / total()); go.textContent = s.endsAt ? 'Pause' : 'Start'; }
+const t_ = document.getElementById('t');
+function chime() { if (!mural.settings.chime) return; try { const a = new AudioContext(); [0, .18, .36].forEach((d, i) => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = [660, 880, 990][i]; g.gain.setValueAtTime(0, a.currentTime + d); g.gain.linearRampToValueAtTime(.15, a.currentTime + d + .02); g.gain.exponentialRampToValueAtTime(.001, a.currentTime + d + .6); o.connect(g).connect(a.destination); o.start(a.currentTime + d); o.stop(a.currentTime + d + .7); }); } catch (_) {} }
+function loop() { clearTimeout(t); draw(); if (!s.endsAt) return; if (left() <= 0) { chime(); s = { mode: s.mode === 'focus' ? 'rest' : 'focus', left: null, endsAt: null }; save(); draw(); return; } if (!mural.paused) t = setTimeout(loop, 1000 - (Date.now() % 1000) + 10); }
+const save = () => mural.storage.set('state', s);
+go.onclick = () => { if (s.endsAt) { s.left = left(); s.endsAt = null; } else { s.endsAt = Date.now() + left(); s.left = null; } save(); loop(); };
+rs.onclick = () => { s = { mode: 'focus', left: null, endsAt: null }; save(); loop(); };
+mural.ready().then(async () => { s = (await mural.storage.get('state')) || s; loop(); }); mural.on('settings', loop); mural.on('resume', loop); mural.on('pause', () => clearTimeout(t));
+</script></body></html>

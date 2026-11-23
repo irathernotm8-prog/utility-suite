@@ -1,0 +1,2 @@
+{ "format": 1, "name": "Weather", "description": "Now and the next few days, from Open-Meteo (free, no account).", "size": { "w": 320, "h": 170, "minW": 220, "minH": 120 }, "permissions": ["network", "location"],
+  "settings": [ { "key": "place", "label": "City (blank = Mural’s place)", "type": "text", "default": "" }, { "key": "units", "label": "Units", "type": "select", "options": ["°F", "°C"], "default": "°F" }, { "key": "days", "label": "Days ahead", "type": "range", "min": 0, "max": 6, "step": 1, "default": 4 } ], "tags": ["weather"] }

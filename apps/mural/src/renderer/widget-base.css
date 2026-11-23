@@ -1,0 +1,15 @@
+/* Mural widget base styles — <link rel="stylesheet" href="mural://app/widget-base.css">. Optional, but it makes widgets
+   match Mural: transparent page (the card behind it is drawn by Mural), system font, colors that follow the card. */
+:root { --fg: #f2f4fa; --dim: rgba(242,244,250,.62); --faint: rgba(242,244,250,.38); --line: rgba(255,255,255,.1); --fill: rgba(255,255,255,.07); --fill2: rgba(255,255,255,.12); --accent: #8f80ff; --accent2: #4fc3ff; --ok: #4fd69c; --warn: #ffb36b; --bad: #ff6b7a;
+  --font: -apple-system, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --display: -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; --mono: ui-monospace, "SF Mono", Consolas, monospace; }
+:root[data-tone=light] { --fg: #14161d; --dim: rgba(20,22,29,.6); --faint: rgba(20,22,29,.38); --line: rgba(0,0,0,.09); --fill: rgba(0,0,0,.05); --fill2: rgba(0,0,0,.09); --accent: #5b4cf0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; color: var(--fg); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+input, textarea { background: var(--fill); border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; outline: none; }
+input:focus, textarea:focus { border-color: var(--accent); }
+::placeholder { color: var(--faint); }
+::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: var(--fill2); border-radius: 8px; }
+.w-pad { padding: 14px 16px; height: 100%; display: flex; flex-direction: column; }
+.w-title { font-size: 11px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); display: flex; align-items: center; gap: 6px; }

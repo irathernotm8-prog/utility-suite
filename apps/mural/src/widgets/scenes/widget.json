@@ -1,0 +1,2 @@
+{ "format": 1, "name": "Scenes", "description": "Switch your Scene workspaces (Work, Gaming, Match day…) from the desktop. Needs the Scene app.", "size": { "w": 280, "h": 170, "minW": 180, "minH": 110 }, "permissions": ["suite:scene"],
+  "settings": [ { "key": "accent", "label": "Accent", "type": "color", "default": "#8f80ff" } ], "tags": ["utility suite"] }

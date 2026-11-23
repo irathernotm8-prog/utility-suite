@@ -1,0 +1,2 @@
+{ "format": 1, "name": "To-do", "description": "A short list: add, tick off, clear.", "size": { "w": 280, "h": 300, "minW": 200, "minH": 160 },
+  "settings": [ { "key": "title", "label": "Title", "type": "text", "default": "To-do" }, { "key": "hideDone", "label": "Hide finished", "type": "toggle", "default": false }, { "key": "accent", "label": "Accent", "type": "color", "default": "#4fd69c" } ], "tags": ["productivity"] }

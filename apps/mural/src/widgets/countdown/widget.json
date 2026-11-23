@@ -1,0 +1,2 @@
+{ "format": 1, "name": "Countdown", "description": "Days until something you’re looking forward to.", "size": { "w": 240, "h": 140, "minW": 160, "minH": 100 },
+  "settings": [ { "key": "what", "label": "What", "type": "text", "default": "Summer holiday" }, { "key": "when", "label": "Date (YYYY-MM-DD)", "type": "text", "default": "2027-06-01" }, { "key": "accent", "label": "Accent", "type": "color", "default": "#ffb36b" } ], "tags": ["time"] }

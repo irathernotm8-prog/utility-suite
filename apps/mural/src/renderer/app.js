@@ -3,6 +3,7 @@ import { icon, TYPE_ICON } from './icons.js';
 import { CITIES } from './runtime/sun.js';
 import { createPlayer } from './runtime/player.js';
 import { Studio } from './studio.js';
+import { WidgetsPage } from './widgets-page.js';
 
 const M = window.mural;
 const $ = (s, r = document) => r.querySelector(s);
@@ -16,7 +17,7 @@ export const S = { settings: null, library: [], state: null, page: 'library', fi
 export function toast(msg, err = false) { const t = h(`<div class="toast ${err ? 'err' : ''}">${err ? '' : icon('check')}${esc(msg)}</div>`); $('#toasts').appendChild(t); setTimeout(() => t.remove(), err ? 6000 : 2800); }
 export async function call(name, ...args) { try { return await M.call(name, ...args); } catch (e) { toast(String(e.message || e).replace(/^Error invoking remote method 'mural:call': (Error: )?/, ''), true); throw e; } }
 export function menu(x, y, items) {
-  document.querySelectorAll('.menu').forEach((m) => m.remove());
+  document.querySelectorAll('.menu:not(#wDrawer)').forEach((m) => m.remove());
   const m = h(`<div class="menu"></div>`);
   for (const it of items) {
     if (it === '-') { m.appendChild(h('<hr>')); continue; }
@@ -30,7 +31,7 @@ export function menu(x, y, items) {
 const typeLabel = { scene: 'Scene', shader: 'Shader', video: 'Video', image: 'Picture', web: 'Web' };
 
 // ---------------------------------------------------------------------------------------------------- shell
-const PAGES = [['library', 'Library'], ['studio', 'Studio'], ['performance', 'Performance'], ['settings', 'Settings']];
+const PAGES = [['library', 'Library'], ['widgets', 'Widgets'], ['studio', 'Studio'], ['performance', 'Performance'], ['settings', 'Settings']];
 function nav() {
   $('#nav').innerHTML = PAGES.map(([id, label]) => `<button data-p="${id}" class="${S.page === id ? 'on' : ''}">${icon(id)}${label}</button>`).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => go(b.dataset.p)));
@@ -40,6 +41,7 @@ export function go(page) {
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('on', p.id === page));
   if (page === 'library') renderLibrary(); if (page === 'performance') renderPerf(); if (page === 'settings') renderSettings();
   if (page === 'studio') studio.show(); else studio.hide();
+  if (page === 'widgets') widgetsPage.show(); else widgetsPage.closeDrawer();
   if (page !== 'library') stopHover();
 }
 function renderSide() {
@@ -305,6 +307,9 @@ function renderAi() {
 
 // ---------------------------------------------------------------------------------------------------- start
 const studio = new Studio($('#studio'), { call, toast, menu, go, S, raw: M });
+const widgetsPage = new WidgetsPage($('#widgets'), { call, toast, menu, go, S, raw: M });
+M.on('widgets', (st) => widgetsPage.update(st));
+M.on('widget-settings', async (id) => { go('widgets'); await widgetsPage.load(); widgetsPage.render(); widgetsPage.openDrawer(id); });
 M.on('library', (l) => { S.library = l; if (S.page === 'library') renderGrid(); renderSide(); studio.libraryChanged(); });
 M.on('settings', (s) => { S.settings = s; renderSide(); if (S.page === 'library') renderLibrary(); if (S.page === 'settings') renderSettings(); if (S.page === 'performance') renderPerf(); });
 M.on('state', (st) => { const prev = S.state; S.state = st; renderSide(); if (S.page === 'performance') { if (!prev || prev.totalCpu !== st.totalCpu || true) { cpuHist.push(st.totalCpu); if (cpuHist.length > 45) cpuHist.shift(); } renderPerf(); } if (S.page === 'library' && (!prev || JSON.stringify(prev.displays.map((d) => d.wallpaperId)) !== JSON.stringify(st.displays.map((d) => d.wallpaperId)))) renderGrid(); });
@@ -314,5 +319,5 @@ M.on('bridge', () => { if (S.page === 'settings') M.call('ai.status').then((s) =
   [S.info, S.settings, S.library, S.state] = await Promise.all([M.call('app.info'), M.call('settings.get'), M.call('library.list'), M.call('host.status')]);
   nav(); renderSide();
   go((location.hash || '#library').slice(1) || 'library');
-  window.__mural = { S, go, studio };
+  window.__mural = { S, go, studio, widgetsPage };
 })();

@@ -41,6 +41,24 @@ Ship: bump `version` in `package.json`, then `./utility note mural "what changed
      needs Automation permission; SPI on Windows) and restores the original on quit or when turned off.
   7. **Plugin.** Settings › Claude & Codex. Then ask Claude for a wallpaper and check `preview` returns pictures.
 
+## 0.2.0: widgets and the resolution fix
+
+- **Resolution fix.** Bilal saw the edges cut off (system wallpaper showing) at some resolutions. On his MacBook Air at
+  1470×956 the window matched; the bug was that Mural only re-placed a window when Electron's display bounds changed, so
+  a window macOS shrank during a resolution switch could stay short. Now `host.fit()` compares the real window bounds every
+  5 s and on every display/move/resize event, re-places it, and on a Mac recreates the window after repeated misses
+  (logged as "wallpaper not covering its display" in `mural.log`; `status.displays[].fit` shows it). Windows: the helper
+  snaps to the monitor's real pixel rectangle and maps into the parent with `MapWindowPoints`. The renderer also redraws
+  when only the pixel density changes. **Check on the Mac:** switch Displays › resolution back and forth with Mural on.
+- **Widgets.** See README. **Check first on a real Mac:** that `setAlwaysOnTop(true, 'normal', -1)` puts the layer under
+  app windows but over desktop icons, that clicking a widget lets you type (notes, to-do) and that clicks elsewhere on the
+  desktop still select icons. If the layer sits above apps, the fallback is `setAlwaysOnTop(false)` in
+  `widget-host.js → placeLevel()`. **On Windows:** `own`/`bottom` in the helper (owner = Progman, HWND_BOTTOM on blur);
+  check Win+D keeps widgets and that they drop under apps after use.
+- Tests: `npm test` 12 checks (adds the widget core); `test/e2e/ui.js` now 42 checks (adds the fit watchdog, widgets
+  layer, click-through, storage, permissions, settings, arrange, pausing, editor and every widget plugin tool).
+- Utility Suite link: `mural` also offers `arrangeWidgets(on)`. The Scenes widget calls Scene's `list` / `activate`.
+
 ## Rules specific to Mural
 
 - **The runtime is shared.** `src/renderer/runtime/*` runs on the desktop, in the Studio, on Library cards and in
@@ -55,6 +73,9 @@ Ship: bump `version` in `package.json`, then `./utility note mural "what changed
 - **Built-ins are read-only**; saving one makes `user/<slug>` (Studio and the plugin both do this).
 - **The Windows helper is C# 5** (Windows PowerShell's Add-Type): no `$""`, no `?.`, no `out var`, no lambdas; keep
   P/Invoke callbacks local and `GC.KeepAlive` them. `npm test` checks the obvious ones.
+- **Widgets can only do what they declared.** Add new SDK calls in `WidgetLayer.call()` behind a permission, and keep the
+  CSP in `main.js` (mural://widget) in step with `network`.
+- **No widgets, no window.** `WidgetLayer.sync()` closes a display's layer when it has none (except while arranging).
 - `src/suitelink.js` is a copy of `tools/suitelink.js` — don't edit it here.
 
 ## Utility Suite link
@@ -67,4 +88,5 @@ offer pause/next from the island.
 
 Your wallpapers: `~/Documents/Mural` (one folder each). App-data folder: `settings.json`, `state.json` (the original
 wallpaper while Eco's still frame is in use), `thumbs/`, `still-*.png`, `bridge.json` (plugin's private connection),
-`mcp/` (the installed MCP script), `ask/` (Ask Claude scratch), `mural-desktop.ps1` (Windows helper), `mural.log`.
+`mcp/` (the installed MCP script), `ask/` (Ask Claude scratch), `widgets.json` (placed widgets), `widget-data/` (each
+widget's saved data), your own widgets in `~/Documents/Mural/Widgets`, `mural-desktop.ps1` (Windows helper), `mural.log`.

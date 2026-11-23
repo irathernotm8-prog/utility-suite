@@ -48,6 +48,8 @@ public static class MuralWin {
   [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SystemParametersInfoW")] static extern bool SpiGet(uint a, uint b, StringBuilder p, uint f);
   [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SystemParametersInfoW")] static extern bool SpiSet(uint a, uint b, string p, uint f);
   [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int a, out int v, int size);
+  [DllImport("user32.dll")] static extern int MapWindowPoints(IntPtr from, IntPtr to, ref POINT pt, uint n);
+  [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr h, int i, IntPtr v);
 
   static readonly object Gate = new object();
   static volatile bool clicks = false, cover = true;
@@ -86,12 +88,31 @@ public static class MuralWin {
     lock (Gate) { if (!ours.Contains(hwnd)) ours.Add(hwnd); }
     return "{\"ok\":true,\"mode\":\"" + mode + "\"}";
   }
+  // The monitor's own rectangle when (x, y, w, h) is meant to be one: Electron's DIP-to-pixel conversion can be off
+  // by a few pixels on scaled or mixed-DPI setups, which leaves a strip of the normal wallpaper showing.
+  static RECT Snap(int x, int y, int w, int h) {
+    RECT want; want.L = x; want.T = y; want.R = x + w; want.B = y + h;
+    List<RECT> mons = Monitors(); double best = double.MaxValue; RECT pick = want;
+    double cx = x + w / 2.0, cy = y + h / 2.0;
+    foreach (RECT m in mons) {
+      double mx = (m.L + m.R) / 2.0, my = (m.T + m.B) / 2.0, d = (mx - cx) * (mx - cx) + (my - cy) * (my - cy);
+      if (d < best && Math.Abs((m.R - m.L) - w) <= Math.Max(8, w / 6) && Math.Abs((m.B - m.T) - h) <= Math.Max(8, h / 6)) { best = d; pick = m; }
+    }
+    return pick;
+  }
   static void Place(IntPtr hwnd, int x, int y, int w, int h, string mode) {
-    int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77); // the parent spans the whole virtual screen
+    RECT r = Snap(x, y, w, h);
+    POINT p; p.X = r.L; p.Y = r.T;
+    IntPtr par = GetParent(hwnd);
+    if (par != IntPtr.Zero) MapWindowPoints(IntPtr.Zero, par, ref p, 1); // screen -> the desktop window's own coordinates
     IntPtr after = mode == "progman" && defView != IntPtr.Zero ? defView : IntPtr.Zero; // 24H2: just below the icons
     uint flags = 0x0050u | (after == IntPtr.Zero ? 0x0004u : 0u); // NOACTIVATE | SHOWWINDOW | NOZORDER
-    SetWindowPos(hwnd, after, x - vx, y - vy, w, h, flags);
+    SetWindowPos(hwnd, after, p.X, p.Y, r.R - r.L, r.B - r.T, flags);
   }
+  // Widgets: an ordinary top-level window owned by Progman sits above the desktop icons, stays put on Win+D, and can
+  // be clicked and typed into. "bottom" sends it back under every app after you've used it.
+  static void Own(IntPtr hwnd) { IntPtr progman = FindWindow("Progman", null); SetWindowLongPtr(hwnd, -8, progman); Bottom(hwnd); }
+  static void Bottom(IntPtr hwnd) { SetWindowPos(hwnd, new IntPtr(1), 0, 0, 0, 0, 0x0001u | 0x0002u | 0x0010u); }
   static string Wallpaper() { StringBuilder sb = new StringBuilder(520); SpiGet(0x73, 520, sb, 0); return sb.ToString(); }
   // Re-setting the same picture makes Explorer repaint the desktop, wiping the last frame we drew.
   static void Refresh() { string p = Wallpaper(); SpiSet(20, 0, p, 0); }
@@ -162,6 +183,8 @@ public static class MuralWin {
           case "attach": Out("{\"re\":" + a[1] + ",\"data\":" + Attach(new IntPtr(long.Parse(a[2])), int.Parse(a[3]), int.Parse(a[4]), int.Parse(a[5]), int.Parse(a[6])) + "}"); break;
           case "move": { string mode; Host(out mode); Place(new IntPtr(long.Parse(a[2])), int.Parse(a[3]), int.Parse(a[4]), int.Parse(a[5]), int.Parse(a[6]), mode); Out("{\"re\":" + a[1] + ",\"data\":{\"ok\":true}}"); break; }
           case "forget": { IntPtr h = new IntPtr(long.Parse(a[2])); lock (Gate) { ours.Remove(h); } Out("{\"re\":" + a[1] + ",\"data\":{\"ok\":true}}"); break; }
+          case "own": Own(new IntPtr(long.Parse(a[2]))); Out("{\"re\":" + a[1] + ",\"data\":{\"ok\":true}}"); break;
+          case "bottom": Bottom(new IntPtr(long.Parse(a[2]))); Out("{\"re\":" + a[1] + ",\"data\":{\"ok\":true}}"); break;
           case "refresh": Refresh(); Out("{\"re\":" + a[1] + ",\"data\":{\"ok\":true}}"); break;
           case "getwp": Out("{\"re\":" + a[1] + ",\"data\":{\"ok\":true,\"path\":\"" + Esc(Wallpaper()) + "\"}}"); break;
           case "setwp": { string p = Encoding.UTF8.GetString(Convert.FromBase64String(a[2])); bool ok = SpiSet(20, 0, p, 3); Out("{\"re\":" + a[1] + ",\"data\":{\"ok\":" + (ok ? "true" : "false") + "}}"); break; }
@@ -227,6 +250,9 @@ class WinDesktop extends EventEmitter {
     return res;
   }
   async place(win, display) { const r = this.phys(display); return this.call('move', `${this.hwnd(win)} ${Math.round(r.x)} ${Math.round(r.y)} ${Math.round(r.width)} ${Math.round(r.height)}`); }
+  /** Widgets layer: above the icons, below apps, still clickable. */
+  async raiseWidgets(win) { await this.ready; return this.call('own', this.hwnd(win)); }
+  lowerWidgets(win) { return this.call('bottom', this.hwnd(win)); }
   forget(win) { try { return this.call('forget', this.hwnd(win)); } catch (_) { return Promise.resolve(); } }
   /** After our windows close: make Explorer repaint the normal wallpaper. */
   restoreDesktop() { return this.child ? this.call('refresh') : Promise.resolve({ ok: true }); }

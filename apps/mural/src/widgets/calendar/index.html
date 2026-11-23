@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ .w-pad { gap: 8px; } header { display: flex; align-items: center; justify-content: space-between; }
+ h1 { margin: 0; font: 600 15px var(--display); } h1 span { color: var(--dim); font-weight: 400; }
+ header button { border: 0; background: var(--fill); width: 26px; height: 26px; border-radius: 8px; } header button:hover { background: var(--fill2); }
+ .g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; flex: 1; align-content: start; text-align: center; }
+ .h { font-size: 10.5px; color: var(--faint); font-weight: 600; padding: 2px 0 4px; }
+ .d { padding: 5px 0; border-radius: 8px; font-variant-numeric: tabular-nums; } .d.o { color: var(--faint); } .d.we { color: var(--dim); }
+ .d.today { background: var(--accent); color: #fff; font-weight: 650; }
+</style></head><body><div class="w-pad"><header><button id="p">‹</button><h1 id="m"></h1><button id="n">›</button></header><div class="g" id="g"></div></div>
+<script>
+let off = 0;
+function draw() { const st = mural.settings; document.documentElement.style.setProperty('--accent', st.accent || '#8f80ff');
+  const now = new Date(), base = new Date(now.getFullYear(), now.getMonth() + off, 1), first = (base.getDay() - (st.monday ? 1 : 0) + 7) % 7, days = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  m.innerHTML = base.toLocaleDateString([], { month: 'long' }) + ' <span>' + base.getFullYear() + '</span>';
+  const names = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 7 + i + (st.monday ? 1 : 0)).toLocaleDateString([], { weekday: 'narrow' }));
+  let h = names.map((x) => '<div class="h">' + x + '</div>').join(''); const prev = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
+  for (let i = 0; i < 42; i++) { const n = i - first + 1; const inM = n >= 1 && n <= days; const dd = inM ? n : n < 1 ? prev + n : n - days; const wd = (i + (st.monday ? 1 : 0)) % 7;
+    const today = inM && off === 0 && n === now.getDate(); if (i >= 35 && n > days) break; h += '<div class="d' + (inM ? '' : ' o') + (wd === 0 || wd === 6 ? ' we' : '') + (today ? ' today' : '') + '">' + dd + '</div>'; }
+  g.innerHTML = h; }
+p.onclick = () => { off--; draw(); }; n.onclick = () => { off++; draw(); }; m.onclick = () => { off = 0; draw(); };
+mural.ready().then(draw); mural.on('settings', draw); mural.on('resume', () => { off = 0; draw(); }); setInterval(() => { if (!mural.paused && off === 0) draw(); }, 600000);
+</script></body></html>

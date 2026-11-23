@@ -297,7 +297,7 @@
     {
       "id": "mural",
       "name": "Mural",
-      "description": "Live wallpapers for Mac and Windows: animated scenes, GPU shaders, videos and web pages, skies that follow the sun, wallpapers that react to the cursor and clicks, a Studio to build your own and a Claude/Codex plugin \u2014 and they stop the moment you can't see them.",
+      "description": "Live wallpapers and desktop widgets for Mac and Windows: animated scenes, GPU shaders, videos and web pages, skies that follow the sun, wallpapers that react to the cursor and clicks, interactive widgets you can arrange or build (with Claude), and a Claude/Codex plugin \u2014 all paused the moment you can't see them.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [

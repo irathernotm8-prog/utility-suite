@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="mural://app/widget-base.css"><script src="mural://app/widget-sdk.js"></script>
+<style>
+ body { display: grid; place-items: center; text-align: center; }
+ #t { font: 200 clamp(28px, 30vmin, 120px)/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+ #t small { font-size: .38em; font-weight: 400; color: var(--dim); margin-left: .15em; letter-spacing: 0; }
+ #d { margin-top: 6px; color: var(--dim); font-size: clamp(11px, 7vmin, 18px); letter-spacing: .06em; }
+ #words { font: 500 clamp(16px, 11vmin, 34px)/1.15 var(--display); padding: 0 12px; } #words b { color: var(--accent); font-weight: 600; }
+ svg { width: 88vmin; height: 88vmin; }
+</style></head><body><div id="v"></div>
+<script>
+let timer = 0;
+const W = ['twelve','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
+function words(d) { const h = d.getHours(), m = d.getMinutes(), r = Math.round(m / 5) * 5 % 60, hh = (h + (m >= 33 ? 1 : 0)) % 12;
+  const hw = W[hh]; if (r === 0) return 'It’s <b>' + hw + '</b> o’clock';
+  const n = { 5: 'five past', 10: 'ten past', 15: 'quarter past', 20: 'twenty past', 25: 'twenty-five past', 30: 'half past', 35: 'twenty-five to', 40: 'twenty to', 45: 'quarter to', 50: 'ten to', 55: 'five to' }[r];
+  return 'It’s ' + n + ' <b>' + hw + '</b>'; }
+function analog(d, acc) { const s = d.getSeconds(), m = d.getMinutes() + s / 60, h = d.getHours() % 12 + m / 60;
+  const hand = (a, len, w, c) => { const r = (a - 90) * Math.PI / 180; return '<line x1="50" y1="50" x2="' + (50 + Math.cos(r) * len) + '" y2="' + (50 + Math.sin(r) * len) + '" stroke="' + c + '" stroke-width="' + w + '" stroke-linecap="round"/>'; };
+  let ticks = ''; for (let i = 0; i < 12; i++) { const r = i * 30 * Math.PI / 180; ticks += '<line x1="' + (50 + Math.sin(r) * 41) + '" y1="' + (50 - Math.cos(r) * 41) + '" x2="' + (50 + Math.sin(r) * 45) + '" y2="' + (50 - Math.cos(r) * 45) + '" stroke="var(--dim)" stroke-width="' + (i % 3 ? 1 : 2) + '"/>'; }
+  return '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="none" stroke="var(--line)"/>' + ticks + hand(h * 30, 24, 3.4, 'var(--fg)') + hand(m * 6, 35, 2.2, 'var(--fg)') + (mural.settings.seconds ? hand(s * 6, 38, 1, acc) : '') + '<circle cx="50" cy="50" r="2.6" fill="' + acc + '"/></svg>'; }
+function draw() {
+  const st = mural.settings, d = new Date(), acc = st.accent || '#8f80ff'; document.documentElement.style.setProperty('--accent', acc);
+  const date = st.date ? '<div id="d">' + d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + '</div>' : '';
+  let html;
+  if (st.style === 'analog') html = analog(d, acc);
+  else if (st.style === 'words') html = '<div id="words">' + words(d) + '</div>' + date;
+  else { const o = { hour: st.h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !st.h24 }; let t = d.toLocaleTimeString([], o).replace(/\s?(AM|PM)$/i, (x) => '<small>' + x.trim() + '</small>');
+    if (st.seconds) t = t.replace(/(<small>|$)/, '<small style="margin-left:.1em">:' + String(d.getSeconds()).padStart(2, '0') + '</small>$1'); html = '<div id="t">' + t + '</div>' + date; }
+  v.innerHTML = html;
+}
+function tick() { clearTimeout(timer); if (mural.paused) return; draw(); const d = new Date(); const fine = mural.settings.seconds || mural.settings.style === 'analog'; timer = setTimeout(tick, fine ? 1000 - d.getMilliseconds() + 5 : (60 - d.getSeconds()) * 1000 - d.getMilliseconds() + 20); }
+mural.ready().then(tick); mural.on('settings', tick); mural.on('resume', tick); mural.on('pause', () => clearTimeout(timer));
+</script></body></html>

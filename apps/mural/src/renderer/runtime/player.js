@@ -85,6 +85,10 @@ export async function createPlayer(root, opts = {}) {
     wake();
   }
   const ro = new ResizeObserver(resize); ro.observe(root);
+  // a resolution switch can change the pixel density without changing the window's size: watch that too
+  let dprQuery = null; const onDpr = () => { resize(); watchDpr(); };
+  function watchDpr() { if (dprQuery) dprQuery.removeEventListener('change', onDpr); dprQuery = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`); dprQuery.addEventListener('change', onDpr); }
+  watchDpr(); window.addEventListener('resize', resize);
 
   // ------------------------------------------------------------------------------------------------- the loop
   function draw(now) {
@@ -183,7 +187,7 @@ export async function createPlayer(root, opts = {}) {
       } catch (_) { return null; }
     },
     destroy() {
-      state.destroyed = true; api.pause(); clearTimeout(minuteTimer); ro.disconnect();
+      state.destroyed = true; api.pause(); clearTimeout(minuteTimer); ro.disconnect(); window.removeEventListener('resize', resize); if (dprQuery) dprQuery.removeEventListener('change', onDpr);
       if (scene) scene.destroy(); if (shader) shader.destroy();
       if (media) { media.removeAttribute('src'); if (media.load) media.load(); }
       root.innerHTML = '';
