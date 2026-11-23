@@ -1,0 +1,75 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Midnight Rain",
+ "type": "scene",
+ "tags": [
+  "city",
+  "night",
+  "rain",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "gradient",
+    "name": "Sky",
+    "from": "#05070d",
+    "via": "#141a2b",
+    "to": "#33263f",
+    "angle": 180
+   },
+   {
+    "kind": "glow",
+    "name": "City haze",
+    "color": "#ff9a5c",
+    "x": 0.5,
+    "y": 1.0,
+    "r": 0.6,
+    "strength": 0.35
+   },
+   {
+    "kind": "hills",
+    "name": "Far towers",
+    "style": "skyline",
+    "color": "#141826",
+    "base": 0.62,
+    "rough": 0.6,
+    "seed": 3,
+    "lights": "#ffcf8a",
+    "lightsOn": 0.25,
+    "depth": 0.2
+   },
+   {
+    "kind": "hills",
+    "name": "Near towers",
+    "style": "skyline",
+    "color": "#07090f",
+    "base": 0.78,
+    "rough": 0.8,
+    "seed": 17,
+    "lights": "#ffd9a0",
+    "lightsOn": 0.45,
+    "depth": 0.5
+   },
+   {
+    "kind": "particles",
+    "name": "Rain",
+    "preset": "rain",
+    "count": 520,
+    "color": "#aebfe0",
+    "size": 1,
+    "speed": 1,
+    "wind": 0.2,
+    "cursor": "repel",
+    "clickBurst": false
+   }
+  ],
+  "effects": {
+   "click": "ripple",
+   "clickColor": "#c8d8ff",
+   "cursorGlow": true,
+   "cursorColor": "#ffb37a"
+  }
+ }
+}

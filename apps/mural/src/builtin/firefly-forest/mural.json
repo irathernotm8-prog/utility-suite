@@ -1,0 +1,91 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Firefly Forest",
+ "type": "scene",
+ "tags": [
+  "forest",
+  "night",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "gradient",
+    "name": "Dusk",
+    "from": "#071318",
+    "via": "#10302f",
+    "to": "#25403a",
+    "angle": 180
+   },
+   {
+    "kind": "glow",
+    "name": "Low moon",
+    "color": "#c8ffe9",
+    "x": 0.3,
+    "y": 0.42,
+    "r": 0.35,
+    "strength": 0.25
+   },
+   {
+    "kind": "hills",
+    "name": "Ridge",
+    "style": "mountains",
+    "color": "#15302f",
+    "base": 0.6,
+    "rough": 0.4,
+    "seed": 61,
+    "depth": 0.15
+   },
+   {
+    "kind": "hills",
+    "name": "Far trees",
+    "style": "forest",
+    "color": "#0c2124",
+    "base": 0.72,
+    "rough": 0.3,
+    "seed": 8,
+    "depth": 0.35
+   },
+   {
+    "kind": "particles",
+    "name": "Far fireflies",
+    "preset": "fireflies",
+    "count": 50,
+    "color": "#d6ff8a",
+    "size": 0.6,
+    "speed": 0.5,
+    "cursor": "none",
+    "top": 0.45,
+    "bottom": 0.9,
+    "depth": 0.4
+   },
+   {
+    "kind": "hills",
+    "name": "Near trees",
+    "style": "forest",
+    "color": "#040c0e",
+    "base": 0.88,
+    "rough": 0.35,
+    "seed": 29,
+    "depth": 0.75
+   },
+   {
+    "kind": "particles",
+    "name": "Fireflies",
+    "preset": "fireflies",
+    "count": 70,
+    "color": "#f4ff9a",
+    "size": 1.2,
+    "speed": 0.8,
+    "cursor": "attract",
+    "top": 0.35,
+    "bottom": 1
+   }
+  ],
+  "effects": {
+   "click": "sparkle",
+   "clickColor": "#f4ffc0"
+  }
+ }
+}

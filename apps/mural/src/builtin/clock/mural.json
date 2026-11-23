@@ -1,0 +1,16 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Minimal Clock",
+ "type": "web",
+ "tags": [
+  "clock",
+  "web",
+  "interactive"
+ ],
+ "page": "index.html",
+ "interactive": {
+  "cursor": true,
+  "click": true
+ }
+}

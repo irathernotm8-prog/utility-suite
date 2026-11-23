@@ -1,0 +1,86 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Ocean Hours",
+ "type": "scene",
+ "tags": [
+  "dynamic",
+  "time of day",
+  "sea",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "sky",
+    "name": "Sky",
+    "horizon": 0.62,
+    "dayTop": "#2f7de0",
+    "dayBottom": "#cde8ff",
+    "duskBottom": "#ff8a5c",
+    "dawnBottom": "#ffb38a"
+   },
+   {
+    "kind": "particles",
+    "name": "Stars",
+    "preset": "stars",
+    "count": 200,
+    "color": "#eef2ff",
+    "cursor": "none",
+    "clickBurst": false,
+    "bottom": 0.55,
+    "when": {
+     "night": 1,
+     "dawn": 0.15,
+     "day": 0,
+     "dusk": 0.3
+    }
+   },
+   {
+    "kind": "glow",
+    "name": "Sun on the water",
+    "color": "#ffd29a",
+    "sun": true,
+    "r": 0.4,
+    "strength": 0.4,
+    "blend": "screen"
+   },
+   {
+    "kind": "waves",
+    "name": "Sea",
+    "color": "#1a4a86",
+    "crest": "#9fd0ff",
+    "y": 0.62,
+    "amp": 0.012,
+    "count": 6,
+    "speed": 0.6,
+    "when": {
+     "day": 1,
+     "dawn": 1,
+     "dusk": 1,
+     "night": 1
+    }
+   },
+   {
+    "kind": "waves",
+    "name": "Sea at night",
+    "color": "#081530",
+    "crest": "#5d74b0",
+    "y": 0.62,
+    "amp": 0.012,
+    "count": 6,
+    "speed": 0.6,
+    "when": {
+     "day": 0,
+     "dawn": 0.2,
+     "dusk": 0.4,
+     "night": 1
+    }
+   }
+  ],
+  "effects": {
+   "click": "ripple",
+   "clickColor": "#e6f3ff"
+  }
+ }
+}

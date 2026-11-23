@@ -1,0 +1,61 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Bokeh Lights",
+ "type": "scene",
+ "tags": [
+  "abstract",
+  "soft",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "gradient",
+    "name": "Backdrop",
+    "from": "#160c2e",
+    "via": "#2c1b4f",
+    "to": "#0b3a4a",
+    "angle": 135
+   },
+   {
+    "kind": "particles",
+    "name": "Big lights",
+    "preset": "bokeh",
+    "count": 46,
+    "color": "#ffb3d9",
+    "size": 1.4,
+    "speed": 0.6,
+    "cursor": "attract",
+    "depth": 0.3
+   },
+   {
+    "kind": "particles",
+    "name": "Teal lights",
+    "preset": "bokeh",
+    "count": 34,
+    "color": "#7ff0e6",
+    "size": 1,
+    "speed": 0.5,
+    "cursor": "repel",
+    "depth": 0.6
+   },
+   {
+    "kind": "particles",
+    "name": "Dust",
+    "preset": "dust",
+    "count": 160,
+    "color": "#fff4e0",
+    "size": 1,
+    "speed": 0.6,
+    "cursor": "repel"
+   }
+  ],
+  "effects": {
+   "click": "sparkle",
+   "clickColor": "#ffe1f2",
+   "cursorGlow": true,
+   "cursorColor": "#b58bff"
+  }
+ }
+}

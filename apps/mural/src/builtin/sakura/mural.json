@@ -1,0 +1,79 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Sakura Breeze",
+ "type": "scene",
+ "tags": [
+  "spring",
+  "light",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "gradient",
+    "name": "Sky",
+    "from": "#fde3ec",
+    "via": "#fbd0dc",
+    "to": "#ffe9d6",
+    "angle": 170
+   },
+   {
+    "kind": "glow",
+    "name": "Sun",
+    "color": "#fff6e0",
+    "x": 0.7,
+    "y": 0.3,
+    "r": 0.4,
+    "strength": 0.7
+   },
+   {
+    "kind": "hills",
+    "name": "Far hills",
+    "style": "hills",
+    "color": "#f0b6c8",
+    "base": 0.7,
+    "rough": 0.3,
+    "seed": 31,
+    "depth": 0.2
+   },
+   {
+    "kind": "hills",
+    "name": "Hills",
+    "style": "hills",
+    "color": "#e597b0",
+    "base": 0.82,
+    "rough": 0.25,
+    "seed": 4,
+    "depth": 0.45
+   },
+   {
+    "kind": "text",
+    "name": "Greeting",
+    "text": "{greeting}",
+    "font": "serif",
+    "size": 0.06,
+    "weight": 400,
+    "color": "#7a3550",
+    "y": 0.4,
+    "shadow": false,
+    "opacity": 0.8
+   },
+   {
+    "kind": "particles",
+    "name": "Petals",
+    "preset": "petals",
+    "count": 120,
+    "color": "#ffb7cb",
+    "size": 1.3,
+    "speed": 0.8,
+    "wind": 0.5,
+    "cursor": "repel"
+   }
+  ],
+  "effects": {
+   "click": "ripple",
+   "clickColor": "#ffffff"
+  }
+ }
+}

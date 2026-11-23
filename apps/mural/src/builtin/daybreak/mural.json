@@ -1,0 +1,96 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Daybreak Hills",
+ "type": "scene",
+ "tags": [
+  "dynamic",
+  "time of day",
+  "landscape",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "sky",
+    "name": "Sky",
+    "horizon": 0.7,
+    "depth": 0.1
+   },
+   {
+    "kind": "particles",
+    "name": "Stars",
+    "preset": "stars",
+    "count": 260,
+    "color": "#dfe6ff",
+    "size": 0.9,
+    "cursor": "none",
+    "clickBurst": false,
+    "bottom": 0.62,
+    "when": {
+     "night": 1,
+     "dawn": 0.15,
+     "day": 0,
+     "dusk": 0.3
+    }
+   },
+   {
+    "kind": "hills",
+    "name": "Far mountains",
+    "style": "mountains",
+    "color": "#8a93c4",
+    "nightColor": "#1b2142",
+    "base": 0.62,
+    "rough": 0.45,
+    "seed": 21,
+    "depth": 0.2,
+    "opacity": 0.85
+   },
+   {
+    "kind": "hills",
+    "name": "Hills",
+    "style": "hills",
+    "color": "#4f6a8c",
+    "nightColor": "#121933",
+    "base": 0.74,
+    "rough": 0.35,
+    "seed": 5,
+    "depth": 0.45
+   },
+   {
+    "kind": "hills",
+    "name": "Forest",
+    "style": "forest",
+    "color": "#22324a",
+    "nightColor": "#070b18",
+    "base": 0.86,
+    "rough": 0.3,
+    "seed": 13,
+    "depth": 0.8
+   },
+   {
+    "kind": "particles",
+    "name": "Fireflies",
+    "preset": "fireflies",
+    "count": 40,
+    "color": "#ffe38a",
+    "size": 1,
+    "speed": 0.7,
+    "cursor": "attract",
+    "top": 0.6,
+    "bottom": 1,
+    "when": {
+     "night": 1,
+     "dawn": 0,
+     "day": 0,
+     "dusk": 0.7
+    },
+    "depth": 0.9
+   }
+  ],
+  "effects": {
+   "click": "sparkle",
+   "clickColor": "#fff2c4"
+  }
+ }
+}

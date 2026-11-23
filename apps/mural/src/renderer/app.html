@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mural</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' mural:; img-src 'self' mural: data: blob:; media-src 'self' mural: blob:; style-src 'self' 'unsafe-inline'; frame-src mural:; connect-src 'self' mural:">
+<link rel="stylesheet" href="app.css"></head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand"><img src="icon.png" alt=""><b>Mural</b></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <div class="now" id="now"></div>
+      <button class="btn" id="pauseBtn"></button>
+    </div>
+  </aside>
+  <main>
+    <section class="page" id="library"></section>
+    <section class="page" id="studio"></section>
+    <section class="page" id="performance"></section>
+    <section class="page" id="settings"></section>
+  </main>
+</div>
+<div class="dropzone" id="drop"><div>Drop to add to your library<small>Videos, pictures, web pages, shaders, .mural files or Wallpaper Engine video/web folders</small></div></div>
+<div id="toasts"></div>
+<script type="module" src="app.js"></script>
+</body></html>

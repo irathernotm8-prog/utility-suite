@@ -1,0 +1,117 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Snowfall",
+ "type": "scene",
+ "tags": [
+  "winter",
+  "night",
+  "clock",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "gradient",
+    "name": "Night sky",
+    "from": "#0b1430",
+    "via": "#1d2c55",
+    "to": "#4a5e8c",
+    "angle": 180
+   },
+   {
+    "kind": "particles",
+    "name": "Stars",
+    "preset": "stars",
+    "count": 180,
+    "color": "#e8eeff",
+    "cursor": "none",
+    "clickBurst": false,
+    "bottom": 0.5
+   },
+   {
+    "kind": "glow",
+    "name": "Moonlight",
+    "color": "#cfe0ff",
+    "x": 0.78,
+    "y": 0.2,
+    "r": 0.28,
+    "strength": 0.35
+   },
+   {
+    "kind": "shape",
+    "name": "Moon",
+    "shape": "circle",
+    "fill": "#f2f5ff",
+    "x": 0.755,
+    "y": 0.155,
+    "w": 0.045,
+    "h": 0.08
+   },
+   {
+    "kind": "hills",
+    "name": "Snowy peaks",
+    "style": "mountains",
+    "color": "#a9b8d8",
+    "base": 0.62,
+    "rough": 0.6,
+    "seed": 44,
+    "depth": 0.15
+   },
+   {
+    "kind": "hills",
+    "name": "Drifts",
+    "style": "hills",
+    "color": "#d6e1f5",
+    "base": 0.8,
+    "rough": 0.2,
+    "seed": 9,
+    "depth": 0.35
+   },
+   {
+    "kind": "hills",
+    "name": "Pines",
+    "style": "forest",
+    "color": "#13203a",
+    "base": 0.9,
+    "rough": 0.25,
+    "seed": 77,
+    "depth": 0.6
+   },
+   {
+    "kind": "text",
+    "name": "Clock",
+    "text": "{time}",
+    "size": 0.11,
+    "weight": 200,
+    "y": 0.36,
+    "font": "system"
+   },
+   {
+    "kind": "text",
+    "name": "Date",
+    "text": "{date}",
+    "size": 0.028,
+    "weight": 400,
+    "y": 0.45,
+    "opacity": 0.8,
+    "spacing": 0.08
+   },
+   {
+    "kind": "particles",
+    "name": "Snow",
+    "preset": "snow",
+    "count": 420,
+    "color": "#ffffff",
+    "size": 1.1,
+    "speed": 1,
+    "wind": 0.15,
+    "cursor": "repel"
+   }
+  ],
+  "effects": {
+   "click": "ripple",
+   "clickColor": "#ffffff"
+  }
+ }
+}

@@ -43,6 +43,7 @@
 | Kiln | `apps/kiln` | `docs/handoffs/Kiln.md` |
 | Lumen | `apps/lumen` | `docs/handoffs/Lumen.md` |
 | Mixer | `apps/mixer` | `docs/handoffs/Mixer.md` (MCP plugin for Claude/Codex; no dependencies, no native modules; MP3 encoder vendored in `src/vendor/lamejs`; audio engine runs in a hidden window) |
+| Mural | `apps/mural` | `docs/handoffs/Mural.md` (MCP plugin for Claude/Codex; no dependencies, no native modules; the Windows desktop helper is C# compiled by PowerShell at runtime, the Mac one is JXA) |
 | Onward | `apps/onward` | `docs/handoffs/Onward.md` |
 | RO3 | `apps/ro3` | `docs/handoffs/RO3.md` |
 | Relay | `apps/relay` | `docs/handoffs/Relay.md` |

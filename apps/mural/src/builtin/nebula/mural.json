@@ -1,0 +1,1 @@
+{ "format": 1, "name": "Nebula Drift", "type": "shader", "author": "Mural", "tags": ["space", "calm", "interactive"], "shader": "main.frag", "quality": { "fps": 30, "scale": 0.5 } }

@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Minimal Clock</title>
+<!-- A web wallpaper: any page works. Mural sends it messages: {mural:'pointer',x,y}, {mural:'click',x,y},
+     {mural:'pause'} / {mural:'resume'} and {mural:'sky', phases, daylight}. Stop your own timers on pause. -->
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b0d12;color:#fff;font-family:-apple-system,"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif}
+  body{display:grid;place-items:center;transition:background 2s}
+  #bg{position:fixed;inset:-20%;background:radial-gradient(40% 40% at var(--x,50%) var(--y,50%),#2b3a6b 0%,transparent 70%),radial-gradient(50% 50% at 80% 90%,#3a1f4d 0%,transparent 70%);transition:background .4s}
+  main{position:relative;text-align:center}
+  #t{font-size:15vh;font-weight:200;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  #d{font-size:2.4vh;opacity:.7;letter-spacing:.2em;text-transform:uppercase;margin-top:1vh}
+  .ring{position:fixed;border:2px solid rgba(255,255,255,.5);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;animation:r 1.2s ease-out forwards}
+  @keyframes r{from{width:0;height:0;opacity:1}to{width:40vh;height:40vh;opacity:0}}
+</style></head>
+<body><div id="bg"></div><main><div id="t"></div><div id="d"></div></main>
+<script>
+  let timer = 0;
+  function tick() { const n = new Date(); t.textContent = n.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); d.textContent = n.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }); timer = setTimeout(tick, 1000 - n.getMilliseconds() + 5); }
+  tick();
+  addEventListener('message', (e) => {
+    const m = e.data || {};
+    if (m.mural === 'pointer') { bg.style.setProperty('--x', (m.x * 100) + '%'); bg.style.setProperty('--y', (m.y * 100) + '%'); }
+    if (m.mural === 'click') { const r = document.createElement('div'); r.className = 'ring'; r.style.left = (m.x * 100) + 'vw'; r.style.top = (m.y * 100) + 'vh'; document.body.appendChild(r); setTimeout(() => r.remove(), 1300); }
+    if (m.mural === 'pause') clearTimeout(timer);
+    if (m.mural === 'resume') { clearTimeout(timer); tick(); }
+    if (m.mural === 'sky') document.body.style.background = m.daylight > 0.5 ? '#141a26' : '#0b0d12';
+  });
+</script></body></html>

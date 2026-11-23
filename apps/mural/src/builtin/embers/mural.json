@@ -1,0 +1,52 @@
+{
+ "format": 1,
+ "author": "Mural",
+ "name": "Campfire Embers",
+ "type": "scene",
+ "tags": [
+  "warm",
+  "night",
+  "interactive"
+ ],
+ "scene": {
+  "layers": [
+   {
+    "kind": "gradient",
+    "name": "Dark",
+    "from": "#050303",
+    "via": "#120706",
+    "to": "#2a0f08",
+    "angle": 180
+   },
+   {
+    "kind": "glow",
+    "name": "Fire glow",
+    "color": "#ff7a2e",
+    "x": 0.5,
+    "y": 1.05,
+    "r": 0.55,
+    "strength": 0.55,
+    "motion": "pulse",
+    "motionSpeed": 1.4,
+    "motionAmount": 0.5
+   },
+   {
+    "kind": "particles",
+    "name": "Embers",
+    "preset": "embers",
+    "count": 160,
+    "color": "#ffae4a",
+    "size": 1,
+    "speed": 1,
+    "wind": 0.1,
+    "cursor": "repel",
+    "top": 0.1,
+    "bottom": 1.0
+   }
+  ],
+  "effects": {
+   "click": "shockwave",
+   "clickColor": "#ffb070"
+  }
+ }
+}

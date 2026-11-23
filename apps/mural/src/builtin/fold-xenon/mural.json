@@ -1,0 +1,37 @@
+{
+ "format": 1,
+ "name": "Fold \u2014 Xenon",
+ "type": "shader",
+ "author": "Mural",
+ "tags": [
+  "abstract",
+  "dark",
+  "fold",
+  "interactive"
+ ],
+ "shader": "main.frag",
+ "params": [
+  {
+   "name": "Palette",
+   "value": 0,
+   "min": 0,
+   "max": 5
+  },
+  {
+   "name": "Motion",
+   "value": 0.6,
+   "min": 0,
+   "max": 2
+  },
+  {
+   "name": "Light angle",
+   "value": 0,
+   "min": -3.14,
+   "max": 3.14
+  }
+ ],
+ "quality": {
+  "fps": 24,
+  "scale": 1
+ }
+}

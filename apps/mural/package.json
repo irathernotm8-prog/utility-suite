@@ -1,0 +1,62 @@
+{
+  "name": "mural",
+  "productName": "Mural",
+  "version": "0.1.0",
+  "description": "Live wallpapers for Mac and Windows: animated scenes, shaders, videos and web wallpapers, dynamic skies that follow the time of day, wallpapers that react to the cursor and clicks, and a Studio to build your own, with a strict performance budget that pauses everything the moment it isn't seen.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js",
+    "e2e": "electron test/e2e/main.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.mural",
+    "productName": "Mural",
+    "copyright": "Personal use",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "mcp/**/*",
+      "build/icon.png",
+      "build/tray.png",
+      "build/trayTemplate.png",
+      "build/trayTemplate@2x.png",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.graphics-design",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSAppleEventsUsageDescription": "Mural uses Apple Events only when Eco mode swaps a still frame in as your normal wallpaper."
+      }
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    },
+    "asarUnpack": [
+      "mcp/**/*"
+    ]
+  }
+}

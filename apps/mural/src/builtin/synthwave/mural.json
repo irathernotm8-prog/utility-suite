@@ -1,0 +1,1 @@
+{ "format": 1, "name": "Synthwave", "type": "shader", "author": "Mural", "tags": ["retro", "neon", "interactive"], "shader": "main.frag", "quality": { "fps": 30, "scale": 0.5 } }
