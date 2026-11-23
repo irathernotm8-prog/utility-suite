@@ -49,8 +49,9 @@ function renderSide() {
   const running = st.displays.filter((d) => d.state === 'running').length;
   const cur = S.library.find((w) => w.id === s.wallpaper);
   const dot = !s.enabled ? 'off' : st.userPaused || !running ? 'paused' : '';
-  const what = !s.enabled ? 'Off' : st.userPaused ? 'Paused by you' : running ? `Running on ${running} display${running > 1 ? 's' : ''}` : reasonText(st.displays[0] && st.displays[0].reason) || 'Paused';
-  $('#now').innerHTML = `<div class="lbl">On the desktop</div><div class="nm">${esc(s.sameOnAll ? (cur ? cur.name : '—') : 'Per display')}</div><div class="meta"><span class="dot ${dot}"></span>${esc(what)}${s.enabled && running ? ` · ${st.totalCpu}% CPU` : ''}</div>`;
+  const nW = (S.widgetCount || 0);
+  const what = !s.enabled ? (s.widgetsEnabled !== false && nW ? `${nW} widget${nW > 1 ? 's' : ''} on your own wallpaper` : 'Live wallpaper off') : st.userPaused ? 'Paused by you' : running ? `Running on ${running} display${running > 1 ? 's' : ''}` : reasonText(st.displays[0] && st.displays[0].reason) || 'Paused';
+  $('#now').innerHTML = `<div class="lbl">On the desktop</div><div class="nm">${esc(!s.enabled ? 'Your own wallpaper' : s.sameOnAll ? (cur ? cur.name : '—') : 'Per display')}</div><div class="meta"><span class="dot ${dot}"></span>${esc(what)}${s.enabled && running ? ` · ${st.totalCpu}% CPU` : ''}</div>`;
   const pb = $('#pauseBtn'); pb.innerHTML = st.userPaused ? `${icon('play')}Resume` : `${icon('pause')}Pause`;
   pb.onclick = async () => { await call('host.pause', !st.userPaused); };
 }
@@ -65,7 +66,7 @@ function libraryFrame() {
     <div class="head"><h1>Library</h1><span class="sub" id="libCount"></span><div class="spacer"></div>
       <div class="search">${icon('search')}<input id="q" placeholder="Search wallpapers"></div>
       <button class="btn" id="addBtn">${icon('plus')}Add</button><button class="btn primary" id="newBtn">${icon('wand')}Make one</button></div>
-    <div class="toolbar"><div class="chips" id="chips"></div><div class="spacer"></div><div id="targets"></div></div>
+    <div class="toolbar"><div class="chips" id="chips"></div><div class="spacer"></div><div id="wpSwitch"></div><div id="targets"></div></div>
     <div class="scroll"><div class="grid" id="grid"></div></div>`;
   $('#q', el).oninput = (e) => { S.query = e.target.value.toLowerCase(); renderGrid(); };
   $('#addBtn', el).onclick = () => importFiles();
@@ -82,6 +83,8 @@ function renderLibrary() {
   $('#chips', el).innerHTML = FILTERS.map(([k, l]) => `<button class="chip ${S.filter === k ? 'on' : ''}" data-f="${k}">${l}</button>`).join('');
   $('#chips', el).querySelectorAll('.chip').forEach((b) => (b.onclick = () => { S.filter = b.dataset.f; renderLibrary(); }));
   const ds = (S.state && S.state.displays) || [];
+  $('#wpSwitch', el).innerHTML = `<label class="hint" style="margin:0;display:flex;align-items:center;gap:8px;white-space:nowrap"><button class="switch ${S.settings.enabled ? 'on' : ''}" id="wpOn"></button>Live wallpaper${S.settings.enabled ? '' : ' off — widgets still work'}</label>`;
+  $('#wpOn', el).onclick = () => call('settings.set', { enabled: !S.settings.enabled });
   $('#targets', el).innerHTML = ds.length > 1 ? `<div class="seg" id="tseg"><button data-k="" class="${!S.target ? 'on' : ''}">All displays</button>${ds.map((d) => `<button data-k="${esc(d.key)}" class="${S.target === d.key ? 'on' : ''}">${esc(d.label)}</button>`).join('')}</div>` : '';
   el.querySelectorAll('#tseg button').forEach((b) => (b.onclick = () => { S.target = b.dataset.k || null; renderLibrary(); }));
   renderGrid();
@@ -254,7 +257,8 @@ async function renderSettings() {
   const scroll = body.parentElement.scrollTop;
   body.innerHTML = `
   <div class="box"><h3>${icon('display')}Displays</h3>
-    <div class="row"><div class="t"><b>Wallpapers on the desktop</b><span>Turn off to go back to your normal wallpaper. Mural keeps running in the ${M.platform === 'darwin' ? 'menu bar' : 'tray'}.</span></div><button class="switch ${s.enabled ? 'on' : ''}" data-sw="enabled"></button></div>
+    <div class="row"><div class="t"><b>Mural’s live wallpaper</b><span>Turn off to keep your normal wallpaper or Wallpaper Engine — widgets keep working on top of it.</span></div><button class="switch ${s.enabled ? 'on' : ''}" data-sw="enabled"></button></div>
+    <div class="row"><div class="t"><b>Widgets on the desktop</b><span>Hides every widget without removing them.</span></div><button class="switch ${s.widgetsEnabled !== false ? 'on' : ''}" data-sw="widgetsEnabled"></button></div>
     <div class="row"><div class="t"><b>Same wallpaper on every display</b></div><button class="switch ${s.sameOnAll ? 'on' : ''}" data-sw="sameOnAll"></button></div>
     ${!s.sameOnAll ? `<div class="disp-map" style="margin-top:8px">${ds.map((d) => `<div class="disp"><div class="nm">${icon('display')}${esc(d.label)}<span class="res">${d.bounds.width}×${d.bounds.height}${d.scale > 1 ? ' @' + d.scale + 'x' : ''}</span></div><select class="txt" data-disp="${esc(d.key)}">${S.library.map((w) => `<option value="${esc(w.id)}" ${w.id === d.wallpaperId ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select></div>`).join('')}</div>` : ''}
   </div>
@@ -308,7 +312,7 @@ function renderAi() {
 // ---------------------------------------------------------------------------------------------------- start
 const studio = new Studio($('#studio'), { call, toast, menu, go, S, raw: M });
 const widgetsPage = new WidgetsPage($('#widgets'), { call, toast, menu, go, S, raw: M });
-M.on('widgets', (st) => widgetsPage.update(st));
+M.on('widgets', (st) => { S.widgetCount = st.instances.length; widgetsPage.update(st); renderSide(); });
 M.on('widget-settings', async (id) => { go('widgets'); await widgetsPage.load(); widgetsPage.render(); widgetsPage.openDrawer(id); });
 M.on('library', (l) => { S.library = l; if (S.page === 'library') renderGrid(); renderSide(); studio.libraryChanged(); });
 M.on('settings', (s) => { S.settings = s; renderSide(); if (S.page === 'library') renderLibrary(); if (S.page === 'settings') renderSettings(); if (S.page === 'performance') renderPerf(); });
@@ -317,6 +321,7 @@ M.on('goto', (p) => go(p));
 M.on('bridge', () => { if (S.page === 'settings') M.call('ai.status').then((s) => { aiStatus = s; renderAi(); }); });
 (async () => {
   [S.info, S.settings, S.library, S.state] = await Promise.all([M.call('app.info'), M.call('settings.get'), M.call('library.list'), M.call('host.status')]);
+  S.widgetCount = (await M.call('widgets.state').catch(() => ({ instances: [] }))).instances.length;
   nav(); renderSide();
   go((location.hash || '#library').slice(1) || 'library');
   window.__mural = { S, go, studio, widgetsPage };

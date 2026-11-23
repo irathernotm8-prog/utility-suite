@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULTS = {
-  enabled: true,              // wallpapers on the desktop at all
+  enabled: true,              // Mural's live wallpaper on the desktop (off = keep your own wallpaper / Wallpaper Engine)
   sameOnAll: true,            // one wallpaper for every display
   wallpaper: 'builtin/aurora',// used when sameOnAll
   perDisplay: {},             // displayKey -> wallpaper id
@@ -23,6 +23,8 @@ const DEFAULTS = {
   showStats: false,           // small fps readout on the desktop
   rotate: { on: false, minutes: 60, ids: [] },
   favorites: [],
+  widgetsEnabled: true,       // widgets on the desktop (independent of the wallpaper)
+  widgetGrid: 'medium',       // small / medium / large grid cells, or 'off' for free placement
   firstRun: true
 };
 

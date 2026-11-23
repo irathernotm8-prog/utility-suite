@@ -40,6 +40,46 @@ function normalizeWidget(raw) {
   m.tags = Array.isArray(m.tags) ? m.tags.map(String).slice(0, 10) : [];
   return m;
 }
+// ---------------------------------------------------------------------------------------------------- the grid
+// Widgets snap to a grid of square cells laid over the usable part of the display (the work area: not under the menu
+// bar, Dock or taskbar), so everything lines up with even gaps. Sizes are whole numbers of cells.
+const GRID_SIZES = { small: { cell: 64, gap: 12 }, medium: { cell: 80, gap: 14 }, large: { cell: 100, gap: 16 } };
+const GRID_MARGIN = 20;
+/** area: the work area in the layer's own coordinates ({x, y, width, height}). size: small|medium|large|off */
+function gridFor(area, size) {
+  const g = GRID_SIZES[size]; if (!g) return { on: false };
+  const step = g.cell + g.gap;
+  const cols = Math.max(1, Math.floor((area.width - 2 * GRID_MARGIN + g.gap) / step));
+  const rows = Math.max(1, Math.floor((area.height - 2 * GRID_MARGIN + g.gap) / step));
+  const w = cols * step - g.gap, h = rows * step - g.gap;
+  return { on: true, size, cell: g.cell, gap: g.gap, step, cols, rows, x0: Math.round(area.x + (area.width - w) / 2), y0: Math.round(area.y + (area.height - h) / 2) };
+}
+const spanOf = (px, G) => Math.max(1, Math.round((px + G.gap) / G.step));
+const pxOf = (span, G) => span * G.step - G.gap;
+/** Pixel rect -> cells {col,row,cols,rows}, inside the grid. minW/minH (px) set the smallest span. */
+function snapToGrid(r, G, minW = 0, minH = 0) {
+  const cols = Math.min(G.cols, Math.max(spanOf(r.w, G), Math.ceil((minW + G.gap) / G.step), 1));
+  const rows = Math.min(G.rows, Math.max(spanOf(r.h, G), Math.ceil((minH + G.gap) / G.step), 1));
+  const col = Math.max(0, Math.min(G.cols - cols, Math.round((r.x - G.x0) / G.step)));
+  const row = Math.max(0, Math.min(G.rows - rows, Math.round((r.y - G.y0) / G.step)));
+  return { col, row, cols, rows };
+}
+const cellsToPx = (c, G) => ({ x: G.x0 + c.col * G.step, y: G.y0 + c.row * G.step, w: pxOf(c.cols, G), h: pxOf(c.rows, G) });
+const cellsOverlap = (a, b) => a.col < b.col + b.cols && b.col < a.col + a.cols && a.row < b.row + b.rows && b.row < a.row + a.rows;
+/** The free spot nearest to `want` (cells) that doesn't overlap `taken`; null if the grid is full. */
+function nearestFree(want, taken, G) {
+  const fits = (c) => c.col >= 0 && c.row >= 0 && c.col + c.cols <= G.cols && c.row + c.rows <= G.rows && !taken.some((t) => cellsOverlap(c, t));
+  if (fits(want)) return want;
+  let best = null, bd = Infinity;
+  for (let row = 0; row + want.rows <= G.rows; row++) for (let col = 0; col + want.cols <= G.cols; col++) {
+    const c = { col, row, cols: want.cols, rows: want.rows }; if (!fits(c)) continue;
+    const d = (col - want.col) ** 2 + (row - want.row) ** 2; if (d < bd) { bd = d; best = c; }
+  }
+  if (best) return best;
+  if (want.cols > 1 || want.rows > 1) return nearestFree({ ...want, cols: Math.max(1, want.cols - 1), rows: Math.max(1, want.rows - 1) }, taken, G); // shrink to fit
+  return null;
+}
+
 const defaultsOf = (m) => Object.fromEntries(m.settings.map((f) => [f.key, f.default !== undefined ? f.default : f.type === 'toggle' ? false : f.type === 'list' ? [] : '']));
 
 class Widgets {
@@ -124,18 +164,42 @@ class Widgets {
     const w = this.read(type); if (!w) throw new Error('Unknown widget ' + type);
     const size = { w: opts.w || w.manifest.size.w, h: opts.h || w.manifest.size.h };
     const spot = opts.x != null && opts.y != null ? { x: opts.x, y: opts.y } : this.freeSpot(display, size, bounds);
-    const inst = { id: 'w' + crypto.randomBytes(5).toString('hex'), type, display: String(display), x: spot.x, y: spot.y, w: size.w, h: size.h, settings: { ...defaultsOf(w.manifest), ...(opts.settings || {}) }, style: { glass: 'dark', opacity: 1, ...(opts.style || {}) }, z: Date.now() };
+    const inst = { placed: Date.now(), id: 'w' + crypto.randomBytes(5).toString('hex'), type, display: String(display), x: spot.x, y: spot.y, w: size.w, h: size.h, settings: { ...defaultsOf(w.manifest), ...(opts.settings || {}) }, style: { glass: 'dark', opacity: 1, ...(opts.style || {}) }, z: Date.now() };
     this.state.instances.push(inst); this.save(); return inst;
   }
   update(id, patch) {
     const i = this.instance(id); if (!i) throw new Error('No such widget on the desktop');
     if (String(id).startsWith('t')) { if (patch.settings) i.settings = { ...i.settings, ...patch.settings }; if (patch.w) i.w = patch.w; if (patch.h) i.h = patch.h; return i; }
     for (const k of ['x', 'y', 'w', 'h', 'display', 'z']) if (patch[k] != null) i[k] = k === 'display' ? String(patch[k]) : Math.round(Number(patch[k]));
+    if (['x', 'y', 'w', 'h', 'display'].some((k) => patch[k] != null)) delete i.g; // re-snapped on the next arrange
     if (patch.settings) i.settings = { ...i.settings, ...patch.settings };
     if (patch.style) i.style = { ...i.style, ...patch.style };
     this.save(); return i;
   }
   remove(id) { this.state.instances = this.state.instances.filter((i) => i.id !== id); this.save(); try { fs.unlinkSync(this.dataFile(id)); } catch (_) {} return true; }
+  /**
+   * Where each widget on a display goes. With the grid on, every widget gets whole cells (kept in inst.g so they stay
+   * put when the grid changes size), older widgets keep their place and newer ones take the nearest free spot.
+   * area: the work area in display coordinates; size: small|medium|large|off. Saves any change.
+   */
+  arrange(display, bounds, area, size, moved = null) {
+    const G = gridFor(area, size); const list = this.instances(display).slice().sort((a, b) => (a.id === moved ? 1 : 0) - (b.id === moved ? 1 : 0) || (a.placed || 0) - (b.placed || 0));
+    let changed = false; const taken = [];
+    for (const i of list) {
+      const t = this.read(i.type); const min = t ? t.manifest.size : { minW: 0, minH: 0 };
+      if (!G.on) { const c = this.clamp(i, bounds); if (c.x !== i.x || c.y !== i.y || c.w !== i.w || c.h !== i.h) { Object.assign(i, { x: c.x, y: c.y, w: c.w, h: c.h }); changed = true; } continue; }
+      let want = i.g && i.g.size === size && i.id !== moved ? { col: i.g.col, row: i.g.row, cols: i.g.cols, rows: i.g.rows } : snapToGrid(i, G, min.minW, min.minH);
+      want.cols = Math.min(want.cols, G.cols); want.rows = Math.min(want.rows, G.rows);
+      const spot = nearestFree(want, taken, G) || want;
+      taken.push(spot);
+      const px = cellsToPx(spot, G);
+      const g = { size, ...spot };
+      if (!i.g || JSON.stringify(i.g) !== JSON.stringify(g) || i.x !== px.x || i.y !== px.y || i.w !== px.w || i.h !== px.h) { i.g = g; Object.assign(i, px); changed = true; }
+      if (!i.placed) { i.placed = Date.now(); changed = true; }
+    }
+    if (changed) this.save();
+    return G;
+  }
   /** Keep a widget fully on its display (after a resolution change or a move). */
   clamp(inst, bounds) {
     const w = Math.min(inst.w, bounds.width), h = Math.min(inst.h, bounds.height);
@@ -162,4 +226,4 @@ class Widgets {
   }
 }
 
-module.exports = { Widgets, normalizeWidget, permissionText, PERMISSIONS, defaultsOf };
+module.exports = { Widgets, normalizeWidget, permissionText, PERMISSIONS, defaultsOf, gridFor, snapToGrid, cellsToPx, nearestFree, GRID_SIZES };

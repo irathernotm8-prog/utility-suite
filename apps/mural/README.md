@@ -20,7 +20,7 @@ stops completely the moment its desktop can't be seen, and a CPU budget keeps th
 - **Settings** — displays, cursor/click reactions, location for the sun (city list or lat/lon; otherwise a guess from
   the time zone), rotation through favorites, open at login, Claude & Codex.
 
-## Widgets (0.2.0)
+## Widgets (0.2.0; grid and widgets-only in 0.3.0)
 
 Interactive widgets on the desktop: above the wallpaper and the icons, below your apps, fully clickable and typeable.
 Built in: **Clock** (digital, analog, in words), **Calendar**, **Notes**, **To-do**, **System** (CPU, memory, battery),
@@ -31,6 +31,14 @@ Built in: **Clock** (digital, analog, in words), **Calendar**, **Notes**, **To-d
   settings plus Dark/Light glass, Solid or No card, opacity, size, display), and an editor for your own (code, live
   preview you can resize, size, permissions, settings) with Ask Claude. Import/export `.muralwidget` files — that's the
   plugin format: a folder with `widget.json` + `index.html` (+ css/js).
+- **Widgets without the wallpaper** (0.3.0): "Mural's live wallpaper" and "Widgets on the desktop" are separate switches
+  (Widgets page, Library, Settings, tray). With the wallpaper off, widgets sit on your normal wallpaper or Wallpaper
+  Engine; Mural never touches the desktop it didn't take over (no Explorer refresh unless it had placed a wallpaper), and
+  widgets still pause when the desktop is hidden (the desktop helper keeps watching while widgets are up).
+- **Grid** (0.3.0): widgets snap to square cells laid over the work area (not under the menu bar, Dock or taskbar) —
+  Small 64 pt, Medium 80 pt (default), Large 100 pt, 14 pt gaps — or Off for free placement. Sizes are whole cells, no
+  two widgets overlap, a dropped widget takes the nearest free cells without pushing older ones, and placements are kept
+  in cells (`inst.g`) so they survive resolution changes. Arranging shows the cells and a ghost of where it will land.
 - **Arrange** (Widgets page, tray, or a widget's ⚙) lifts the layer over everything with a dim backdrop: drag to move,
   corner to resize, ✕ to remove, Esc or Done when finished.
 - **Permissions** are declared in `widget.json` and shown before adding: `network`, `system`, `open`, `location`,

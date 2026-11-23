@@ -18,6 +18,7 @@ class Host extends EventEmitter {
     this.recs = new Map(); // displayKey -> record
     this.power = { onBattery: false, locked: false, suspended: false, thermal: 'nominal', idle: false };
     this.userPaused = false; this.governor = new Governor(store.get().budget);
+    this.coverByKey = new Map(); this.placedOnce = false; this.needsCover = () => false;
     this.lastPointer = null; this.pointerTimer = 0; this.metricsTimer = 0; this.started = false; this.quitting = false;
   }
 
@@ -64,7 +65,11 @@ class Host extends EventEmitter {
     const s = this.store.get();
     const ds = this.displays(); const keys = new Set(ds.map((d) => this.key(d)));
     for (const [k, r] of this.recs) if (!keys.has(k) || !s.enabled) this.close(r, true);
-    if (!s.enabled) { this.desktop.restoreDesktop().catch(() => {}); this.updateWatchers(); this.emit('state'); return; }
+    if (!s.enabled) {
+      // hand the desktop back — but only if we were on it, so Wallpaper Engine or the normal wallpaper isn't disturbed
+      if (this.placedOnce) { this.placedOnce = false; this.desktop.restoreDesktop().catch(() => {}); }
+      this.updateWatchers(); this.emit('state'); return;
+    }
     ds.forEach((d, i) => {
       const k = this.key(d); let r = this.recs.get(k);
       if (!r) { r = { key: k, display: d, win: null, wallpaperId: null, covered: false, reason: null, frozen: false, freed: false, pausedAt: 0, traits: {}, stats: { fps: 0, ms: 0 }, cpu: 0, mem: 0, error: null }; this.recs.set(k, r); }
@@ -105,7 +110,7 @@ class Host extends EventEmitter {
       const res = await this.desktop.attach(win, r.display).catch((e) => ({ ok: false, error: e.message }));
       if (win.isDestroyed()) return;
       if (!res.ok) { r.error = 'Couldn’t place the wallpaper behind the desktop icons: ' + (res.error || 'unknown'); this.log(r.error); this.emit('state'); }
-      r.attached = true;
+      r.attached = true; if (res.ok) this.placedOnce = true;
       win.showInactive();
       if (this.desktop.name === 'mac') try { win.moveTop(); } catch (_) {}
     });
@@ -214,7 +219,14 @@ class Host extends EventEmitter {
 
   setUserPaused(v) { this.userPaused = !!v; this.evaluate(); return this.userPaused; }
 
+  /** Why a display's desktop is paused right now, with or without a wallpaper on it (widgets use this). */
+  reasonFor(key) { return pauseReason({ settings: this.store.get(), covered: !!this.coverByKey.get(String(key)), userPaused: false, ...this.power }); }
   onCover(list) {
+    for (const d of this.displays()) {
+      const b = d.bounds, c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+      const m = list.find((s) => c.x >= s.bounds.x && c.x < s.bounds.x + s.bounds.width && c.y >= s.bounds.y && c.y < s.bounds.y + s.bounds.height);
+      if (m) this.coverByKey.set(this.key(d), m.covered);
+    }
     for (const r of this.recs.values()) {
       const b = r.display.bounds, c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
       const m = list.find((s) => c.x >= s.bounds.x && c.x < s.bounds.x + s.bounds.width && c.y >= s.bounds.y && c.y < s.bounds.y + s.bounds.height);
@@ -242,7 +254,7 @@ class Host extends EventEmitter {
     const s = this.store.get(); const run = this.running();
     const wantPointer = s.cursor !== false && run.some((r) => r.traits && r.traits.cursor);
     const wantClicks = s.clicks !== false && run.some((r) => r.traits && r.traits.click);
-    this.desktop.configure({ clicks: wantClicks, cover: s.pauseCovered !== false });
+    this.desktop.configure({ clicks: wantClicks, cover: s.pauseCovered !== false && (run.length > 0 || this.needsCover()) });
     if (wantPointer && !this.pointerTimer) this.pointerTimer = setInterval(() => this.pollPointer(), 33);
     if (!wantPointer && this.pointerTimer) { clearInterval(this.pointerTimer); this.pointerTimer = 0; }
   }
@@ -310,7 +322,7 @@ class Host extends EventEmitter {
     clearInterval(this.pointerTimer); clearInterval(this.metricsTimer); clearInterval(this.idleTimer); clearInterval(this.rotateTimer); clearInterval(this.fitTimer);
     for (const r of this.recs.values()) this.close(r);
     this.recs.clear();
-    await this.desktop.restoreDesktop().catch(() => {});
+    if (this.placedOnce) await this.desktop.restoreDesktop().catch(() => {});
     await this.restoreOriginal().catch(() => {});
     this.desktop.stop();
   }

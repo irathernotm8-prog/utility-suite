@@ -26,8 +26,14 @@ export class WidgetsPage {
       <div class="head"><h1>Widgets</h1><span class="sub">Interactive pieces that live on your desktop, above the wallpaper and below your apps</span><div class="spacer"></div>
         <button class="btn" id="wImp">${icon('plus')}Add from file</button><button class="btn" id="wNew">${icon('code')}Make one</button>
         <button class="btn ${editing ? 'primary' : ''}" id="wArr">${icon('layers')}${editing ? 'Done arranging' : 'Arrange on desktop'}</button></div>
+      <div class="toolbar" style="gap:18px">
+        <label class="hint" style="margin:0;display:flex;align-items:center;gap:8px"><button class="switch ${st.enabled ? 'on' : ''}" id="wOn"></button>Widgets on the desktop</label>
+        <label class="hint" style="margin:0;display:flex;align-items:center;gap:8px"><button class="switch ${st.wallpaper ? 'on' : ''}" id="wWp"></button>Mural’s live wallpaper <span style="color:var(--faint)">${st.wallpaper ? '' : '· using your own (or Wallpaper Engine)'}</span></label>
+        <div class="spacer"></div><span class="hint" style="margin:0">Grid</span>
+        <div class="seg" id="wGridSz">${[['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['off', 'Off']].map(([k, l]) => `<button data-g="${k}" class="${st.grid === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      </div>
       <div class="scroll">
-        ${inst.length ? `<div class="section-title">On your desktop</div><div class="box" style="padding:6px 16px">${inst.map((i) => { const t = st.types.find((x) => x.type === i.type); return `<div class="row"><div class="t"><b>${esc(t ? t.name : i.type)}</b><span>${esc(this.displayLabel(i.display))} · ${i.w}×${i.h}</span></div><button class="btn sm" data-set="${esc(i.id)}">${icon('settings')}Settings</button><button class="btn sm icon ghost" data-rm="${esc(i.id)}" title="Take off the desktop">${icon('close')}</button></div>`; }).join('')}</div>` : ''}
+        ${inst.length ? `<div class="section-title">On your desktop</div><div class="box" style="padding:6px 16px">${inst.map((i) => { const t = st.types.find((x) => x.type === i.type); return `<div class="row"><div class="t"><b>${esc(t ? t.name : i.type)}</b><span>${esc(this.displayLabel(i.display))} · ${i.g ? `${i.g.cols}×${i.g.rows} cells` : `${i.w}×${i.h}`}</span></div><button class="btn sm" data-set="${esc(i.id)}">${icon('settings')}Settings</button><button class="btn sm icon ghost" data-rm="${esc(i.id)}" title="Take off the desktop">${icon('close')}</button></div>`; }).join('')}</div>` : ''}
         <div class="section-title">Gallery</div>
         <div class="grid" id="wGrid">${st.types.map((t) => `
           <div class="card" data-type="${esc(t.type)}">
@@ -39,6 +45,9 @@ export class WidgetsPage {
           </div>`).join('')}</div>
         <div class="box" style="margin-top:22px"><h3>${icon('claude')}Make widgets with Claude</h3><p class="desc">With Mural connected in Settings › Claude & Codex, ask Claude for any widget — “a stock ticker for AAPL and NVDA”, “a Premier League table”, “a pomodoro that logs my sessions” — and it writes, previews and places it for you. Widgets are plain web pages; share them as <kbd>.muralwidget</kbd> files.</p></div>
       </div>`;
+    $('#wOn', this.el).onclick = async () => { await this.ctx.call('settings.set', { widgetsEnabled: !st.enabled }); await this.load(); this.render(); };
+    $('#wWp', this.el).onclick = async () => { await this.ctx.call('settings.set', { enabled: !st.wallpaper }); await this.load(); this.render(); };
+    this.el.querySelectorAll('#wGridSz button').forEach((b) => (b.onclick = async () => { await this.ctx.call('settings.set', { widgetGrid: b.dataset.g }); await this.load(); this.render(); this.ctx.toast(b.dataset.g === 'off' ? 'Widgets place freely' : 'Widgets snap to the grid'); }));
     $('#wArr', this.el).onclick = async () => { await this.ctx.call('widgets.arrange', !editing); await this.load(); this.render(); };
     $('#wImp', this.el).onclick = async () => { const r = await this.ctx.call('widgets.import'); for (const x of r) x.error ? this.ctx.toast(`${x.path.split(/[\\/]/).pop()}: ${x.error}`, true) : this.ctx.toast('Widget added to the gallery'); await this.load(); this.render(); };
     $('#wNew', this.el).onclick = async () => { const t = await this.ctx.call('widgets.create', 'My widget'); await this.load(); this.edit(t); };
@@ -103,7 +112,9 @@ export class WidgetsPage {
       <div class="group" style="border-top:1px solid var(--line);margin-top:8px"><div class="gt">Look</div>
         <div class="seg" id="dGlass" style="display:grid;grid-template-columns:1fr 1fr;width:100%">${GLASS.map(([k, l]) => `<button data-g="${k}" class="${(inst.style || {}).glass === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="field" style="grid-template-columns:110px 1fr"><label>Opacity</label><div class="ctl"><input type="range" id="dOp" min="0.3" max="1" step="0.05" value="${(inst.style || {}).opacity ?? 1}"></div></div>
-        <div class="field" style="grid-template-columns:110px 1fr"><label>Size</label><div class="ctl"><input class="num" id="dW" value="${inst.w}"> × <input class="num" id="dH" value="${inst.h}"></div></div>
+        ${inst.g ? `<div class="field" style="grid-template-columns:110px 1fr"><label>Size</label><div class="ctl"><div class="seg" id="dSpanW">${[1, 2, 3, 4, 5].map((n) => `<button data-n="${n}" class="${inst.g.cols === n ? 'on' : ''}">${n}</button>`).join('')}</div><span class="hint" style="margin:0">wide</span></div></div>
+        <div class="field" style="grid-template-columns:110px 1fr"><label></label><div class="ctl"><div class="seg" id="dSpanH">${[1, 2, 3, 4, 5].map((n) => `<button data-n="${n}" class="${inst.g.rows === n ? 'on' : ''}">${n}</button>`).join('')}</div><span class="hint" style="margin:0">tall</span></div></div>`
+        : `<div class="field" style="grid-template-columns:110px 1fr"><label>Size</label><div class="ctl"><input class="num" id="dW" value="${inst.w}"> × <input class="num" id="dH" value="${inst.h}"></div></div>`}
         ${this.state.displays.length > 1 ? `<div class="field" style="grid-template-columns:110px 1fr"><label>Display</label><div class="ctl"><select class="txt" id="dDisp" style="flex:1">${this.state.displays.map((x) => `<option value="${esc(x.key)}" ${x.key === inst.display ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div></div>` : ''}
       </div>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn sm" id="dArr">${icon('layers')}Arrange</button><div class="spacer"></div><button class="btn sm danger" id="dRm">${icon('trash')}Take off desktop</button></div>`;
@@ -113,7 +124,11 @@ export class WidgetsPage {
     d.querySelectorAll('[data-list]').forEach((x) => (x.onchange = () => set({ settings: { [x.dataset.list]: x.value.split('\n').map((l) => l.trim()).filter(Boolean) } })));
     d.querySelectorAll('#dGlass button').forEach((b) => (b.onclick = () => set({ style: { glass: b.dataset.g } })));
     $('#dOp', d).oninput = (e) => set({ style: { opacity: Number(e.target.value) } });
-    const sz = () => set({ w: Number($('#dW', d).value) || inst.w, h: Number($('#dH', d).value) || inst.h }); $('#dW', d).onchange = sz; $('#dH', d).onchange = sz;
+    if ($('#dW', d)) { const sz = () => set({ w: Number($('#dW', d).value) || inst.w, h: Number($('#dH', d).value) || inst.h }); $('#dW', d).onchange = sz; $('#dH', d).onchange = sz; }
+    const G = { cell: { small: 64, medium: 80, large: 100 }[this.state.grid] || 80, gap: { small: 12, medium: 14, large: 16 }[this.state.grid] || 14 };
+    const px = (n) => n * (G.cell + G.gap) - G.gap;
+    d.querySelectorAll('#dSpanW button').forEach((b) => (b.onclick = () => set({ x: inst.x, y: inst.y, w: px(Number(b.dataset.n)), h: inst.h })));
+    d.querySelectorAll('#dSpanH button').forEach((b) => (b.onclick = () => set({ x: inst.x, y: inst.y, w: inst.w, h: px(Number(b.dataset.n)) })));
     if ($('#dDisp', d)) $('#dDisp', d).onchange = (e) => set({ display: e.target.value, x: 40, y: 60 });
     $('#dX', d).onclick = () => this.closeDrawer();
     $('#dArr', d).onclick = () => this.ctx.call('widgets.arrange', true);

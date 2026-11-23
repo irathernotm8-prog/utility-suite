@@ -1,7 +1,7 @@
 {
   "name": "mural",
   "productName": "Mural",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Live wallpapers for Mac and Windows: animated scenes, shaders, videos and web wallpapers, dynamic skies that follow the time of day, wallpapers that react to the cursor and clicks, and a Studio to build your own, with a strict performance budget that pauses everything the moment it isn't seen.",
   "main": "src/main.js",
   "author": "Bilal",

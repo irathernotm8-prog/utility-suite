@@ -35,7 +35,7 @@ class WidgetLayer extends EventEmitter {
     for (const i of this.widgets.instances()) if (!keys.has(i.display)) this.widgets.update(i.id, { display: primary });
     for (const [k, L] of this.layers) if (!keys.has(k)) this.closeLayer(k);
     for (const d of ds) {
-      const k = this.key(d); const want = this.editing || this.widgets.instances(k).length > 0;
+      const k = this.key(d); const want = this.store.get().widgetsEnabled !== false && (this.editing || this.widgets.instances(k).length > 0);
       let L = this.layers.get(k);
       if (!want) { if (L) this.closeLayer(k); continue; }
       if (!L || !L.win || L.win.isDestroyed()) L = this.openLayer(d);
@@ -90,25 +90,37 @@ class WidgetLayer extends EventEmitter {
     if (Math.abs(have.x - want.x) > 1 || Math.abs(have.y - want.y) > 1 || Math.abs(have.width - want.width) > 1 || Math.abs(have.height - want.height) > 1) w.setBounds(want);
   }
 
-  /** Send a display's widgets (and their manifests) to its layer. */
-  layoutFor(k) {
-    const L = this.layers.get(k); const b = L ? L.display.bounds : { width: 1440, height: 900 };
-    return this.widgets.instances(k).sort((a, z) => a.z - z.z).map((i) => {
+  /** The usable part of a display (not under the menu bar, Dock or taskbar), in the layer's own coordinates. */
+  areaOf(d) { const b = d.bounds, w = d.workArea || b; return { x: w.x - b.x, y: w.y - b.y, width: w.width, height: w.height }; }
+  /** Lay a display's widgets out (snapping them to the grid) and remember the rectangles for click-through. */
+  layoutFor(k, moved = null) {
+    const L = this.layers.get(k); const d = L ? L.display : this.displays().find((x) => this.key(x) === k);
+    const b = d ? d.bounds : { width: 1440, height: 900 };
+    const G = this.widgets.arrange(k, { width: b.width, height: b.height }, d ? this.areaOf(d) : { x: 0, y: 0, width: b.width, height: b.height }, this.store.get().widgetGrid || 'medium', moved);
+    const list = this.widgets.instances(k).sort((a, z) => a.z - z.z).map((i) => {
       const t = this.widgets.read(i.type); if (!t) return null;
-      const c = this.widgets.clamp(i, b);
+      const c = G.on ? i : this.widgets.clamp(i, b);
       return { ...c, name: t.manifest.name, url: `mural://widget/${i.type}/${t.manifest.page}?i=${i.id}`, permissions: t.manifest.permissions, resizable: t.manifest.size.resizable, minW: t.manifest.size.minW, minH: t.manifest.size.minH };
     }).filter(Boolean);
+    if (L) { L.rects = list.map((i) => ({ x: i.x, y: i.y, w: i.w, h: i.h })); L.grid = G; }
+    return list;
   }
-  push(k) {
+  push(k, moved = null) {
     const L = this.layers.get(k); if (!L || !L.win || L.win.isDestroyed()) return;
-    const s = this.store.get();
-    L.win.webContents.send('wl:layout', { display: k, editing: this.editing, widgets: this.layoutFor(k), location: s.location, platform: process.platform });
+    const s = this.store.get(); const widgets = this.layoutFor(k, moved);
+    L.win.webContents.send('wl:layout', { display: k, editing: this.editing, widgets, grid: L.grid, location: s.location, platform: process.platform });
+  }
+  /** A widget was dragged or resized: it takes the nearest free cells to where it was dropped. */
+  moved(id, rect) {
+    const i = this.widgets.instance(id); if (!i) return;
+    this.widgets.update(id, rect); this.push(i.display, id); this.emit('changed');
   }
   pushAll() { for (const k of this.layers.keys()) this.push(k); }
 
   // ------------------------------------------------------------------------------------------------- arranging
   setEditing(on) {
     this.editing = !!on;
+    if (this.editing && this.store.get().widgetsEnabled === false) this.store.set({ widgetsEnabled: true });
     this.sync();
     for (const L of this.layers.values()) {
       if (!L.win || L.win.isDestroyed()) continue;
@@ -132,7 +144,7 @@ class WidgetLayer extends EventEmitter {
     for (const L of this.layers.values()) {
       if (!L.win || L.win.isDestroyed() || L.frozen) continue;
       const b = L.display.bounds; const x = p.x - b.x, y = p.y - b.y;
-      const over = x >= 0 && y >= 0 && x < b.width && y < b.height && this.layoutFor(L.key).some((i) => x >= i.x - 3 && x < i.x + i.w + 3 && y >= i.y - 3 && y < i.y + i.h + 3);
+      const over = x >= 0 && y >= 0 && x < b.width && y < b.height && (L.rects || []).some((i) => x >= i.x - 3 && x < i.x + i.w + 3 && y >= i.y - 3 && y < i.y + i.h + 3);
       if (over === !L.ignoring) continue;
       L.ignoring = !over; L.win.setIgnoreMouseEvents(!over);
     }
@@ -141,11 +153,10 @@ class WidgetLayer extends EventEmitter {
   // ------------------------------------------------------------------------------------------------- pausing with the wallpaper
   followHost() {
     if (this.editing) return;
-    const st = this.host.status();
     for (const L of this.layers.values()) {
       if (!L.win || L.win.isDestroyed() || !L.ready) continue;
-      const d = st.displays.find((x) => x.key === L.key);
-      const reason = d ? d.reason : this.host.userPaused ? 'paused' : null;
+      // the layer's own reason (not the wallpaper's), so widgets work with Mural's wallpaper off too
+      const reason = this.host.reasonFor(L.key);
       // "paused by you" only stops the wallpaper: widgets keep working. Anything that hides the desktop pauses them too.
       const hide = reason && reason !== 'paused' && reason !== 'battery';
       if (hide && !L.frozen) this.freeze(L); else if (!hide && L.frozen) this.thaw(L);

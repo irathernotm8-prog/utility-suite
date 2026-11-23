@@ -59,6 +59,17 @@ Ship: bump `version` in `package.json`, then `./utility note mural "what changed
   layer, click-through, storage, permissions, settings, arrange, pausing, editor and every widget plugin tool).
 - Utility Suite link: `mural` also offers `arrangeWidgets(on)`. The Scenes widget calls Scene's `list` / `activate`.
 
+## 0.3.0: widgets without the wallpaper, and the grid
+
+- `settings.enabled` is now only Mural's live wallpaper; `settings.widgetsEnabled` and `settings.widgetGrid`
+  (small|medium|large|off) are new. With the wallpaper off the widgets layer follows `host.reasonFor(displayKey)` (cover
+  state is now kept per display in `host.coverByKey`, not per wallpaper window) and `host.needsCover()` keeps the desktop
+  helper watching. `host.placedOnce` makes sure Mural only refreshes Explorer's wallpaper / restores the desktop if it had
+  actually placed one — important next to Wallpaper Engine. **Check on Windows with Wallpaper Engine running:** turn
+  Mural's wallpaper off, add widgets, and make sure Wallpaper Engine keeps playing underneath.
+- Grid maths are pure in `core/widgets.js` (`gridFor`, `snapToGrid`, `nearestFree`, `Widgets.arrange`); the layer page
+  only previews (ghost) and main decides the final cells. `npm test` 13 checks; `ui.js` 54.
+
 ## Rules specific to Mural
 
 - **The runtime is shared.** `src/renderer/runtime/*` runs on the desktop, in the Studio, on Library cards and in

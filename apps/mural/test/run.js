@@ -154,6 +154,33 @@ test('widgets: built-ins are valid, placing finds free spots, clamp, storage, im
   assert.strictEqual(normalizeWidget({ size: { w: 99999 } }).size.w, 3000); assert(/Scene/.test(permissionText('suite:scene')));
 });
 
+test('widget grid: cells fit the work area, snapping, nearest free spot, no overlaps, survives grid changes', () => {
+  const { Widgets, gridFor, snapToGrid, cellsToPx, nearestFree } = require('../src/core/widgets');
+  const area = { x: 0, y: 37, width: 1470, height: 845 }; // MacBook Air: under the menu bar, above the Dock
+  const G = gridFor(area, 'medium');
+  assert(G.on && G.cols === 15 && G.rows === 8, JSON.stringify(G));
+  assert(G.x0 >= area.x + 20 && G.y0 >= area.y + 20 && G.x0 + G.cols * G.step - G.gap <= area.x + area.width - 20, 'inside the work area with margins');
+  assert.strictEqual(Math.round(G.x0 - area.x), Math.round(area.x + area.width - (G.x0 + G.cols * G.step - G.gap)), 'centered');
+  assert.deepStrictEqual(snapToGrid({ x: G.x0 + 100, y: G.y0 + 3, w: 300, h: 150 }, G), { col: 1, row: 0, cols: 3, rows: 2 });
+  assert.deepStrictEqual(snapToGrid({ x: 99999, y: 99999, w: 50, h: 50 }, G, 200, 0), { col: G.cols - 3, row: G.rows - 1, cols: 3, rows: 1 }, 'min size and clamped');
+  const px = cellsToPx({ col: 2, row: 1, cols: 2, rows: 1 }, G); assert.strictEqual(px.w, 2 * 80 + 14); assert.strictEqual(px.x, G.x0 + 2 * 94);
+  assert.deepStrictEqual(nearestFree({ col: 0, row: 0, cols: 2, rows: 2 }, [{ col: 0, row: 0, cols: 2, rows: 2 }], G), { col: 2, row: 0, cols: 2, rows: 2 });
+  assert.strictEqual(gridFor(area, 'off').on, false);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mural-g-'));
+  const W = new Widgets({ builtinDir: path.join(__dirname, '..', 'src', 'widgets'), userDir: path.join(tmp, 'W'), dataDir: tmp });
+  const b = { width: 1470, height: 956 };
+  const ids = ['builtin/clock', 'builtin/notes', 'builtin/todo', 'builtin/calendar', 'builtin/system', 'builtin/weather'].map((t) => W.add(t, '1', b, { x: 400, y: 300 }).id); // all dropped on the same spot
+  W.arrange('1', b, area, 'medium');
+  const all = W.instances('1'); const ov = (p, q) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
+  for (const a of all) { assert(a.g && (a.x - G.x0) % G.step === 0 && (a.y - G.y0) % G.step === 0 && (a.w + G.gap) % G.step === 0, 'on the grid ' + JSON.stringify(a)); for (const c of all) if (a !== c) assert(!ov(a, c), 'no overlaps'); }
+  const first = W.instance(ids[0]); const firstSpot = { x: first.x, y: first.y };
+  W.update(ids[1], { x: first.x + 5, y: first.y + 5, w: first.w, h: first.h }); W.arrange('1', b, area, 'medium', ids[1]);
+  assert.deepStrictEqual({ x: W.instance(ids[0]).x, y: W.instance(ids[0]).y }, firstSpot, 'a dropped widget never pushes an older one');
+  assert(!ov(W.instance(ids[0]), W.instance(ids[1])), 'it takes the nearest free cells instead');
+  const G2 = W.arrange('1', b, area, 'large'); for (const a of W.instances('1')) assert(a.g.size === 'large' && (a.x - G2.x0) % G2.step === 0, 'regrids when the grid size changes');
+  W.arrange('1', b, area, 'off'); assert(W.instances('1').every((a) => a.x + a.w <= b.width), 'free placement keeps them on screen');
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) { try { await t.fn(); console.log('ok   ' + t.name); } catch (e) { failed++; console.log('FAIL ' + t.name + '\n     ' + (e.stack || e).toString().split('\n').slice(0, 3).join('\n     ')); } }

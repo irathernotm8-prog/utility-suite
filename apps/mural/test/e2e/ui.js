@@ -100,6 +100,30 @@ module.exports = async ({ app, win, host, library, API, widgets, layer, screen }
   // pausing the desktop pauses widgets
   host.onCover([{ bounds: rec.display.bounds, covered: true }]); await wait(400); ok(layer.layers.get(d).frozen, 'widgets pause when a full-screen window hides the desktop');
   host.onCover([{ bounds: rec.display.bounds, covered: false }]); await wait(400); ok(!layer.layers.get(d).frozen, 'and come back');
+  // the grid: every widget snapped, none overlapping; dropping one on another takes the nearest free cells
+  const G = layer.layers.get(d).grid; ok(G && G.on, 'widgets sit on a grid');
+  const ov = (p, q) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
+  const placed = widgets.instances(d);
+  ok(placed.every((a) => (a.x - G.x0) % G.step === 0 && (a.y - G.y0) % G.step === 0 && (a.w + G.gap) % G.step === 0), 'every widget is snapped to whole cells');
+  ok(placed.every((a) => placed.every((c) => a === c || !ov(a, c))), 'no widgets overlap');
+  const w1 = { ...placed[0] }, w2 = placed[1];
+  layer.moved(w2.id, { x: w1.x + 7, y: w1.y + 5, w: w2.w, h: w2.h }); await wait(400);
+  ok(widgets.instance(w1.id).x === w1.x && !ov(widgets.instance(w1.id), widgets.instance(w2.id)), 'dropping a widget on another takes the nearest free cells');
+  layer.moved(w2.id, { x: w2.x, y: w2.y, w: 400, h: 200 }); await wait(300); const r2 = widgets.instance(w2.id);
+  ok((r2.w + G.gap) % G.step === 0 && (r2.h + G.gap) % G.step === 0, 'resizing snaps to whole cells');
+  layer.setEditing(true); await wait(900);
+  fs.writeFileSync(path.join(out, 'ui-widgets-grid.png'), (await layer.layers.get(d).win.webContents.capturePage()).toPNG());
+  layer.setEditing(false); await wait(300);
+  // widgets without Mural's wallpaper (your own wallpaper or Wallpaper Engine underneath)
+  await API['settings.set']({ enabled: false }); await wait(1500);
+  ok(host.recs.size === 0, 'turning the live wallpaper off closes the wallpaper windows');
+  ok(!!layer.layers.get(d) && (await layer.layers.get(d).win.webContents.executeJavaScript('window.__muralWidgets().length')) === widgets.instances(d).length, 'widgets stay on the desktop with the wallpaper off');
+  host.onCover([{ bounds: screen.getPrimaryDisplay().bounds, covered: true }]); await wait(400); ok(layer.layers.get(d).frozen, 'and still pause behind a full-screen window');
+  host.onCover([{ bounds: screen.getPrimaryDisplay().bounds, covered: false }]); await wait(400); ok(!layer.layers.get(d).frozen, 'and come back');
+  await js(`__mural.go('library')`); await wait(600); ok(/off/.test(await js(`document.querySelector('#wpSwitch').textContent`)), 'the Library shows the live wallpaper is off');
+  await API['settings.set']({ widgetsEnabled: false }); await wait(800); ok(!layer.layers.get(d), 'turning widgets off removes the layer');
+  await API['settings.set']({ widgetsEnabled: true, enabled: true }); await wait(3000);
+  ok(host.recs.size === 1 && !!layer.layers.get(d), 'both come back');
   // editor
   const counter = await API['widgets.create']('Counter'); await js(`__mural.widgetsPage.edit(${JSON.stringify(counter)})`); await wait(2000); await shot('widgets-editor');
   ok(await js(`!!document.querySelector('#eFrame') && document.querySelector('#eErr').textContent === ''`), 'the widget editor runs its live preview');

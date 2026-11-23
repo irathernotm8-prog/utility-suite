@@ -157,7 +157,7 @@ create_wallpaper or update_wallpaper → preview (try hour 6, 12, 19, 23 for tim
     apply: async ({ id, display }) => text(apply(resolveId(id), display || null)),
     status: async () => { const s = store.get(); return text({ ...host.status(), settings: { fps: s.fps, scale: s.scale, budget: s.budget, battery: s.battery, pauseCovered: s.pauseCovered, pauseIdle: s.pauseIdle, freeAfter: s.freeAfter, cursor: s.cursor, clicks: s.clicks } }); },
     widget_guide: async () => text(widgetGuide()),
-    list_widgets: async () => text({ types: widgets.types().map((t) => ({ type: t.type, name: t.name, description: t.description, builtin: t.builtin, size: t.size, permissions: t.permissions.map((p) => p.id), settings: t.settings.map((f) => f.key) })), placed: widgets.instances().map((i) => ({ id: i.id, type: i.type, display: i.display, x: i.x, y: i.y, w: i.w, h: i.h, settings: i.settings, style: i.style })), displays: screen.getAllDisplays().map((d) => ({ key: String(d.id), bounds: d.bounds })) }),
+    list_widgets: async () => text({ types: widgets.types().map((t) => ({ type: t.type, name: t.name, description: t.description, builtin: t.builtin, size: t.size, permissions: t.permissions.map((p) => p.id), settings: t.settings.map((f) => f.key) })), placed: widgets.instances().map((i) => ({ id: i.id, type: i.type, display: i.display, x: i.x, y: i.y, w: i.w, h: i.h, cells: i.g ? { col: i.g.col, row: i.g.row, cols: i.g.cols, rows: i.g.rows } : null, settings: i.settings, style: i.style })), grid: { size: store.get().widgetGrid || 'medium', layers: [...layer.layers.values()].map((L) => ({ display: L.key, ...(L.grid || {}) })) }, wallpaperOn: !!store.get().enabled, displays: screen.getAllDisplays().map((d) => ({ key: String(d.id), bounds: d.bounds })) }),
     get_widget: async ({ type }) => {
       type = resolveType(type); const w = widgets.read(type); const files = {};
       for (const f of fs.readdirSync(w.dir)) { const p = path.join(w.dir, f); if (fs.statSync(p).isFile() && /\.(html?|css|js|json|svg|txt|md)$/i.test(f)) files[f] = fs.readFileSync(p, 'utf8'); }
@@ -187,8 +187,9 @@ create_wallpaper or update_wallpaper → preview (try hour 6, 12, 19, 23 for tim
     place_widget: async (a) => {
       const style = {}; if (a.glass) style.glass = a.glass; if (a.opacity != null) style.opacity = Math.max(0.3, Math.min(1, Number(a.opacity)));
       if (a.id) {
-        const patch = {}; for (const k of ['x', 'y', 'w', 'h', 'display']) if (a[k] != null) patch[k] = a[k]; if (a.settings) patch.settings = a.settings; if (Object.keys(style).length) patch.style = style;
-        const i = widgets.update(a.id, patch); layer.sync(); layer.pushAll(); sendWidgets(); return text(i);
+        const patch = {}; if (a.settings) patch.settings = a.settings; if (Object.keys(style).length) patch.style = style; if (a.display != null) patch.display = a.display;
+        widgets.update(a.id, patch); const geo = {}; for (const k of ['x', 'y', 'w', 'h']) if (a[k] != null) geo[k] = a[k];
+        if (Object.keys(geo).length) layer.moved(a.id, geo); layer.sync(); sendWidgets(); return text({ placed: widgets.instance(a.id), note: 'Positions and sizes snap to the grid when it is on.' });
       }
       const type = resolveType(a.type); const ds = screen.getAllDisplays(); const d = ds.find((x) => String(x.id) === String(a.display)) || screen.getPrimaryDisplay();
       const i = widgets.add(type, String(d.id), d.bounds, { x: a.x, y: a.y, w: a.w, h: a.h, settings: a.settings, style }); layer.sync(); sendWidgets();
@@ -196,7 +197,8 @@ create_wallpaper or update_wallpaper → preview (try hour 6, 12, 19, 23 for tim
     },
     remove_widget: async ({ id }) => { widgets.remove(id); layer.sync(); sendWidgets(); return text({ removed: id }); },
     set_performance: async (a) => {
-      const patch = {}; for (const k of ['fps', 'scale', 'budget', 'battery', 'pauseCovered', 'pauseIdle', 'freeAfter']) if (a[k] !== undefined) patch[k] = a[k];
+      const patch = {}; for (const k of ['fps', 'scale', 'budget', 'battery', 'pauseCovered', 'pauseIdle', 'freeAfter', 'enabled', 'widgetsEnabled', 'widgetGrid']) if (a[k] !== undefined) patch[k] = a[k];
+      if (patch.widgetGrid && !['small', 'medium', 'large', 'off'].includes(patch.widgetGrid)) delete patch.widgetGrid;
       if (patch.fps) patch.fps = [15, 24, 30, 60].reduce((b, f) => (Math.abs(f - patch.fps) < Math.abs(b - patch.fps) ? f : b), 30);
       if (patch.scale) patch.scale = Math.max(0.4, Math.min(1, patch.scale));
       return text(setSettings(patch));

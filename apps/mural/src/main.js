@@ -124,7 +124,8 @@ function refreshTray() {
     { label: cur ? `Now: ${cur.name}` : 'Mural', enabled: false },
     { type: 'separator' },
     { label: host.userPaused ? 'Resume wallpapers' : 'Pause wallpapers', click: () => { host.setUserPaused(!host.userPaused); refreshTray(); send('state', host.status()); } },
-    { label: 'Wallpapers on desktop', type: 'checkbox', checked: !!s.enabled, click: (i) => setSettings({ enabled: i.checked }) },
+    { label: 'Live wallpaper', type: 'checkbox', checked: !!s.enabled, click: (i) => setSettings({ enabled: i.checked }) },
+    { label: 'Widgets', type: 'checkbox', checked: s.widgetsEnabled !== false, click: (i) => setSettings({ widgetsEnabled: i.checked }) },
     { type: 'separator' }, ...pick, { type: 'separator' },
     { label: 'Open Mural…', click: () => createWindow('library') },
     { label: 'Studio…', click: () => createWindow('studio') },
@@ -155,6 +156,7 @@ function setSettings(patch) {
   if (['pauseCovered', 'pauseLocked', 'pauseHot', 'pauseIdle', 'battery', 'cursor', 'clicks', 'freeAfter'].some((k) => k in patch)) host.evaluate();
   if ('location' in patch || 'showStats' in patch) for (const r of host.recs.values()) if (r.win && !r.win.isDestroyed()) r.win.webContents.send('wp:settings', { location: s.location, showStats: s.showStats });
   if ('freeAfter' in patch && !patch.freeAfter && prev.freeAfter) host.restoreOriginal();
+  if (layer && ('widgetGrid' in patch || 'widgetsEnabled' in patch)) { layer.sync(); layer.pushAll(); }
   refreshTray(); send('settings', s); return s;
 }
 function applyLogin() { try { app.setLoginItemSettings({ openAtLogin: !!store.get().startAtLogin, openAsHidden: true, args: ['--hidden'] }); } catch (_) {} }
@@ -238,7 +240,13 @@ const API = {
     const d = screen.getAllDisplays().find((x) => String(x.id) === String(displayKey)) || screen.getPrimaryDisplay();
     const inst = widgets.add(type, String(d.id), d.bounds, opts || {}); layer.sync(); return inst;
   },
-  'widgets.update': (id, patch) => { const i = widgets.update(id, patch || {}); if (patch && patch.display) layer.sync(); else layer.pushAll(); sendWidgets(); return i; },
+  'widgets.update': (id, patch) => {
+    patch = patch || {};
+    if (patch.display) { widgets.update(id, patch); layer.sync(); }
+    else if (['x', 'y', 'w', 'h'].some((k) => patch[k] != null)) { const { settings, style, ...geo } = patch; if (settings || style) widgets.update(id, { settings, style }); layer.moved(id, geo); }
+    else { widgets.update(id, patch); layer.pushAll(); }
+    sendWidgets(); return widgets.instance(id);
+  },
   'widgets.remove': (id) => { widgets.remove(id); layer.sync(); sendWidgets(); return true; },
   'widgets.arrange': (on) => layer.setEditing(on),
   'widgets.save': (type, manifest, files) => { const t = widgets.saveType(type, manifest, files || {}); widgetThumbs.delete(t); layer.pushAll(); reloadWidgetFrames(t); sendWidgets(); return t; },
@@ -311,7 +319,7 @@ async function renderWidget({ type, settings = null, w = null, h = null, wait = 
     return { png: img.toPNG(), jpeg: img.toJPEG(86), size: img.getSize(), errors };
   } finally { widgets.dropTemp(inst.id); if (!pw.isDestroyed()) pw.destroy(); }
 }
-function widgetState() { return { types: widgets.types(), instances: widgets.instances(), layer: layer.status(), displays: screen.getAllDisplays().map((d, i) => ({ key: String(d.id), label: d.label || (d.id === screen.getPrimaryDisplay().id ? 'Main display' : `Display ${i + 1}`), bounds: d.bounds })) }; }
+function widgetState() { const s = store.get(); return { grid: s.widgetGrid || 'medium', enabled: s.widgetsEnabled !== false, wallpaper: !!s.enabled, types: widgets.types(), instances: widgets.instances(), layer: layer.status(), displays: screen.getAllDisplays().map((d, i) => ({ key: String(d.id), label: d.label || (d.id === screen.getPrimaryDisplay().id ? 'Main display' : `Display ${i + 1}`), bounds: d.bounds })) }; }
 function sendWidgets() { send('widgets', widgetState()); }
 function reloadWidgetFrames() { for (const L of layer.layers.values()) if (L.win && !L.win.isDestroyed()) L.win.webContents.reload(); }
 const WIDGET_TEMPLATE = `<!doctype html>
@@ -347,7 +355,7 @@ ipcMain.handle('mural:call', async (e, name, ...args) => {
 // the widgets layer windows (and offscreen previews): every call is checked against the window it came from
 const layerFor = (e, key) => { if (String(key).startsWith('preview-')) return true; const L = layer && layer.layers.get(String(key)); return !!(L && L.win && !L.win.isDestroyed() && L.win.webContents === e.sender); };
 ipcMain.handle('wl:call', (e, key, id, name, args) => { if (!layerFor(e, key)) throw new Error('Not allowed'); const inst = widgets.instance(id); if (!inst || (!String(key).startsWith('preview-') && inst.display !== String(key))) throw new Error('Not allowed'); return layer.call(id, name, args || []); });
-ipcMain.handle('wl:move', (e, key, id, rect) => { if (!layerFor(e, key)) throw new Error('Not allowed'); widgets.update(id, rect); sendWidgets(); return true; });
+ipcMain.handle('wl:move', (e, key, id, rect) => { if (!layerFor(e, key)) throw new Error('Not allowed'); layer.moved(id, rect); return true; });
 ipcMain.handle('wl:remove', (e, key, id) => { if (!layerFor(e, key)) throw new Error('Not allowed'); widgets.remove(id); layer.sync(); sendWidgets(); return true; });
 ipcMain.handle('wl:settings', (e, key, id) => { if (!layerFor(e, key)) throw new Error('Not allowed'); if (layer.editing) layer.setEditing(false); createWindow('widgets'); setTimeout(() => send('widget-settings', id), 400); return true; });
 ipcMain.handle('wl:done', (e, key) => { if (!layerFor(e, key)) throw new Error('Not allowed'); layer.setEditing(false); refreshTray(); sendWidgets(); return true; });
@@ -389,7 +397,8 @@ app.whenReady().then(async () => {
   host.on('applied', () => { refreshTray(); send('settings', store.get()); if (link) link.emit('changed', current()); });
   widgets = new Widgets({ builtinDir: path.join(__dirname, 'widgets'), userDir: path.join(userWallpapers(), 'Widgets'), dataDir: app.getPath('userData') });
   layer = new WidgetLayer({ electron: { app, BrowserWindow, screen }, widgets, host, desktop, store, preload: path.join(__dirname, 'widget-preload.js'), log });
-  layer.on('changed', () => sendWidgets());
+  layer.on('changed', () => { sendWidgets(); host.updateWatchers(); refreshTray(); });
+  host.needsCover = () => layer.layers.size > 0;
   layer.on('settings', (id) => { createWindow('widgets'); setTimeout(() => send('widget-settings', id), 400); });
   if (!E2E || process.env.MURAL_E2E_HOST) { host.start(); layer.start(); }
   buildTray(); startLink(); applyLogin();
