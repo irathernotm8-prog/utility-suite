@@ -101,7 +101,7 @@
     {
       "id": "kiln",
       "name": "Kiln",
-      "description": "Install, run and create with Stable Diffusion apps — models, profiles, prompts and a built-in browser.",
+      "description": "Install, run and create with Stable Diffusion apps \u2014 models, profiles, prompts and a built-in browser.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [],
@@ -289,7 +289,7 @@
     {
       "id": "mixer",
       "name": "Mixer",
-      "description": "Music studio for you and your AI: compose instrumental tracks with synthesized instruments and drum kits, edit and remix recordings, mix with effects and automation, measure loudness, key and balance, export WAV/MP3 and stems — with a Claude/Codex plugin.",
+      "description": "Music studio for you and your AI: compose instrumental tracks with synthesized instruments and drum kits, edit and remix recordings, mix with effects and automation, measure loudness, key and balance, export WAV/MP3 and stems \u2014 with a Claude/Codex plugin.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": []
@@ -297,7 +297,17 @@
     {
       "id": "mural",
       "name": "Mural",
-      "description": "Live wallpapers for Mac and Windows: animated scenes, GPU shaders, videos and web pages, skies that follow the sun, wallpapers that react to the cursor and clicks, a Studio to build your own and a Claude/Codex plugin — and they stop the moment you can't see them.",
+      "description": "Live wallpapers for Mac and Windows: animated scenes, GPU shaders, videos and web pages, skies that follow the sun, wallpapers that react to the cursor and clicks, a Studio to build your own and a Claude/Codex plugin \u2014 and they stop the moment you can't see them.",
+      "macArch": "arm64",
+      "winArch": "x64",
+      "exclude": [
+        "test/e2e/out"
+      ]
+    },
+    {
+      "id": "concourse",
+      "name": "Concourse",
+      "description": "Microsoft Teams, rebuilt as a glowing departures board: chats, channels, meetings you can join, a timetable calendar and your own tasks synced with To Do, without the bloat.",
       "macArch": "arm64",
       "winArch": "x64",
       "exclude": [

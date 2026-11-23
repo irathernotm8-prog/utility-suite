@@ -10,6 +10,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 | **Beam** | AirDrop for Macs, PCs and phones: files, folders, text and links straight to nearby devices, encrypted, as fast as the network goes | `apps/beam` |
 | **Bench** | A test workspace for Claude: sandbox desks that run apps on this computer with their own data, Mac/Linux VMs and Windows Sandbox for clean desktops, a live view, parallel smoke tests of the whole suite, findings, and a Claude/Codex plugin to launch, see, click, type and read errors | `apps/bench` |
 | **Cadence** | Automations on a schedule: pull reports from sites, file them by week, and build slides and reports, with Claude and Codex plugged in | `apps/cadence` |
+| **Concourse** | Microsoft Teams as a glowing departures board: chats, channels, a timetable calendar with meetings you join in one click, self-assigned tasks synced with To Do, menu-bar countdown and reminders, without the bloat | `apps/concourse` |
 | **Crate** | Music downloads as tagged MP3s, album editing, and sending to your phone | `apps/crate` |
 | **Datum** | Linked spreadsheets, slides, docs and dashboards | `apps/datum` |
 | **Decomp** | Takes any app apart: decompiles Windows, Mac, Linux, Android, iOS, Java, .NET, Python, Electron and WebAssembly apps, and opens installers, disc images (ISO, UDF, DMG, VHD, CSO, Xbox, GameCube), game packs and firmware, on every core | `apps/decomp` |
@@ -55,7 +56,7 @@ The one home for every app Bilal has built: the source code, the tool that build
 
 ## Apps talking to each other (Utility Suite link)
 
-`tools/suitelink.js` lets suite apps on the same computer talk to each other, for the signed-in user only: a Unix socket in `~/Library/Application Support/Utility Suite/link` on a Mac, a per-user named pipe on Windows. Each app that takes part carries an identical copy in `src/suitelink.js`. Today Docket, Scene, Beam, Vitals, Relay and Vantage offer a few calls and events on it, and Atoll's add-ons use them (each add-on is off until turned on in Atoll). What each app offers is in its handoff.
+`tools/suitelink.js` lets suite apps on the same computer talk to each other, for the signed-in user only: a Unix socket in `~/Library/Application Support/Utility Suite/link` on a Mac, a per-user named pipe on Windows. Each app that takes part carries an identical copy in `src/suitelink.js`. Today Docket, Scene, Beam, Vitals, Relay, Vantage and Concourse offer a few calls and events on it, and Atoll's add-ons use them (each add-on is off until turned on in Atoll). What each app offers is in its handoff.
 
 ## Personal data that stays outside
 
@@ -69,6 +70,7 @@ Some apps keep data in fixed places. It is never part of the package or the repo
 | Atoll | its app-data folder: `settings.json`, `state.json` (timers, the shelf list, the followed team or match), `cache/` (Touchline match data and crests), `artwork/` (scratch). Shelf files stay where they are; clipboard history is never saved |
 | Beam | `~/Downloads/Beam` (received files; `.beam-incoming/` inside holds transfers still arriving). Its app-data folder has `identity.json` (this device's key), `settings.json` (trusted devices, saved addresses, phone link) and `history.json` |
 | Bench | its app-data folder: `desks/<id>/` (a sandbox desk's own home, app-data and temp folders; a Windows Sandbox desk's shared folder), `vms/` (Tart system images and VM disks, 20–30 GB each), `engines/` (Tart), `findings/` and `runs/` (screenshots and logs), `bridge.json` (the Claude plugin's private connection). Saved screenshots go to `~/Pictures/Bench` |
+| Concourse | its app-data folder: `settings.json`, `accounts.bin` (Microsoft sign-ins, encrypted with the system keychain), `tasks.json` (local tasks), `cache.json` (last snapshot for offline start), `photos/` |
 | Cadence | its app-data folder: `flows/` (one JSON per automation), `runs.json`, `memory.json`, `secrets.json` (encrypted), browser sign-ins, `runs/` (scratch, 14 days). Output goes where each automation says, by default `~/Documents/Cadence/<automation>` |
 | Crate | `~/Music/Crate` (your MP3s; `.crate/` inside holds the index, artwork cache and originals of edited songs) |
 | Decomp | its app-data folder: `engines/` (7-Zip, Java, JADX, Vineflower, .NET, ILSpy, Ghidra — up to ~1 GB) and `jobs.json`. Results go to `~/Documents/Decomp`, one folder per job |

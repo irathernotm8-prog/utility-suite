@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'">
+<title>Concourse</title>
+<link rel="stylesheet" href="board.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="lamp-amber">
+<div id="titlebar"></div>
+<nav id="rail">
+  <div class="brand"><div class="mark"></div></div>
+  <button data-view="home" class="nav"><i data-ic="board"></i><span>Board</span><b class="pip" id="pipHome"></b></button>
+  <button data-view="chats" class="nav"><i data-ic="chat"></i><span>Chats</span><b class="pip" id="pipChats"></b></button>
+  <button data-view="teams" class="nav"><i data-ic="teams"></i><span>Teams</span></button>
+  <button data-view="calendar" class="nav"><i data-ic="cal"></i><span>Timetable</span></button>
+  <button data-view="tasks" class="nav"><i data-ic="tasks"></i><span>Manifest</span><b class="pip" id="pipTasks"></b></button>
+  <div class="grow"></div>
+  <button id="presenceBtn" class="me" title="Your status"><span class="avatar sm" id="meAvatar"></span><b class="dot" id="meDot"></b></button>
+  <button data-view="settings" class="nav small"><i data-ic="gear"></i><span>Settings</span></button>
+</nav>
+<main id="main"></main>
+<div id="ticker"><div class="label">LIVE</div><div class="track"><div class="tape" id="tape"></div></div></div>
+<div id="layer"></div>
+<div id="toasts"></div>
+<script src="icons.js"></script>
+<script src="flap.js"></script>
+<script src="util.js"></script>
+<script src="views/home.js"></script>
+<script src="views/chats.js"></script>
+<script src="views/teams.js"></script>
+<script src="views/calendar.js"></script>
+<script src="views/tasks.js"></script>
+<script src="views/settings.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

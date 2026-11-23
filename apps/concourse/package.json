@@ -1,0 +1,58 @@
+{
+  "name": "concourse",
+  "productName": "Concourse",
+  "version": "0.1.0",
+  "description": "Microsoft Teams, rebuilt as a glowing departures board: chats, channels, meetings you can join, a timetable calendar and your own tasks, without the bloat.",
+  "main": "src/main.js",
+  "author": "Bilal",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "CONCOURSE_DEMO=1 electron .",
+    "test": "node test/run.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.bilal.concourse",
+    "productName": "Concourse",
+    "copyright": "Personal use",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "build/trayTemplate.png",
+      "build/trayTemplate@2x.png",
+      "build/tray.png",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.business",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Concourse uses the microphone when you join a meeting inside the app.",
+        "NSCameraUsageDescription": "Concourse uses the camera when you join a meeting inside the app."
+      }
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    }
+  }
+}
